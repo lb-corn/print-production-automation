@@ -8,6 +8,7 @@ class ProductionItem extends Model
 {
     protected $fillable = [
         'line_item_id',
+        'shopify_shop',
         'shopify_order_id',
         'order_number',
         'order_date',
@@ -31,6 +32,11 @@ class ProductionItem extends Model
         'match_status',
         'confidence',
         'matches',
+        'is_active',
+        'inactive_reason',
+        'inactivated_at',
+        'sync_conflict',
+        'last_shopify_seen_at',
     ];
 
     protected function casts(): array
@@ -38,11 +44,14 @@ class ProductionItem extends Model
         return [
             'matches' => 'array',
             'is_custom' => 'boolean',
+            'is_active' => 'boolean',
             'quantity' => 'integer',
             'last_synced_quantity' => 'integer',
             'quantity_delta' => 'integer',
             'order_date' => 'datetime',
             'last_synced_at' => 'datetime',
+            'inactivated_at' => 'datetime',
+            'last_shopify_seen_at' => 'datetime',
         ];
     }
 

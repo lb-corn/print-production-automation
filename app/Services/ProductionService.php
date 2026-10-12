@@ -79,6 +79,7 @@ class ProductionService
     public function queue(): Collection
     {
         return ProductionItem::with(['decision', 'batchItems.batch', 'printHistories'])
+            ->where('is_active', true)
             ->orderBy('order_number')
             ->get()
             ->filter(function ($item) {
@@ -364,6 +365,7 @@ class ProductionService
         }
 
         $query = ProductionItem::with(['decision', 'batchItems.batch', 'printHistories'])
+            ->where('is_active', true)
             ->whereIn('id', $ids);
 
         if ($lock) {

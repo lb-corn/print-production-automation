@@ -10,13 +10,13 @@
         <section class="panel sync-panel">
             <div class="panel-head">
                 <div>
-                    <h2>Shopify Manual Sync</h2>
-                    <p>Read-only backlog import. Fulfillment is never modified.</p>
+                    <h2>Full Sync with Shopify</h2>
+                    <p>Read-only reconciliation. Fulfillment is never modified.</p>
                 </div>
                 <a class="btn secondary" href="/ready-for-print">Open Queue</a>
             </div>
 
-            <form class="sync-controls" method="post" action="{{ route('production.sync-backlog') }}" onsubmit="return confirm('Read Shopify backlog and match artwork from Google Drive? This does not change Shopify fulfillment.')">
+            <form class="sync-controls" method="post" action="{{ route('production.sync-backlog') }}" onsubmit="return confirm('Reconcile Shopify orders and match artwork from Google Drive? This does not change Shopify fulfillment.')">
                 @csrf
                 <label class="radio-card">
                     <input type="radio" name="mode" value="unfulfilled" checked>
@@ -26,7 +26,7 @@
                     <input type="radio" name="mode" value="unfulfilled_partial">
                     <span><b>Unfulfilled + Partially Fulfilled</b><em>Includes partially fulfilled orders</em></span>
                 </label>
-                <button class="primary sync-button" type="submit">Sync Backlog</button>
+                <button class="primary sync-button" type="submit">Full Sync with Shopify</button>
             </form>
 
             @if(session('error_details'))
@@ -40,13 +40,25 @@
                 <div class="sync-meta">
                     <b>Last sync:</b> {{ $lastSync->created_at->format('M d, Y g:i A') }}
                     <span>Mode: {{ $lastSync->mode }}</span>
+                    @if($lastSuccessfulSync)
+                        <span>Last successful: {{ $lastSuccessfulSync->created_at->format('M d, Y g:i A') }}</span>
+                    @endif
                     @if($lastSync->error)
                         <details class="sync-error">
                             <summary>Last sync failed</summary>
                             <pre>{{ $lastSync->error }}</pre>
                         </details>
                     @else
-                        <span>{{ $lastSync->shopify_items }} items, {{ $lastSync->orders_examined }} orders, {{ $lastSync->quantity_deltas }} quantity deltas</span>
+                        <span>
+                            {{ $lastSync->shopify_items }} current,
+                            {{ $lastSync->orders_examined }} orders,
+                            {{ $lastSync->added }} new,
+                            {{ $lastSync->updated }} updated,
+                            {{ $lastSync->unchanged }} unchanged,
+                            {{ $lastSync->inactive }} inactive,
+                            {{ $lastSync->conflicts }} conflicts,
+                            {{ $lastSync->quantity_deltas }} quantity deltas
+                        </span>
                     @endif
                 </div>
             @endif

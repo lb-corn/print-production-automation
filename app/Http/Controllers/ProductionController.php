@@ -19,16 +19,18 @@ class ProductionController extends Controller
     public function dashboard()
     {
         $items = ProductionItem::with(['decision', 'batchItems.batch', 'printHistories'])->get();
+        $activeItems = $items->where('is_active', true);
         $ready = $this->svc->queue();
 
         return view('dashboard.index', [
-            'total' => $items->count(),
+            'total' => $activeItems->count(),
             'ready' => $ready->count(),
-            'review' => $items->where('match_status', 'REVIEW')->count(),
-            'custom' => $items->where('is_custom', true)->count(),
+            'review' => $activeItems->where('match_status', 'REVIEW')->count(),
+            'custom' => $activeItems->where('is_custom', true)->count(),
             'summary' => $this->svc->summary($ready),
             'batches' => PrintBatch::latest()->limit(5)->get(),
             'lastSync' => ProductionSync::latest()->first(),
+            'lastSuccessfulSync' => ProductionSync::whereNull('error')->latest()->first(),
         ]);
     }
 
@@ -42,15 +44,15 @@ class ProductionController extends Controller
             $result = $this->backlogSync->sync($mode, $request->user()->id);
 
             return redirect()->route('dashboard')->with('ok', sprintf(
-                'Shopify backlog refreshed: %d current, %d orders examined, %d added, %d updated, %d unchanged, %d matched, %d missing, %d quantity deltas.',
+                'Full Shopify sync complete: %d current, %d orders examined, %d new, %d updated, %d unchanged, %d inactive, %d conflicts, %d errors.',
                 $result['shopify_items'],
                 $result['orders_examined'],
                 $result['added'],
                 $result['updated'],
                 $result['unchanged'],
-                $result['matched'],
-                $result['missing'],
-                $result['quantity_deltas']
+                $result['inactive'],
+                $result['conflicts'],
+                0
             ));
         } catch (\Throwable $e) {
             report($e);

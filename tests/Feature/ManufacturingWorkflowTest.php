@@ -48,9 +48,10 @@ class ManufacturingWorkflowTest extends TestCase
     public function test_shopify_sync_uses_requested_fulfillment_filter_and_paginates(): void
     {
         $shopify = Mockery::mock(ShopifyService::class);
-        $shopify->shouldReceive('getProductionBacklog')
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')
             ->once()
-            ->with('unfulfilled_partial')
+            ->with('unfulfilled_partial', [], [])
             ->andReturn([
                 'items' => [$this->shopifyRow('gid://shopify/LineItem/1', 3)],
                 'order_count' => 2,
@@ -280,7 +281,8 @@ class ManufacturingWorkflowTest extends TestCase
         ]);
 
         $shopify = Mockery::mock(ShopifyService::class);
-        $shopify->shouldReceive('getProductionBacklog')->once()->andReturn([
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')->once()->andReturn([
             'items' => [$this->shopifyRow($item->line_item_id, 4)],
             'order_count' => 1,
             'item_count' => 1,
@@ -296,6 +298,153 @@ class ManufacturingWorkflowTest extends TestCase
 
         $this->assertSame(1, app(\App\Services\ProductionService::class)->availableQuantity($item->fresh()));
         $this->assertDatabaseHas('production_items', ['id' => $item->id, 'quantity_delta' => 1]);
+    }
+
+    public function test_repeated_full_sync_updates_existing_item_without_duplicates(): void
+    {
+        $shopify = Mockery::mock(ShopifyService::class);
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')
+            ->twice()
+            ->andReturn([
+                'items' => [$this->shopifyRow('gid://shopify/LineItem/repeat', 2)],
+                'order_count' => 1,
+                'item_count' => 1,
+            ]);
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('artworkIndex')->twice()->andReturn($this->driveIndex());
+
+        $this->app->instance(ShopifyService::class, $shopify);
+        $this->app->instance(GoogleDriveService::class, $drive);
+
+        $this->actingAs($this->user)->post(route('production.sync-backlog'))->assertRedirect();
+        $this->actingAs($this->user)->post(route('production.sync-backlog'))->assertRedirect();
+
+        $this->assertSame(1, ProductionItem::where('line_item_id', 'gid://shopify/LineItem/repeat')->count());
+        $this->assertDatabaseHas('production_syncs', [
+            'added' => 0,
+            'unchanged' => 1,
+            'conflicts' => 0,
+        ]);
+    }
+
+    public function test_reconciliation_marks_cancelled_or_refunded_known_items_inactive_without_deleting_history(): void
+    {
+        $item = $this->approvedItem([
+            'shopify_shop' => 'example.myshopify.com',
+            'shopify_order_id' => 'gid://shopify/Order/cancelled',
+            'line_item_id' => 'gid://shopify/LineItem/cancelled',
+            'quantity' => 2,
+        ]);
+        $batch = $this->batchFor($item, 2, 'PRINTED');
+        $batchItem = $batch->items()->first();
+
+        PrintHistory::create([
+            'print_batch_id' => $batch->id,
+            'print_batch_item_id' => $batchItem->id,
+            'production_item_id' => $item->id,
+            'shopify_line_item_id' => $item->line_item_id,
+            'result' => 'COMPLETED',
+            'quantity' => 2,
+            'batch_type' => 'normal',
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+        ]);
+
+        $shopify = Mockery::mock(ShopifyService::class);
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')->once()->andReturn([
+            'items' => [array_merge($this->shopifyRow($item->line_item_id, 0), [
+                'shopify_shop' => 'example.myshopify.com',
+                'order_id' => 'gid://shopify/Order/cancelled',
+                'is_active' => false,
+                'inactive_reason' => 'Shopify order cancelled',
+                'mode_included' => false,
+            ])],
+            'order_count' => 1,
+            'item_count' => 0,
+        ]);
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('artworkIndex')->once()->andReturn($this->driveIndex());
+
+        $this->app->instance(ShopifyService::class, $shopify);
+        $this->app->instance(GoogleDriveService::class, $drive);
+
+        $this->actingAs($this->user)->post(route('production.sync-backlog'))->assertRedirect();
+
+        $this->assertDatabaseHas('production_items', [
+            'id' => $item->id,
+            'is_active' => false,
+            'inactive_reason' => 'Shopify order cancelled',
+        ]);
+        $this->assertSame(1, PrintHistory::where('production_item_id', $item->id)->count());
+        $this->assertFalse(app(\App\Services\ProductionService::class)->queue()->contains('id', $item->id));
+    }
+
+    public function test_failed_shopify_pagination_does_not_deactivate_existing_records(): void
+    {
+        $item = $this->approvedItem([
+            'shopify_order_id' => 'gid://shopify/Order/old',
+            'line_item_id' => 'gid://shopify/LineItem/old',
+            'quantity' => 2,
+        ]);
+
+        $shopify = Mockery::mock(ShopifyService::class);
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')
+            ->once()
+            ->andThrow(new RuntimeException('Shopify pagination failed after page 2'));
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldNotReceive('artworkIndex');
+
+        $this->app->instance(ShopifyService::class, $shopify);
+        $this->app->instance(GoogleDriveService::class, $drive);
+
+        $this->actingAs($this->user)
+            ->post(route('production.sync-backlog'))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('error');
+
+        $this->assertTrue($item->fresh()->is_active);
+        $this->assertDatabaseHas('production_syncs', [
+            'error' => 'Shopify pagination failed after page 2',
+        ]);
+    }
+
+    public function test_reconciliation_flags_active_batch_quantity_conflicts_for_review(): void
+    {
+        $item = $this->approvedItem([
+            'shopify_order_id' => 'gid://shopify/Order/conflict',
+            'line_item_id' => 'gid://shopify/LineItem/conflict',
+            'quantity' => 3,
+            'last_synced_quantity' => 3,
+        ]);
+
+        $this->batchFor($item, 3, 'QUEUED');
+
+        $shopify = Mockery::mock(ShopifyService::class);
+        $shopify->shouldReceive('shopDomain')->andReturn('example.myshopify.com');
+        $shopify->shouldReceive('getProductionReconciliation')->once()->andReturn([
+            'items' => [array_merge($this->shopifyRow($item->line_item_id, 1), [
+                'order_id' => 'gid://shopify/Order/conflict',
+            ])],
+            'order_count' => 1,
+            'item_count' => 1,
+        ]);
+
+        $drive = Mockery::mock(GoogleDriveService::class);
+        $drive->shouldReceive('artworkIndex')->once()->andReturn($this->driveIndex());
+
+        $this->app->instance(ShopifyService::class, $shopify);
+        $this->app->instance(GoogleDriveService::class, $drive);
+
+        $this->actingAs($this->user)->post(route('production.sync-backlog'))->assertRedirect();
+
+        $this->assertStringContainsString('active batch allocation', $item->fresh()->sync_conflict);
+        $this->assertDatabaseHas('production_syncs', ['conflicts' => 1]);
     }
 
     public function test_batch_requires_explicit_selected_quantities_and_prevents_duplicates(): void

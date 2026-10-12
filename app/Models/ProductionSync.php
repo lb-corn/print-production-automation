@@ -16,6 +16,8 @@ class ProductionSync extends Model
         'matched',
         'missing',
         'quantity_deltas',
+        'inactive',
+        'conflicts',
         'drive_files',
         'error',
         'created_by',

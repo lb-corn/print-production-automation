@@ -289,6 +289,11 @@ GRAPHQL;
         return $this->graphql($query);
     }
 
+    public function shopDomain(): string
+    {
+        return $this->store;
+    }
+
     /**
      * Read the current Lucky Bags manufacturing backlog.
      *
@@ -378,149 +383,24 @@ GRAPHQL;
             $ordersExamined += count($orders);
 
             foreach ($orders as $order) {
-            /*
-             * Ignore cancelled orders.
-             */
-            if (!empty($order['cancelledAt'])) {
-                continue;
-            }
+                $lineItems = $order['lineItems']['nodes'] ?? [];
 
-            /*
-             * Ignore fully refunded orders.
-             */
-            if (
-                ($order['displayFinancialStatus'] ?? '')
-                === 'REFUNDED'
-            ) {
-                continue;
-            }
-
-            $lineItems = $order['lineItems']['nodes'] ?? [];
-
-            if ($order['lineItems']['pageInfo']['hasNextPage'] ?? false) {
-                $lineItems = array_merge(
-                    $lineItems,
-                    $this->getRemainingLineItems(
-                        $order['id'],
-                        $order['lineItems']['pageInfo']['endCursor']
-                    )
-                );
-            }
-
-            foreach ($lineItems as $line) {
-                $productTitle = trim(
-                    (string) (
-                        $line['product']['title']
-                        ?? ''
-                    )
-                );
-
-                if ($productTitle === '') {
-                    continue;
+                if ($order['lineItems']['pageInfo']['hasNextPage'] ?? false) {
+                    $lineItems = array_merge(
+                        $lineItems,
+                        $this->getRemainingLineItems(
+                            $order['id'],
+                            $order['lineItems']['pageInfo']['endCursor']
+                        )
+                    );
                 }
 
-                /*
-                 * Bag manufacturing only.
-                 *
-                 * Do not allow apparel, accessories,
-                 * fees, patches, coolers, etc. into
-                 * the bag production workflow.
-                 */
-                $productType = trim(
-                    (string) (
-                        $line['product']['productType']
-                        ?? ''
-                    )
+                $order['lineItems']['nodes'] = $lineItems;
+                $items = array_merge(
+                    $items,
+                    $this->rowsFromOrder($order, true, [], true)
                 );
-
-                if (!in_array(
-                    $productType,
-                    [
-                        'ACL Pro Stamped 2026',
-                        'ACL Pro Stamped 2027',
-                    ],
-                    true
-                )) {
-                    continue;
-                }
-
-                /*
-                 * Custom bags follow their own
-                 * artwork approval workflow.
-                 *
-                 * For now, exclude them from this
-                 * stock-print backlog.
-                 */
-                if (
-                    stripos(
-                        $productTitle,
-                        'Custom'
-                    ) !== false
-                ) {
-                    continue;
-                }
-
-                /*
-                 * Only actual outstanding quantity
-                 * belongs in the manufacturing backlog.
-                 */
-                $unfulfilledQuantity = (int) (
-                    $line['unfulfilledQuantity']
-                    ?? 0
-                );
-
-                if ($unfulfilledQuantity <= 0) {
-                    continue;
-                }
-
-                $items[] = [
-                    'line_item_id' =>
-                        $line['id'],
-
-                    'order_id' =>
-                        $order['id'],
-
-                    'order_number' =>
-                        $order['name'],
-
-                    'order_date' =>
-                        $order['createdAt'],
-
-                    'customer' =>
-                        $order['customer']['displayName']
-                        ?? null,
-
-                    'product' =>
-                        $productTitle,
-
-                    'product_type' =>
-                        $productType,
-
-                    'variant' =>
-                        $line['variantTitle']
-                        ?? null,
-
-                    'sku' =>
-                        $line['sku']
-                        ?? null,
-
-                    'quantity' =>
-                        $unfulfilledQuantity,
-
-                    'shopify_image' =>
-                        $line['image']['url']
-                        ?? null,
-
-                    'financial_status' =>
-                        $order['displayFinancialStatus']
-                        ?? null,
-
-                    'fulfillment_status' =>
-                        $order['displayFulfillmentStatus']
-                        ?? null,
-                ];
             }
-        }
 
             $pageInfo = $data['orders']['pageInfo'] ?? [];
             $after = $pageInfo['endCursor'] ?? null;
@@ -547,6 +427,229 @@ GRAPHQL;
 
             'end_cursor' => null,
         ];
+    }
+
+    /**
+     * Read Shopify rows for the selected backlog plus already-imported orders.
+     * Known orders are fetched outside the selected filter so cancellations,
+     * refunds, fulfilled lines and quantity changes can be reconciled in place.
+     */
+    public function getProductionReconciliation(
+        string $mode = 'unfulfilled',
+        array $knownOrderIds = [],
+        array $knownLineItemIds = [],
+        int $first = 50
+    ): array {
+        $backlog = $this->getProductionBacklog($mode, $first);
+        $itemsByLine = [];
+
+        foreach ($backlog['items'] as $item) {
+            $item['mode_included'] = true;
+            $item['shopify_shop'] = $this->shopDomain();
+            $itemsByLine[$item['line_item_id']] = $item;
+        }
+
+        $known = $this->getKnownOrderRows($knownOrderIds, $knownLineItemIds);
+
+        foreach ($known['items'] as $item) {
+            $item['shopify_shop'] = $this->shopDomain();
+            $existing = $itemsByLine[$item['line_item_id']] ?? null;
+            $item['mode_included'] = (bool) ($existing['mode_included'] ?? false);
+            $itemsByLine[$item['line_item_id']] = array_merge($existing ?? [], $item);
+        }
+
+        return [
+            'items' => array_values($itemsByLine),
+            'order_count' => $backlog['order_count'] + $known['order_count'],
+            'item_count' => count(array_filter(
+                $itemsByLine,
+                fn (array $item) => (bool) ($item['is_active'] ?? true)
+                    && (bool) ($item['mode_included'] ?? false)
+            )),
+            'has_next_page' => false,
+            'end_cursor' => null,
+        ];
+    }
+
+    private function getKnownOrderRows(array $knownOrderIds, array $knownLineItemIds): array
+    {
+        $knownOrderIds = array_values(array_unique(array_filter($knownOrderIds)));
+        $knownLineItemIds = array_values(array_unique(array_filter($knownLineItemIds)));
+
+        if (!$knownOrderIds) {
+            return ['items' => [], 'order_count' => 0];
+        }
+
+        $query = <<<'GRAPHQL'
+query ProductionKnownOrders($ids: [ID!]!) {
+    nodes(ids: $ids) {
+        ... on Order {
+            id
+            name
+            createdAt
+            cancelledAt
+            displayFinancialStatus
+            displayFulfillmentStatus
+
+            customer {
+                displayName
+            }
+
+            lineItems(first: 100) {
+                nodes {
+                    id
+                    name
+                    quantity
+                    unfulfilledQuantity
+                    sku
+                    variantTitle
+
+                    product {
+                        id
+                        title
+                        productType
+                    }
+
+                    image {
+                        url
+                    }
+                }
+
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+            }
+        }
+    }
+}
+GRAPHQL;
+
+        $items = [];
+        $ordersExamined = 0;
+
+        foreach (array_chunk($knownOrderIds, 50) as $ids) {
+            $data = $this->graphql($query, ['ids' => $ids]);
+
+            foreach ($data['nodes'] ?? [] as $order) {
+                if (!$order) {
+                    continue;
+                }
+
+                $ordersExamined++;
+                $lineItems = $order['lineItems']['nodes'] ?? [];
+
+                if ($order['lineItems']['pageInfo']['hasNextPage'] ?? false) {
+                    $lineItems = array_merge(
+                        $lineItems,
+                        $this->getRemainingLineItems(
+                            $order['id'],
+                            $order['lineItems']['pageInfo']['endCursor']
+                        )
+                    );
+                }
+
+                $order['lineItems']['nodes'] = $lineItems;
+                $items = array_merge(
+                    $items,
+                    $this->rowsFromOrder($order, false, $knownLineItemIds, false)
+                );
+            }
+        }
+
+        return [
+            'items' => $items,
+            'order_count' => $ordersExamined,
+        ];
+    }
+
+    private function rowsFromOrder(
+        array $order,
+        bool $modeIncluded,
+        array $knownLineItemIds = [],
+        bool $eligibleOnly = true
+    ): array {
+        $rows = [];
+
+        foreach ($order['lineItems']['nodes'] ?? [] as $line) {
+            $lineId = (string) ($line['id'] ?? '');
+            $productTitle = trim((string) ($line['product']['title'] ?? ''));
+            $productType = trim((string) ($line['product']['productType'] ?? ''));
+            $unfulfilledQuantity = (int) ($line['unfulfilledQuantity'] ?? 0);
+            $knownLine = in_array($lineId, $knownLineItemIds, true);
+
+            $inactiveReason = $this->inactiveReason(
+                $order,
+                $productTitle,
+                $productType,
+                $unfulfilledQuantity
+            );
+
+            if ($eligibleOnly && $inactiveReason !== null) {
+                continue;
+            }
+
+            if (!$eligibleOnly && $inactiveReason !== null && !$knownLine) {
+                continue;
+            }
+
+            $rows[] = [
+                'line_item_id' => $lineId,
+                'order_id' => $order['id'],
+                'order_number' => $order['name'],
+                'order_date' => $order['createdAt'],
+                'customer' => $order['customer']['displayName'] ?? null,
+                'product' => $productTitle !== '' ? $productTitle : (string) ($line['name'] ?? ''),
+                'product_type' => $productType,
+                'variant' => $line['variantTitle'] ?? null,
+                'sku' => $line['sku'] ?? null,
+                'quantity' => max(0, $unfulfilledQuantity),
+                'shopify_image' => $line['image']['url'] ?? null,
+                'financial_status' => $order['displayFinancialStatus'] ?? null,
+                'fulfillment_status' => $order['displayFulfillmentStatus'] ?? null,
+                'is_active' => $inactiveReason === null,
+                'inactive_reason' => $inactiveReason,
+                'mode_included' => $modeIncluded,
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function inactiveReason(
+        array $order,
+        string $productTitle,
+        string $productType,
+        int $unfulfilledQuantity
+    ): ?string {
+        if (!empty($order['cancelledAt'])) {
+            return 'Shopify order cancelled';
+        }
+
+        if (($order['displayFinancialStatus'] ?? '') === 'REFUNDED') {
+            return 'Shopify order refunded';
+        }
+
+        if ($productTitle === '') {
+            return 'Shopify product title missing';
+        }
+
+        if (!in_array($productType, [
+            'ACL Pro Stamped 2026',
+            'ACL Pro Stamped 2027',
+        ], true)) {
+            return 'Not a stock bag production item';
+        }
+
+        if (stripos($productTitle, 'Custom') !== false) {
+            return 'Custom artwork item excluded from stock workflow';
+        }
+
+        if ($unfulfilledQuantity <= 0) {
+            return 'No outstanding Shopify quantity';
+        }
+
+        return null;
     }
 
     private function getRemainingLineItems(string $orderId, ?string $after): array
