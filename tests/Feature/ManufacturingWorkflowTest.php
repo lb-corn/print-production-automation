@@ -8,9 +8,13 @@ use App\Models\ProductionItem;
 use App\Models\User;
 use App\Services\GoogleDriveService;
 use App\Services\ShopifyService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class ManufacturingWorkflowTest extends TestCase
@@ -31,6 +35,7 @@ class ManufacturingWorkflowTest extends TestCase
         ]);
 
         $this->withoutMiddleware(\App\Http\Middleware\FactoryKey::class);
+        Cache::flush();
     }
 
     protected function tearDown(): void
@@ -177,6 +182,83 @@ class ManufacturingWorkflowTest extends TestCase
         $this->assertSame(4, $result['order_count']);
         $this->assertSame('fulfillment_status:unfulfilled OR fulfillment_status:partial', $service->queries[0][1]['statusQuery']);
         $this->assertCount(3, $service->queries);
+    }
+
+    public function test_shopify_client_reuses_cached_client_credentials_token(): void
+    {
+        config([
+            'services.shopify.store' => 'example.myshopify.com',
+            'services.shopify.access_token' => null,
+            'services.shopify.client_id' => 'client-id',
+            'services.shopify.client_secret' => 'client-secret',
+            'services.shopify.connect_timeout' => 1,
+            'services.shopify.request_timeout' => 2,
+            'services.shopify.retry_attempts' => 0,
+        ]);
+
+        Http::fakeSequence()
+            ->push(['access_token' => 'cached-token', 'expires_in' => 3600], 200)
+            ->push(['data' => ['shop' => ['name' => 'Lucky Bags']]], 200)
+            ->push(['data' => ['shop' => ['name' => 'Lucky Bags']]], 200);
+
+        app(ShopifyService::class)->testConnection();
+        app(ShopifyService::class)->testConnection();
+
+        Http::assertSentCount(3);
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/admin/oauth/access_token');
+        });
+    }
+
+    public function test_shopify_client_retries_transient_token_failures_safely(): void
+    {
+        config([
+            'services.shopify.store' => 'example.myshopify.com',
+            'services.shopify.access_token' => null,
+            'services.shopify.client_id' => 'client-id',
+            'services.shopify.client_secret' => 'client-secret',
+            'services.shopify.connect_timeout' => 1,
+            'services.shopify.request_timeout' => 2,
+            'services.shopify.retry_attempts' => 1,
+            'services.shopify.retry_sleep_ms' => 0,
+        ]);
+
+        Http::fakeSequence()
+            ->push([], 500)
+            ->push(['access_token' => 'retry-token', 'expires_in' => 3600], 200)
+            ->push(['data' => ['shop' => ['name' => 'Lucky Bags']]], 200);
+
+        app(ShopifyService::class)->testConnection();
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_shopify_token_timeout_error_is_actionable_and_sanitized(): void
+    {
+        config([
+            'services.shopify.store' => 'example.myshopify.com',
+            'services.shopify.access_token' => null,
+            'services.shopify.client_id' => 'client-id',
+            'services.shopify.client_secret' => 'shpss_secret_value',
+            'services.shopify.connect_timeout' => 1,
+            'services.shopify.request_timeout' => 2,
+            'services.shopify.retry_attempts' => 0,
+        ]);
+
+        Http::fake(function () {
+            throw new ConnectionException('cURL error 28: Operation timed out after 10000 milliseconds with client_secret=shpss_secret_value');
+        });
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Connection timed out while contacting Shopify');
+        $this->expectExceptionMessage('connect 1s, request 2s');
+
+        try {
+            app(ShopifyService::class)->testConnection();
+        } catch (RuntimeException $e) {
+            $this->assertStringNotContainsString('shpss_secret_value', $e->getMessage());
+            throw $e;
+        }
     }
 
     public function test_repeat_sync_tracks_quantity_delta_without_reopening_completed_work(): void
