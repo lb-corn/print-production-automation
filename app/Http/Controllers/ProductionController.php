@@ -57,7 +57,8 @@ class ProductionController extends Controller
             $this->backlogSync->recordFailure($mode, $e->getMessage(), $request->user()->id);
 
             return redirect()->route('dashboard')
-                ->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
+                ->with('error', 'Shopify backlog refresh failed. Check details below.')
+                ->with('error_details', $e->getMessage());
         }
     }
 

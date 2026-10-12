@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -11,6 +14,11 @@ class ShopifyService
     private string $clientId;
     private string $clientSecret;
     private string $apiVersion;
+    private string $staticAccessToken;
+    private int $connectTimeout;
+    private int $requestTimeout;
+    private int $retryAttempts;
+    private int $retrySleepMs;
 
     private ?string $accessToken = null;
 
@@ -24,6 +32,10 @@ class ShopifyService
             (string) config('services.shopify.client_id')
         );
 
+        $this->staticAccessToken = trim(
+            (string) config('services.shopify.access_token')
+        );
+
         $this->clientSecret = trim(
             (string) config('services.shopify.client_secret')
         );
@@ -35,10 +47,20 @@ class ShopifyService
             )
         );
 
+        $this->connectTimeout = max(1, (int) config('services.shopify.connect_timeout', 5));
+        $this->requestTimeout = max($this->connectTimeout, (int) config('services.shopify.request_timeout', 20));
+        $this->retryAttempts = max(0, (int) config('services.shopify.retry_attempts', 2));
+        $this->retrySleepMs = max(0, (int) config('services.shopify.retry_sleep_ms', 350));
+
         if (
             $this->store === '' ||
-            $this->clientId === '' ||
-            $this->clientSecret === ''
+            (
+                $this->staticAccessToken === '' &&
+                (
+                    $this->clientId === '' ||
+                    $this->clientSecret === ''
+                )
+            )
         ) {
             throw new RuntimeException(
                 'Shopify production integration is not configured.'
@@ -52,8 +74,21 @@ class ShopifyService
      */
     private function getAccessToken(): string
     {
+        if ($this->staticAccessToken !== '') {
+            return $this->staticAccessToken;
+        }
+
         if ($this->accessToken !== null) {
             return $this->accessToken;
+        }
+
+        $cacheKey = $this->tokenCacheKey();
+        $cachedToken = Cache::get($cacheKey);
+
+        if (is_string($cachedToken) && $cachedToken !== '') {
+            $this->accessToken = $cachedToken;
+
+            return $cachedToken;
         }
 
         $url = sprintf(
@@ -61,24 +96,28 @@ class ShopifyService
             $this->store
         );
 
-        $response = Http::asForm()
-            ->timeout(30)
-            ->post($url, [
-                'grant_type' => 'client_credentials',
-                'client_id' => $this->clientId,
-                'client_secret' => $this->clientSecret,
-            ]);
+        $response = $this->sendWithRetry(
+            fn () => Http::asForm()
+                ->connectTimeout($this->connectTimeout)
+                ->timeout($this->requestTimeout)
+                ->post($url, [
+                    'grant_type' => 'client_credentials',
+                    'client_id' => $this->clientId,
+                    'client_secret' => $this->clientSecret,
+                ]),
+            'Shopify token request'
+        );
 
         if ($response->failed()) {
             throw new RuntimeException(
                 'Unable to obtain Shopify access token. HTTP ' .
                 $response->status() .
-                ': ' .
-                $response->body()
+                '. Verify app installation, network access, and Shopify API credentials.'
             );
         }
 
         $token = $response->json('access_token');
+        $expiresIn = (int) ($response->json('expires_in') ?? 3600);
 
         if (!$token) {
             throw new RuntimeException(
@@ -87,6 +126,7 @@ class ShopifyService
         }
 
         $this->accessToken = $token;
+        Cache::put($cacheKey, $token, now()->addSeconds(max(60, $expiresIn - 120)));
 
         return $token;
     }
@@ -116,20 +156,21 @@ class ShopifyService
             $payload['variables'] = $variables;
         }
 
-        $response = Http::withHeaders([
-            'X-Shopify-Access-Token' => $this->getAccessToken(),
-            'Accept' => 'application/json',
-            'Content-Type' => 'application/json',
-        ])
-            ->timeout(60)
-            ->post($url, $payload);
+        $response = $this->sendGraphql($url, $payload);
+
+        if (
+            in_array($response->status(), [401, 403], true) &&
+            $this->staticAccessToken === ''
+        ) {
+            $this->forgetCachedToken();
+            $response = $this->sendGraphql($url, $payload);
+        }
 
         if ($response->failed()) {
             throw new RuntimeException(
                 'Shopify GraphQL request failed. HTTP ' .
                 $response->status() .
-                ': ' .
-                $response->body()
+                '. Check Shopify API access, query limits, and network connectivity.'
             );
         }
 
@@ -143,6 +184,92 @@ class ShopifyService
         }
 
         return $json['data'] ?? [];
+    }
+
+    private function sendGraphql(string $url, array $payload): Response
+    {
+        return $this->sendWithRetry(
+            fn () => Http::withHeaders([
+                'X-Shopify-Access-Token' => $this->getAccessToken(),
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ])
+                ->connectTimeout($this->connectTimeout)
+                ->timeout($this->requestTimeout)
+                ->post($url, $payload),
+            'Shopify GraphQL request'
+        );
+    }
+
+    private function sendWithRetry(callable $request, string $label): Response
+    {
+        $attempt = 0;
+        $lastException = null;
+
+        do {
+            try {
+                $response = $request();
+
+                if (
+                    !$this->isTransientStatus($response->status()) ||
+                    $attempt >= $this->retryAttempts
+                ) {
+                    return $response;
+                }
+            } catch (ConnectionException $e) {
+                $lastException = $e;
+
+                if ($attempt >= $this->retryAttempts) {
+                    break;
+                }
+            }
+
+            $attempt++;
+
+            if ($this->retrySleepMs > 0) {
+                usleep($this->retrySleepMs * 1000);
+            }
+        } while ($attempt <= $this->retryAttempts);
+
+        $message = $lastException?->getMessage() ?? 'transient Shopify network failure';
+
+        throw new RuntimeException(sprintf(
+            '%s failed after %d attempt(s). %s Timeout settings: connect %ss, request %ss.',
+            $label,
+            $this->retryAttempts + 1,
+            $this->sanitizeHttpError($message),
+            $this->connectTimeout,
+            $this->requestTimeout
+        ));
+    }
+
+    private function isTransientStatus(int $status): bool
+    {
+        return $status === 408 || $status === 429 || $status >= 500;
+    }
+
+    private function tokenCacheKey(): string
+    {
+        return 'shopify:access-token:'.sha1($this->store.'|'.$this->clientId);
+    }
+
+    private function forgetCachedToken(): void
+    {
+        $this->accessToken = null;
+        Cache::forget($this->tokenCacheKey());
+    }
+
+    private function sanitizeHttpError(string $message): string
+    {
+        $message = preg_replace('/client_secret=[^&\s]+/i', 'client_secret=[redacted]', $message);
+        $message = preg_replace('/client_id=[^&\s]+/i', 'client_id=[redacted]', $message);
+        $message = preg_replace('/shpss_[A-Za-z0-9_]+/i', '[redacted]', $message);
+
+        if (str_contains(strtolower($message), 'timed out')) {
+            return 'Connection timed out while contacting Shopify. Check internet access, DNS, firewall/proxy rules, and Shopify availability.';
+        }
+
+        return $message ?: 'No response from Shopify.';
     }
 
     /**
