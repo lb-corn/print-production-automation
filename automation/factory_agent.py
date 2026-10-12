@@ -9,6 +9,7 @@ import shutil
 import signal
 import sys
 import time
+import tempfile
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -161,16 +162,25 @@ def api(method, path, **kwargs):
 
 
 def status(batch_id, new_status):
+    return status_with_reason(batch_id, new_status, None)
+
+
+def status_with_reason(batch_id, new_status, reason=None):
     log.info(
         "Batch %s -> %s",
         batch_id,
         new_status,
     )
 
+    body = {"status": new_status}
+
+    if reason:
+        body["failure_reason"] = str(reason)[:500]
+
     api(
         "POST",
         f"/factory/batches/{batch_id}/status",
-        json={"status": new_status},
+        json=body,
     )
 
 
@@ -250,7 +260,9 @@ def prepare(batch):
 
     folder = batch_folder(batch)
 
-    status(database_id, "CLAIMED")
+    if batch.get("status") == "QUEUED":
+        status(database_id, "CLAIMED")
+
     status(database_id, "DOWNLOADING")
 
     service = drive()
@@ -347,9 +359,10 @@ def prepare(batch):
 
     except Exception:
         try:
-            status(
+            status_with_reason(
                 database_id,
                 "FAILED",
+                "Artwork download or preparation failed.",
             )
         except Exception:
             pass
@@ -392,7 +405,9 @@ def verify_prepared_batch(batch):
         if (
             path.is_file()
             and path.name != "batch.json"
+            and path.name != "edgeprint-handoff.json"
             and not path.name.startswith(".")
+            and not path.name.endswith(".lbtmp")
         )
     ]
 
@@ -541,9 +556,10 @@ def handoff(batch):
 
     except Exception:
         try:
-            status(
+            status_with_reason(
                 database_id,
                 "FAILED",
+                "Edge Print hot-folder handoff failed.",
             )
         except Exception:
             pass
@@ -589,7 +605,7 @@ def process_batch(batch):
         current_status,
     )
 
-    if current_status == "QUEUED":
+    if current_status in ("QUEUED", "CLAIMED", "DOWNLOADING"):
         prepare(batch)
         return True
 
@@ -621,7 +637,110 @@ def once():
     return process_batch(batch)
 
 
+def preflight():
+    failures = []
+    warnings = []
+
+    def ok(name):
+        log.info("PREFLIGHT OK: %s", name)
+
+    def fail(name, message):
+        failures.append(f"{name}: {message}")
+        log.error("PREFLIGHT FAIL: %s: %s", name, message)
+
+    def warn(name, message):
+        warnings.append(f"{name}: {message}")
+        log.warning("PREFLIGHT WARN: %s: %s", name, message)
+
+    try:
+        if sys.version_info < (3, 11):
+            fail("Python", f"Python 3.11+ required, found {sys.version.split()[0]}")
+        else:
+            ok(f"Python {sys.version.split()[0]}")
+    except Exception as exc:
+        fail("Python", exc)
+
+    for name in ("requests", "dotenv", "google.oauth2", "googleapiclient.discovery"):
+        try:
+            __import__(name)
+            ok(f"Dependency {name}")
+        except Exception as exc:
+            fail(f"Dependency {name}", exc)
+
+    try:
+        integrity()
+        ok("Agent integrity")
+    except Exception as exc:
+        fail("Agent integrity", exc)
+
+    if BASE.startswith("http://127.0.0.1") or BASE.startswith("http://localhost"):
+        warn(
+            "PRODUCTION_API",
+            "localhost only works if Laravel is running on this Factory PC; use the hosted API URL for remote Laravel.",
+        )
+    else:
+        ok(f"PRODUCTION_API {BASE}")
+
+    try:
+        response = api("GET", "/factory/preflight")
+        if response.get("ok") and response.get("contract", {}).get("operator_print_confirmation_required"):
+            ok("Factory API connectivity/auth")
+        else:
+            fail("Factory API", "Unexpected preflight response")
+    except Exception as exc:
+        fail("Factory API connectivity/auth", exc)
+
+    try:
+        drive().files().list(pageSize=1, fields="files(id,name)").execute()
+        ok("Google Drive readonly access")
+    except Exception as exc:
+        fail("Google Drive readonly access", exc)
+
+    for label, path in (("FACTORY_PRINT_DIR", OUT),):
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=path, delete=True) as handle:
+                handle.write(b"preflight")
+            ok(f"{label} writable")
+        except Exception as exc:
+            fail(f"{label} writable", exc)
+
+    if not HOT:
+        fail("EDGE_PRINT_HOT_FOLDER", "not configured")
+    else:
+        hot_folder = Path(HOT)
+
+        if os.getenv("EDGE_PRINT_HOT_FOLDER_CONFIRMED", "").strip().lower() not in ("1", "true", "yes"):
+            warn(
+                "EDGE_PRINT_HOT_FOLDER",
+                "path is configured, but EDGE_PRINT_HOT_FOLDER_CONFIRMED is not yes; verify Edge Print watches this folder manually.",
+            )
+
+        try:
+            hot_folder.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(dir=hot_folder, suffix=".lbpreflight", delete=True) as handle:
+                handle.write(b"preflight")
+            ok("EDGE_PRINT_HOT_FOLDER writable")
+        except Exception as exc:
+            fail("EDGE_PRINT_HOT_FOLDER writable", exc)
+
+    if warnings:
+        log.warning("PREFLIGHT completed with %d warning(s).", len(warnings))
+
+    if failures:
+        raise RuntimeError("PREFLIGHT failed: " + " | ".join(failures))
+
+    log.info("PREFLIGHT PASSED. No batches were claimed and no print jobs were submitted.")
+
+    return True
+
+
 def main():
+    if "--preflight" in sys.argv:
+        integrity()
+        preflight()
+        return
+
     one = "--once" in sys.argv
 
     log.info(

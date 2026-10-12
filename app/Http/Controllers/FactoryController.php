@@ -11,10 +11,33 @@ class FactoryController extends Controller
 {
     public function __construct(private ProductionService $svc) {}
 
+    public function preflight()
+    {
+        return response()->json([
+            'ok' => true,
+            'service' => 'Lucky Bags Production Factory API',
+            'time' => now()->toIso8601String(),
+            'contract' => [
+                'claim_endpoint' => '/api/factory/batches/next',
+                'status_endpoint' => '/api/factory/batches/{batch}/status',
+                'operator_print_confirmation_required' => true,
+                'physical_print_auto_complete' => false,
+            ],
+        ]);
+    }
+
     public function next()
     {
         $batch = DB::transaction(function () {
-            $batch = PrintBatch::whereIn('status', ['QUEUED', 'HANDOFF_REQUESTED'])
+            $staleBefore = now()->subMinutes((int) env('FACTORY_CLAIM_RETRY_MINUTES', 30));
+
+            $batch = PrintBatch::where(function ($query) use ($staleBefore) {
+                $query->whereIn('status', ['QUEUED', 'HANDOFF_REQUESTED'])
+                    ->orWhere(function ($inner) use ($staleBefore) {
+                        $inner->whereIn('status', ['CLAIMED', 'DOWNLOADING'])
+                            ->where('updated_at', '<=', $staleBefore);
+                    });
+            })
                 ->oldest()
                 ->lockForUpdate()
                 ->first();
@@ -23,11 +46,9 @@ class FactoryController extends Controller
                 $batch->status = 'CLAIMED';
                 $batch->claimed_at = $batch->claimed_at ?: now();
                 $batch->save();
-
-                $batch->status = 'QUEUED';
             }
 
-            return $batch;
+            return $batch?->fresh();
         });
 
         return response()->json([

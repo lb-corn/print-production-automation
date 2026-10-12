@@ -8,3 +8,4 @@ if (!(Test-Path ".\.venv")) { python -m venv .venv }
 New-Item -ItemType Directory -Force logs,factory_print | Out-Null
 if (!(Test-Path ".\.env")) { Copy-Item config.example.env .env; Write-Host "Created .env - edit it before running." -ForegroundColor Yellow }
 Write-Host "Factory Agent installed." -ForegroundColor Green
+Write-Host "Next: edit .env, place service-account JSON, then run .\preflight.ps1 before .\run-once.ps1." -ForegroundColor Yellow
