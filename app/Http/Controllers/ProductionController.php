@@ -92,6 +92,27 @@ class ProductionController extends Controller
 
         $this->svc->verify($item, $decision, $request->user()->id);
 
+        $item = $item->fresh('decision');
+        $item->ready_for_print = $this->svc->ready($item);
+        $item->approval_current = $this->svc->current($item);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $decision === 'CORRECT'
+                    ? 'Artwork approved.'
+                    : 'Artwork marked wrong.',
+                'item' => [
+                    'id' => $item->id,
+                    'decision' => $item->decision?->decision,
+                    'ready_for_print' => $item->ready_for_print,
+                    'approval_current' => $item->approval_current,
+                    'card_classes' => trim(($item->decision?->decision === 'CORRECT' ? 'approved-card ' : '').($item->decision?->decision === 'WRONG' ? 'wrong-card' : '')),
+                    'decision_html' => view('production.partials.item-decision', compact('item'))->render(),
+                ],
+            ]);
+        }
+
         return back()->with(
             'ok',
             $decision === 'CORRECT' ? 'Artwork approved.' : 'Artwork marked wrong.'

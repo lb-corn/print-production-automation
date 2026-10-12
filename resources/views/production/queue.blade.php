@@ -69,6 +69,7 @@
 
                     <div class="job-actions">
                         <span class="ok">APPROVED</span>
+                        <span class="inline-feedback" data-queue-feedback role="status" aria-live="polite"></span>
                     </div>
                 </article>
             @empty
