@@ -316,6 +316,59 @@ class ManufacturingWorkflowTest extends TestCase
             ->assertSessionHasErrors();
     }
 
+    public function test_verification_action_returns_inline_json_feedback(): void
+    {
+        $item = $this->approvedItem();
+
+        $this->actingAs($this->user)
+            ->withHeaders(['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'])
+            ->post(route('verify', $item), ['decision' => 'WRONG'])
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('item.id', $item->id)
+            ->assertJsonPath('item.decision', 'WRONG')
+            ->assertJsonFragment(['message' => 'Artwork marked wrong.']);
+    }
+
+    public function test_factory_preflight_is_non_mutating_and_next_claims_batch_once(): void
+    {
+        $item = $this->approvedItem();
+        $batch = $this->batchFor($item, 1);
+
+        $this->getJson('/api/factory/preflight')
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('contract.operator_print_confirmation_required', true);
+
+        $this->assertSame('QUEUED', $batch->fresh()->status);
+
+        $this->getJson('/api/factory/batches/next')
+            ->assertOk()
+            ->assertJsonPath('batch.id', $batch->id)
+            ->assertJsonPath('batch.status', 'CLAIMED');
+
+        $this->assertSame('CLAIMED', $batch->fresh()->status);
+
+        $this->getJson('/api/factory/batches/next')
+            ->assertOk()
+            ->assertJsonPath('batch', null);
+    }
+
+    public function test_factory_next_allows_stale_claim_recovery(): void
+    {
+        $item = $this->approvedItem();
+        $batch = $this->batchFor($item, 1, 'CLAIMED');
+        $batch->forceFill([
+            'claimed_at' => now()->subHour(),
+            'updated_at' => now()->subHour(),
+        ])->save();
+
+        $this->getJson('/api/factory/batches/next')
+            ->assertOk()
+            ->assertJsonPath('batch.id', $batch->id)
+            ->assertJsonPath('batch.status', 'CLAIMED');
+    }
+
     public function test_factory_status_transitions_are_strict_and_physical_print_is_operator_only(): void
     {
         $item = $this->approvedItem();
