@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ProductionItem;
 use App\Models\PrintBatch;
-use App\Services\ProductionService;
+use App\Models\ProductionItem;
+use App\Models\ProductionSync;
 use App\Services\BacklogSyncService;
+use App\Services\ProductionService;
 use Illuminate\Http\Request;
 
 class ProductionController extends Controller
@@ -17,11 +18,8 @@ class ProductionController extends Controller
 
     public function dashboard()
     {
-        $items = ProductionItem::with('decision')->get();
-
-        $ready = $items->filter(
-            fn ($item) => $this->svc->ready($item)
-        );
+        $items = ProductionItem::with(['decision', 'batchItems.batch', 'printHistories'])->get();
+        $ready = $this->svc->queue();
 
         return view('dashboard.index', [
             'total' => $items->count(),
@@ -30,17 +28,36 @@ class ProductionController extends Controller
             'custom' => $items->where('is_custom', true)->count(),
             'summary' => $this->svc->summary($ready),
             'batches' => PrintBatch::latest()->limit(5)->get(),
+            'lastSync' => ProductionSync::latest()->first(),
         ]);
     }
 
-    public function syncBacklog()
+    public function syncBacklog(Request $request)
     {
+        $mode = $request->validate([
+            'mode' => 'nullable|in:unfulfilled,unfulfilled_partial',
+        ])['mode'] ?? 'unfulfilled';
+
         try {
-            $r = $this->backlogSync->sync();
-            return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing']));
+            $result = $this->backlogSync->sync($mode, $request->user()->id);
+
+            return redirect()->route('dashboard')->with('ok', sprintf(
+                'Shopify backlog refreshed: %d current, %d orders examined, %d added, %d updated, %d unchanged, %d matched, %d missing, %d quantity deltas.',
+                $result['shopify_items'],
+                $result['orders_examined'],
+                $result['added'],
+                $result['updated'],
+                $result['unchanged'],
+                $result['matched'],
+                $result['missing'],
+                $result['quantity_deltas']
+            ));
         } catch (\Throwable $e) {
             report($e);
-            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
+            $this->backlogSync->recordFailure($mode, $e->getMessage(), $request->user()->id);
+
+            return redirect()->route('dashboard')
+                ->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
         }
     }
 
@@ -72,17 +89,11 @@ class ProductionController extends Controller
             'decision' => 'required|in:CORRECT,WRONG',
         ])['decision'];
 
-        $this->svc->verify(
-            $item,
-            $decision,
-            $request->user()->id
-        );
+        $this->svc->verify($item, $decision, $request->user()->id);
 
         return back()->with(
             'ok',
-            $decision === 'CORRECT'
-                ? 'Artwork approved.'
-                : 'Artwork marked wrong.'
+            $decision === 'CORRECT' ? 'Artwork approved.' : 'Artwork marked wrong.'
         );
     }
 
@@ -97,11 +108,24 @@ class ProductionController extends Controller
         ]);
     }
 
+    public function previewBatch(Request $request)
+    {
+        $data = $request->validate([
+            'items' => 'required|array',
+            'items.*' => 'nullable|integer|min:0',
+        ]);
+
+        return view('batches.preview', $this->svc->preview($data['items']));
+    }
+
     public function batch(Request $request)
     {
-        $batch = $this->svc->batch(
-            $request->user()->id
-        );
+        $data = $request->validate([
+            'items' => 'required|array',
+            'items.*' => 'nullable|integer|min:0',
+        ]);
+
+        $batch = $this->svc->batch($request->user()->id, $data['items']);
 
         return redirect('/batches/'.$batch->id)
             ->with('ok', 'Production batch created.');
@@ -110,53 +134,84 @@ class ProductionController extends Controller
     public function batches()
     {
         return view('batches.index', [
-            'batches' => PrintBatch::latest()->get(),
+            'batches' => PrintBatch::withCount('items')->latest()->get(),
         ]);
     }
 
     public function showBatch(PrintBatch $batch)
     {
+        $batch->load('items.productionItem', 'histories');
+
         return view('batches.show', compact('batch'));
     }
 
-    /**
-     * Operator requests the prepared batch to be handed
-     * from the Factory Agent to Epson Edge Print.
-     */
     public function requestEdgePrint(Request $request, PrintBatch $batch)
     {
-        abort_unless(
-            $batch->status === 'PREPARED',
-            422,
-            'Only a PREPARED batch can be sent to Edge Print.'
-        );
-
-        $batch->status = 'HANDOFF_REQUESTED';
-        $batch->save();
+        $this->svc->transition($batch, 'HANDOFF_REQUESTED');
 
         return redirect('/batches/'.$batch->id)
-            ->with(
-                'ok',
-                'Edge Print handoff requested. Waiting for Factory PC.'
-            );
+            ->with('ok', 'Edge Print handoff requested. Waiting for Factory PC. Auto Print remains OFF.');
     }
 
-    /**
-     * Operator confirms the batch was physically printed.
-     */
     public function markPrinted(Request $request, PrintBatch $batch)
     {
-        abort_unless(
-            $batch->status === 'SENT_TO_RIP',
-            422,
-            'Only a batch already sent to Edge Print can be marked printed.'
-        );
+        $data = $request->validate([
+            'items' => 'required|array',
+            'items.*.completed_quantity' => 'required|integer|min:0',
+            'items.*.failed_quantity' => 'required|integer|min:0',
+            'items.*.reason' => 'nullable|string|max:500',
+        ]);
 
-        $batch->status = 'PRINTED';
-        $batch->completed_at = now();
-        $batch->save();
+        $this->svc->confirmPrinted($batch, $data['items'], $request->user()->id);
 
         return redirect('/batches/'.$batch->id)
-            ->with('ok', 'Batch marked as printed.');
+            ->with('ok', 'Physical print results recorded.');
+    }
+
+    public function history(Request $request)
+    {
+        $q = trim((string) $request->query('q'));
+
+        $items = ProductionItem::with('printHistories.batch')
+            ->whereHas('printHistories', function ($query) {
+                $query->where('result', 'COMPLETED')
+                    ->where('batch_type', 'normal');
+            })
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($inner) use ($q) {
+                    $inner->where('order_number', 'like', "%{$q}%")
+                        ->orWhere('product', 'like', "%{$q}%")
+                        ->orWhere('sku', 'like', "%{$q}%")
+                        ->orWhere('line_item_id', 'like', "%{$q}%");
+                });
+            })
+            ->latest()
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('production.history', [
+            'items' => $items,
+            'q' => $q,
+            'svc' => $this->svc,
+        ]);
+    }
+
+    public function reprint(Request $request, ProductionItem $item)
+    {
+        $data = $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'reason' => 'required|string|max:500',
+            'confirm' => 'accepted',
+        ]);
+
+        $batch = $this->svc->createReprintBatch(
+            $item,
+            (int) $data['quantity'],
+            $data['reason'],
+            $request->user()->id
+        );
+
+        return redirect('/batches/'.$batch->id)
+            ->with('ok', 'Reprint batch created without changing Shopify fulfillment or original print history.');
     }
 }

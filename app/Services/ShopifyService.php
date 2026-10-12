@@ -168,15 +168,23 @@ GRAPHQL;
      * This method is READ-ONLY.
      * It does not modify Shopify or the local database.
      */
-    public function getProductionBacklog(int $first = 50): array
+    public function getProductionBacklog(
+        string $mode = 'unfulfilled',
+        int $first = 50
+    ): array
     {
+        $statusQuery = $mode === 'unfulfilled_partial'
+            ? 'fulfillment_status:unfulfilled OR fulfillment_status:partial'
+            : 'fulfillment_status:unfulfilled';
+
         $query = <<<'GRAPHQL'
-query ProductionBacklog($first: Int!) {
+query ProductionBacklog($first: Int!, $after: String, $statusQuery: String!) {
     orders(
         first: $first
+        after: $after
         sortKey: CREATED_AT
         reverse: true
-        query: "fulfillment_status:unfulfilled OR fulfillment_status:partial"
+        query: $statusQuery
     ) {
         nodes {
             id
@@ -209,6 +217,11 @@ query ProductionBacklog($first: Int!) {
                         url
                     }
                 }
+
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
             }
         }
 
@@ -220,19 +233,24 @@ query ProductionBacklog($first: Int!) {
 }
 GRAPHQL;
 
-        $data = $this->graphql(
-            $query,
-            [
-                'first' => $first,
-            ]
-        );
-
         $items = [];
+        $ordersExamined = 0;
+        $after = null;
 
-        foreach (
-            $data['orders']['nodes'] ?? []
-            as $order
-        ) {
+        do {
+            $data = $this->graphql(
+                $query,
+                [
+                    'first' => $first,
+                    'after' => $after,
+                    'statusQuery' => $statusQuery,
+                ]
+            );
+
+            $orders = $data['orders']['nodes'] ?? [];
+            $ordersExamined += count($orders);
+
+            foreach ($orders as $order) {
             /*
              * Ignore cancelled orders.
              */
@@ -250,10 +268,19 @@ GRAPHQL;
                 continue;
             }
 
-            foreach (
-                $order['lineItems']['nodes'] ?? []
-                as $line
-            ) {
+            $lineItems = $order['lineItems']['nodes'] ?? [];
+
+            if ($order['lineItems']['pageInfo']['hasNextPage'] ?? false) {
+                $lineItems = array_merge(
+                    $lineItems,
+                    $this->getRemainingLineItems(
+                        $order['id'],
+                        $order['lineItems']['pageInfo']['endCursor']
+                    )
+                );
+            }
+
+            foreach ($lineItems as $line) {
                 $productTitle = trim(
                     (string) (
                         $line['product']['title']
@@ -368,6 +395,11 @@ GRAPHQL;
             }
         }
 
+            $pageInfo = $data['orders']['pageInfo'] ?? [];
+            $after = $pageInfo['endCursor'] ?? null;
+            $hasNextPage = (bool) ($pageInfo['hasNextPage'] ?? false);
+        } while ($hasNextPage);
+
         return [
             'items' => $items,
 
@@ -376,10 +408,7 @@ GRAPHQL;
              * This is NOT necessarily the number
              * of manufacturing orders.
              */
-            'order_count' => count(
-                $data['orders']['nodes']
-                ?? []
-            ),
+            'order_count' => $ordersExamined,
 
             /*
              * Number of eligible bag-production
@@ -387,13 +416,61 @@ GRAPHQL;
              */
             'item_count' => count($items),
 
-            'has_next_page' =>
-                $data['orders']['pageInfo']['hasNextPage']
-                ?? false,
+            'has_next_page' => false,
 
-            'end_cursor' =>
-                $data['orders']['pageInfo']['endCursor']
-                ?? null,
+            'end_cursor' => null,
         ];
+    }
+
+    private function getRemainingLineItems(string $orderId, ?string $after): array
+    {
+        $query = <<<'GRAPHQL'
+query ProductionBacklogLineItems($orderId: ID!, $after: String) {
+    order(id: $orderId) {
+        lineItems(first: 100, after: $after) {
+            nodes {
+                id
+                name
+                quantity
+                unfulfilledQuantity
+                sku
+                variantTitle
+
+                product {
+                    id
+                    title
+                    productType
+                }
+
+                image {
+                    url
+                }
+            }
+
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+        }
+    }
+}
+GRAPHQL;
+
+        $items = [];
+
+        do {
+            $data = $this->graphql($query, [
+                'orderId' => $orderId,
+                'after' => $after,
+            ]);
+
+            $connection = $data['order']['lineItems'] ?? [];
+            $items = array_merge($items, $connection['nodes'] ?? []);
+
+            $after = $connection['pageInfo']['endCursor'] ?? null;
+            $hasNextPage = (bool) ($connection['pageInfo']['hasNextPage'] ?? false);
+        } while ($hasNextPage);
+
+        return $items;
     }
 }
