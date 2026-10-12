@@ -1,12 +1,4 @@
 <x-layouts.app heading="Production Dashboard" subheading="Orders, artwork readiness and factory print status">
-    @if(session('ok'))
-        <section class="panel notice"><strong>OK</strong> {{ session('ok') }}</section>
-    @endif
-
-    @if(session('error'))
-        <section class="panel notice danger"><strong>ERROR</strong> {{ session('error') }}</section>
-    @endif
-
     <div class="stats">
         <div class="stat"><span>Production Items</span><b>{{ $total }}</b><em>Current Shopify candidates</em></div>
         <div class="stat green"><span>Ready for Print</span><b>{{ $ready }}</b><em>Approved with open quantity</em></div>
@@ -15,16 +7,16 @@
     </div>
 
     <div class="grid2">
-        <section class="panel">
+        <section class="panel sync-panel">
             <div class="panel-head">
                 <div>
                     <h2>Shopify Manual Sync</h2>
                     <p>Read-only backlog import. Fulfillment is never modified.</p>
                 </div>
-                <a href="/ready-for-print">Open queue -></a>
+                <a class="btn secondary" href="/ready-for-print">Open Queue</a>
             </div>
 
-            <form class="inline-form" method="post" action="{{ route('production.sync-backlog') }}" onsubmit="return confirm('Read Shopify backlog and match artwork from Google Drive? This does not change Shopify fulfillment.')">
+            <form class="sync-controls" method="post" action="{{ route('production.sync-backlog') }}" onsubmit="return confirm('Read Shopify backlog and match artwork from Google Drive? This does not change Shopify fulfillment.')">
                 @csrf
                 <label class="radio-card">
                     <input type="radio" name="mode" value="unfulfilled" checked>
@@ -34,15 +26,25 @@
                     <input type="radio" name="mode" value="unfulfilled_partial">
                     <span><b>Unfulfilled + Partially Fulfilled</b><em>Includes partially fulfilled orders</em></span>
                 </label>
-                <button class="primary" type="submit">Sync Backlog</button>
+                <button class="primary sync-button" type="submit">Sync Backlog</button>
             </form>
+
+            @if(session('error_details'))
+                <details class="sync-error" open>
+                    <summary>{{ session('error') ?: 'Shopify sync failed.' }}</summary>
+                    <pre>{{ session('error_details') }}</pre>
+                </details>
+            @endif
 
             @if($lastSync)
                 <div class="sync-meta">
                     <b>Last sync:</b> {{ $lastSync->created_at->format('M d, Y g:i A') }}
                     <span>Mode: {{ $lastSync->mode }}</span>
                     @if($lastSync->error)
-                        <span class="bad">Error: {{ $lastSync->error }}</span>
+                        <details class="sync-error">
+                            <summary>Last sync failed</summary>
+                            <pre>{{ $lastSync->error }}</pre>
+                        </details>
                     @else
                         <span>{{ $lastSync->shopify_items }} items, {{ $lastSync->orders_examined }} orders, {{ $lastSync->quantity_deltas }} quantity deltas</span>
                     @endif
@@ -84,7 +86,7 @@
                     <strong class="badge">{{ $batch->status }}</strong>
                 </a>
             @empty
-                <div class="empty">No print batches created yet.</div>
+                <div class="empty compact-empty">No print batches yet.</div>
             @endforelse
         </section>
     </div>

@@ -6,12 +6,15 @@
         <div class="stat"><span>Artwork Files</span><b>{{ $summary['artwork_files'] }}</b></div>
     </div>
 
-    <section class="panel material">
+    <section class="panel material queue-hero">
         <div class="panel-head">
             <div>
                 <h2>Selectable Production Queue</h2>
                 <p>Choose individual line items and quantities before creating a batch.</p>
             </div>
+            @if($items->count())
+                <button class="primary" type="submit" form="queue-batch-form">Review Selected Batch</button>
+            @endif
         </div>
 
         <h3>Printable</h3>
@@ -24,7 +27,7 @@
         </div>
     </section>
 
-    <form method="post" action="{{ route('batch.preview') }}">
+    <form id="queue-batch-form" method="post" action="{{ route('batch.preview') }}">
         @csrf
 
         <div class="cards">
@@ -69,7 +72,7 @@
                     </div>
                 </article>
             @empty
-                <div class="empty">No approved stock orders are ready for print.</div>
+                <div class="empty compact-empty">No approved stock orders are ready for print.</div>
             @endforelse
         </div>
 
