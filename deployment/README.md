@@ -61,3 +61,13 @@ FTPS upload is not an atomic or zero-downtime release mechanism. Existing databa
 ## After activation
 
 Check login, dashboard, artwork verification, Ready for Print, the batch list and a batch detail page with its confirmation history. Confirm the Factory API still rejects unauthenticated requests and that the existing factory configuration uses the correct HTTPS endpoint. Do not trigger an actual print job merely to test the upload.
+
+### FTPS certificate and FTP account directory
+
+Use a hostname matching the hosting server FTPS certificate for `PROD_FTP_SERVER`. If the connection must use an IP, set `PROD_FTP_TLS_SERVER_NAME` to the certificate hostname; TLS verification remains required for both control and data connections. Get the hostname from cPanel Configure FTP Client or HostGator support.
+
+The FTP account home must be `/home2/antspixa/public_html/x_dev/luckyprodauto/prod`, not `prod/public`. The website document root remains `prod/public`. The uploader refuses a root containing `index.php` to prevent accidentally publishing the full Laravel application inside the public directory.
+
+Security and Laravel validation run in parallel. PHP installation is skipped when the required runner packages already exist, and uploads skip unchanged files and reuse directory lookups. Malware and dependency checks remain enabled.
+
+The configured IP `192.185.52.143` presents a certificate covering `hostgator.com`; the workflow uses that verified TLS identity for this specific IP. `PROD_FTP_TLS_SERVER_NAME` can override it if HostGator changes the certificate. No certificate verification is disabled.

@@ -88,7 +88,6 @@ jobs:
 
   validate:
     name: Laravel validation
-    needs: security
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -99,8 +98,10 @@ jobs:
       - name: Setup PHP from Ubuntu packages
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          if ! /usr/bin/php8.3 -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo","curl","zip"] as $e) { if (!extension_loaded($e)) exit(1); }' 2>/dev/null || ! command -v composer >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          fi
           sudo update-alternatives --set php /usr/bin/php8.3
           php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 1);'
           php -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing PHP extension: ".$extension.PHP_EOL); exit(1); } }'
@@ -141,8 +142,10 @@ jobs:
       - name: Setup PHP from Ubuntu packages
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          if ! /usr/bin/php8.3 -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo","curl","zip"] as $e) { if (!extension_loaded($e)) exit(1); }' 2>/dev/null || ! command -v composer >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          fi
           sudo update-alternatives --set php /usr/bin/php8.3
           php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 1);'
           php -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing PHP extension: ".$extension.PHP_EOL); exit(1); } }'
@@ -214,6 +217,7 @@ jobs:
           clamscan --recursive --infected --no-summary .deploy
       - name: Deploy via encrypted FTPS without a third-party action
         env:
+          FTP_TLS_SERVER_NAME: ${{ secrets.PROD_FTP_TLS_SERVER_NAME }}
           FTP_SERVER: ${{ secrets.PROD_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.PROD_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.PROD_FTP_PASSWORD }}
@@ -226,6 +230,7 @@ jobs:
           import os
           from pathlib import Path, PurePosixPath
           import ssl
+          import ipaddress
 
           # The FTP login is already rooted at prod; never append public/ or a host path.
           root = Path('.deploy').resolve()
@@ -233,6 +238,13 @@ jobs:
           host = os.environ['FTP_SERVER'].strip()
           if not host or any(c in host for c in '/\\\r\n\t '):
               raise SystemExit('FTP_SERVER must be the certificate hostname, without a scheme or path')
+          tls_name = os.environ.get('FTP_TLS_SERVER_NAME', '').strip() or ('hostgator.com' if host == '192.185.52.143' else host)
+          try:
+              ipaddress.ip_address(tls_name)
+          except ValueError:
+              pass
+          else:
+              raise SystemExit('Set PROD_FTP_SERVER to the certificate hostname, or add PROD_FTP_TLS_SERVER_NAME with that hostname. An IP cannot verify this server certificate.')
           files = sorted(path for path in root.rglob('*') if path.is_file())
           if not files or any(path.is_symlink() for path in root.rglob('*')):
               raise SystemExit('Empty deployment package or symlink detected')
@@ -246,9 +258,14 @@ jobs:
           ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60)
           try:
               ftp.connect(host, 21)
+              ftp.host = tls_name  # Verify control and data TLS against the certificate hostname.
               ftp.login(os.environ['FTP_USERNAME'], os.environ['FTP_PASSWORD'])
               ftp.prot_p()  # Encrypt data transfers as well as the authenticated control connection.
               remote_root = ftp.pwd()
+              # A chroot often reports /, so also detect Laravel's public entry point.
+              entries = ftp.nlst()
+              if remote_root.rstrip('/').endswith('/public') or any(PurePosixPath(entry).name == 'index.php' for entry in entries):
+                  raise SystemExit('FTP account appears rooted at public/. Change its home directory to prod/, keeping the website document root at prod/public/.')
               state = bytearray()
               def collect(chunk):
                   state.extend(chunk)
@@ -263,20 +280,30 @@ jobs:
               if not isinstance(previous, dict):
                   raise ValueError('Invalid remote deployment inventory')
               uploaded = 0
+              remote_parent = None
+              known_dirs = set()
               for path in files:
                   relative = path.relative_to(root).as_posix()
                   if previous.get(relative) == current[relative]:
                       continue
-                  ftp.cwd(remote_root)
-                  for part in PurePosixPath(relative).parts[:-1]:
-                      try:
-                          ftp.mkd(part)
-                      except ftplib.error_perm as error:
-                          if not str(error).startswith('550'):
-                              raise
-                      ftp.cwd(part)  # Verify that an existing target really is an accessible directory.
+                  parent = PurePosixPath(relative).parent.as_posix()
+                  if parent != remote_parent:
+                      ftp.cwd(remote_root)
+                      traversed = []
+                      for part in PurePosixPath(relative).parts[:-1]:
+                          traversed.append(part)
+                          directory = '/'.join(traversed)
+                          if directory not in known_dirs:
+                              try:
+                                  ftp.mkd(part)
+                              except ftplib.error_perm as error:
+                                  if not str(error).startswith('550'):
+                                      raise
+                              known_dirs.add(directory)
+                          ftp.cwd(part)
+                      remote_parent = parent
                   with path.open('rb') as handle:
-                      ftp.storbinary('STOR ' + path.name, handle, blocksize=65536)
+                      ftp.storbinary('STOR ' + path.name, handle, blocksize=262144)
                   uploaded += 1
               ftp.cwd(remote_root)
               inventory = json.dumps(current, sort_keys=True).encode()
