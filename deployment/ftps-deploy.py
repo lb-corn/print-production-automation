@@ -48,6 +48,12 @@ def read_state(ftp):
     except ftplib.error_perm as exc:
         if not str(exc).startswith("550"):
             raise
+        payload.clear()
+        try:
+            ftp.retrbinary("RETR " + STATE + ".backup", collect)
+        except ftplib.error_perm as backup_exc:
+            if not str(backup_exc).startswith("550"):
+                raise
     if not payload:
         return {}
     data = json.loads(payload)
@@ -59,12 +65,24 @@ def read_state(ftp):
 def write_state(ftp, inventory):
     data = json.dumps(inventory, sort_keys=True).encode("utf-8")
     ftp.storbinary("STOR " + STATE + ".pending", io.BytesIO(data))
-    # On FTP servers that do not support replace-on-rename, do not remove
-    # the old inventory; continue using its existing record next time.
     try:
         ftp.rename(STATE + ".pending", STATE)
     except ftplib.error_perm as exc:
-        raise RuntimeError("FTPS server cannot atomically replace the inventory; deployment checkpoint failed") from exc
+        # Many FTPS servers require deleting an existing destination first.
+        # Keep a backup of the inventory so a failed rename is recoverable.
+        try:
+            ftp.delete(STATE + ".backup")
+        except ftplib.error_perm:
+            pass
+        try:
+            ftp.rename(STATE, STATE + ".backup")
+        except ftplib.error_perm:
+            raise RuntimeError("Cannot replace remote deployment inventory") from exc
+        try:
+            ftp.rename(STATE + ".pending", STATE)
+        except Exception:
+            ftp.rename(STATE + ".backup", STATE)
+            raise
 
 
 def upload_file(ftp, path, relative, remote_root):
@@ -76,14 +94,10 @@ def upload_file(ftp, path, relative, remote_root):
         except ftplib.error_perm:
             ftp.mkd(part)
             ftp.cwd(part)
+    # Direct upload is compatible with restricted shared-host FTP servers.
+    # A failed transfer is never checkpointed; its file will retry next run.
     with path.open("rb") as handle:
-        ftp.storbinary("STOR " + pieces[-1] + ".uploading", handle, blocksize=262144)
-    # A partially transferred destination must not masquerade as complete.
-    try:
-        ftp.rename(pieces[-1] + ".uploading", pieces[-1])
-    except ftplib.error_perm:
-        # Some FTP servers will not replace an existing name. Fail safely.
-        raise RuntimeError("FTPS rename failed for " + relative)
+        ftp.storbinary("STOR " + pieces[-1], handle, blocksize=262144)
 
 
 def main():
