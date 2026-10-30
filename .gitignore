@@ -29,3 +29,6 @@ factory_edgeprint_test/
 **/.env
 *.pem
 *.p12
+
+/docs/.qa*/
+/docs/__pycache__/

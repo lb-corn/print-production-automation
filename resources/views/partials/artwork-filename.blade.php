@@ -1,0 +1,1 @@
+<p class="artwork-filename" title="{{$filename}}" aria-label="{{$filename}}">@if(\Illuminate\Support\Str::length($filename)>32)<span class="filename-prefix">{{\Illuminate\Support\Str::substr($filename,0,-24)}}</span><span class="filename-tail">{{\Illuminate\Support\Str::substr($filename,-24)}}</span>@else<span>{{$filename}}</span>@endif</p>

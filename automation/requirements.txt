@@ -1,4 +1,2 @@
-requests>=2.32
-google-api-python-client>=2.0
-google-auth>=2.0
-python-dotenv>=1.0
+# Install the fully pinned, hash-checked release lock.
+-r requirements.lock

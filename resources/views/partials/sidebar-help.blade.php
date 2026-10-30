@@ -1,0 +1,1 @@
+<div class="sidebar-help sidebar-live"><div class="sidebar-live-heading"><strong>Production now</strong><span data-workspace-live>Live</span></div>@include('partials.workspace-status')<p>Production items · updates every minute</p></div>
