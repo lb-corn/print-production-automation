@@ -15,9 +15,9 @@ The existing server `.env`, APP_KEY, database, Google credentials, runtime stora
 
 Keep the existing secret names, configured as repository secrets or in the `production` environment:
 
-- `LB_PRODUCTION_FTP_SERVER`: hostname matching the FTPS certificate, without a URL scheme.
-- `LB_PRODUCTION_FTP_USERNAME`: the existing account rooted at `prod`.
-- `LB_PRODUCTION_FTP_PASSWORD`: that account's password.
+- `PROD_FTP_SERVER`: hostname matching the FTPS certificate, without a URL scheme.
+- `PROD_FTP_USERNAME`: the existing account rooted at `prod`.
+- `PROD_FTP_PASSWORD`: that account's password.
 
 Configure the GitHub `production` environment with the desired reviewers and deployment branch restrictions. The only external action is GitHub-owned `actions/checkout`, pinned to a full commit SHA, with Git credentials not persisted. PHP and Composer come from Ubuntu 24.04 packages; policy checks, packaging and Python standard-library FTPS upload run inline in the workflow. No third-party actions or `.github/scripts` are required. The workflow uses explicit FTPS on port 21 with strict certificate validation; it will not fall back to plaintext FTP or bypass a certificate failure.
 
