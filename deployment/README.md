@@ -1,6 +1,6 @@
 # Lucky Bags production deployment
 
-One unified deployment job checks the source, validates Laravel, builds the production package and uploads it. There is one checkout, one PHP setup and one source malware scan. It runs only through **Actions → Lucky Bags Secure Production Deployment → Run workflow**. Only a run selected from `main` can enter the deployment job. Merging or pushing does not deploy the site automatically.
+The workflow follows the supplied DinaPotha structure: Security gate, Laravel validation, then Deploy to HostGator. There is one source malware scan, matching the reference. It runs only through **Actions → Lucky Bags Secure Production Deployment → Run workflow**. Only a run selected from `main` can enter the deployment job. Merging or pushing does not deploy the site automatically.
 
 ## Existing hosting paths
 
@@ -68,6 +68,10 @@ Use a hostname matching the hosting server FTPS certificate for `PROD_FTP_SERVER
 
 The FTP account home must be `/home2/antspixa/public_html/x_dev/luckyprodauto/prod`, not `prod/public`. The website document root remains `prod/public`. The uploader refuses a root containing `index.php` to prevent accidentally publishing the full Laravel application inside the public directory.
 
-All deployment steps are maintained in one job and run in order; a failed check prevents upload. PHP installation is skipped when the required runner packages already exist, and uploads skip unchanged files and reuse directory lookups. Malware and dependency checks remain enabled.
+All deployment steps are maintained in one workflow with the same three jobs and ordering as DinaPotha; a failed check prevents upload. PHP installation is skipped when the required runner packages already exist, and uploads skip unchanged files and reuse directory lookups. Malware and dependency checks remain enabled.
 
 The configured IP `192.185.52.143` presents a certificate covering `hostgator.com`; the workflow uses that verified TLS identity for this specific IP. `PROD_FTP_TLS_SERVER_NAME` can override it if HostGator changes the certificate. No certificate verification is disabled.
+
+### Required differences from DinaPotha
+
+Repository policy blocks the third-party PHP and FTP actions and requires full SHA pins. Ubuntu PHP setup and inline FTPS replace those actions. The allowlisted package excludes local secrets and the factory agent. The FTP account home must be `prod`, while the website document root stays `prod/public`. Uploading to `./` cannot escape an FTP account confined to `prod/public`; the root guard prevents publishing private Laravel files there.
