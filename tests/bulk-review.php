@@ -7,6 +7,9 @@ config(['database.default' => 'sqlite', 'database.connections.sqlite.database' =
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $file) (require $file)->up();
 $user = App\Models\User::create(['name'=>'Test','email'=>'ui-test@example.test','password'=>'unused']);
+// CI and these tests must not require live Shopify credentials or a Google private key.
+$app->instance(App\Services\ShopifyService::class, new class extends App\Services\ShopifyService { public function __construct() {} });
+$app->instance(App\Services\GoogleDriveService::class, new class extends App\Services\GoogleDriveService { public function __construct() {} });
 $controller = $app->make(App\Http\Controllers\ProductionController::class);
 $svc = $app->make(App\Services\ProductionService::class);
 $create = fn($id, $extra=[]) => App\Models\ProductionItem::create(array_merge([
