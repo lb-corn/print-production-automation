@@ -149,9 +149,9 @@ jobs:
           composer --version
       - name: Require existing deployment credentials
         env:
-          FTP_SERVER: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
+          FTP_SERVER: ${{ secrets.PROD_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.PROD_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.PROD_FTP_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
@@ -214,9 +214,9 @@ jobs:
           clamscan --recursive --infected --no-summary .deploy
       - name: Deploy via encrypted FTPS without a third-party action
         env:
-          FTP_SERVER: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
+          FTP_SERVER: ${{ secrets.PROD_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.PROD_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.PROD_FTP_PASSWORD }}
         run: |
           python3 - <<'PY'
           import ftplib
