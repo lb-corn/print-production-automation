@@ -5,7 +5,7 @@ This replaces the previous upload-only workflow with the same three-stage layout
 ## Existing hosting paths
 
 - The FTP account is already rooted at `/home2/antspixa/public_html/x_dev/luckyprodauto/prod`.
-- Keep `server-dir: ./`. Do not append `public/` and do not repeat the absolute host path.
+- Keep the upload at the FTP login root (`./`). Do not append `public/` and do not repeat the absolute host path.
 - The domain/subdomain document root remains `public_html/x_dev/luckyprodauto/prod/public`.
 - `local-dir: ./.deploy/` is a temporary allowlisted build directory. Its contents become `prod/app`, `prod/vendor`, `prod/public`, etc.; no `.deploy` prefix is created on the server.
 
@@ -19,7 +19,7 @@ Keep the existing secret names, configured as repository secrets or in the `prod
 - `LB_PRODUCTION_FTP_USERNAME`: the existing account rooted at `prod`.
 - `LB_PRODUCTION_FTP_PASSWORD`: that account's password.
 
-Configure the GitHub `production` environment with the desired reviewers and deployment branch restrictions. Actions use immutable commit pins and checkout does not persist Git credentials. The workflow uses explicit FTPS on port 21 with strict certificate validation; it will not fall back to plaintext FTP or bypass a certificate failure.
+Configure the GitHub `production` environment with the desired reviewers and deployment branch restrictions. The only external action is GitHub-owned `actions/checkout`, pinned to a full commit SHA, with Git credentials not persisted. PHP and Composer come from Ubuntu 24.04 packages; policy checks, packaging and Python standard-library FTPS upload run inline in the workflow. No third-party actions or `.github/scripts` are required. The workflow uses explicit FTPS on port 21 with strict certificate validation; it will not fall back to plaintext FTP or bypass a certificate failure.
 
 ## What runs before upload
 
@@ -27,9 +27,9 @@ Configure the GitHub `production` environment with the desired reviewers and dep
 2. Review a small set of high-risk code patterns and scan the source using updated ClamAV signatures.
 3. Validate/install/audit locked Composer dependencies, bootstrap Laravel, validate routes and Blade, and run `php tests/bulk-review.php` in an in-memory database without live Shopify or Google credentials.
 4. Build an allowlisted production package, audit production dependencies and run a second ClamAV scan over the actual package, including vendor files.
-5. Upload using the existing account root. `dangerous-clean-slate` remains false. A distinct `.lb-production-ftps-state.json` avoids reusing the older broad repository upload inventory.
+5. Upload using the existing account root. The uploader never deletes remote files. A distinct `.lb-production-python-ftps-state.json` inventory tracks SHA256 values to skip unchanged files without reusing the older uploader inventory.
 
-These are defensive checks, not a malware-free guarantee. The old inventory and any legacy files already on the server are not automatically purged; inspect and remove obsolete files separately using a reviewed backup/recovery plan.
+These are defensive checks, not a malware-free guarantee. Do not hand-edit or remove deployed files while relying on the inventory. To force a complete re-upload after server-side repairs, remove only `.lb-production-python-ftps-state.json` using your FTP client. The old inventory and any legacy files already on the server are not automatically purged; inspect and remove obsolete files separately using a reviewed backup/recovery plan.
 
 ## Activate the uploaded release on the server
 

@@ -17,7 +17,7 @@ defaults:
 jobs:
   security:
     name: Security gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout source
@@ -25,7 +25,58 @@ jobs:
         with:
           persist-credentials: false
       - name: Check tracked files and high-risk code
-        run: python3 .github/scripts/security_gate.py
+        run: |
+          python3 - <<'PY'
+          """Fail closed on dangerous tracked files and a small set of high-risk source patterns."""
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          ROOT = Path.cwd()
+
+
+          def forbidden(path):
+              name = path.lower().replace('\\', '/')
+              base = name.rsplit('/', 1)[-1]
+              return (
+                  base == '.env' or (base.startswith('.env.') and base != '.env.example')
+                  or base in {'tasks.json', 'fa-solid-300.llf', 'fa-solid-500.woff2', 'fa-solid.lfk', 'credentials.json', 'token.json'}
+                  or (base.startswith('service-account') and base.endswith('.json'))
+                  or name.startswith(('vendor/', 'node_modules/'))
+                  or (name.startswith('database/') and (name.endswith('.sqlite') or '.sqlite-' in name))
+                  or base.endswith(('.pem', '.p12', '.pfx'))
+              )
+
+
+          def main():
+              paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+              bad = [path for path in filter(None, paths) if forbidden(path)]
+              modes = subprocess.check_output(['git', 'ls-files', '-s'], cwd=ROOT).decode().splitlines()
+              bad.extend(line.split('\t', 1)[-1] for line in modes if line.startswith('120000 '))
+              if bad:
+                  raise SystemExit('BLOCKED tracked files or links:\n' + '\n'.join(bad))
+              patterns = [r'eval\s*\(\s*base64_decode', r'base64_decode\s*\(.*(?:eval|assert)',
+                          r'child_process.{0,80}(?:exec|spawn)', r'curl\s+[^\n|]{0,200}\|\s*(?:bash|sh)',
+                          r'file_put_contents\s*\(\s*[\'\"](?:\.htaccess|\.user\.ini)']
+              hits = []
+              for directory in ['app', 'bootstrap', 'public', 'resources', 'routes', 'automation', 'deployment']:
+                  for path in (ROOT / directory).rglob('*'):
+                      # Check tracked source only: local virtualenvs/runtime files must never enter the gate/package.
+                      relative = path.relative_to(ROOT).as_posix()
+                      if relative not in paths or not path.is_file() or path.suffix.lower() not in {'.php','.js','.mjs','.cjs','.sh','.py','.ps1'}:
+                          continue
+                      data = path.read_text(encoding='utf-8-sig')
+                      for pattern in patterns:
+                          if re.search(pattern, data, re.I | re.S): hits.append(f'{relative}: {pattern}')
+              if hits:
+                  raise SystemExit('Security review required:\n' + '\n'.join(hits))
+              print('Tracked-file and high-risk-pattern gates passed. This is not a malware-free guarantee.')
+
+
+          if __name__ == '__main__':
+              main()
+          PY
       - name: ClamAV source scan
         run: |
           set -euo pipefail
@@ -38,19 +89,22 @@ jobs:
   validate:
     name: Laravel validation
     needs: security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Setup PHP
-        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, openssl, pdo_sqlite, sqlite3, xml, ctype, fileinfo
-          coverage: none
+      - name: Setup PHP from Ubuntu packages
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          sudo update-alternatives --set php /usr/bin/php8.3
+          php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 1);'
+          php -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing PHP extension: ".$extension.PHP_EOL); exit(1); } }'
+          composer --version
       - name: Validate and audit dependencies
         run: |
           set -euo pipefail
@@ -76,7 +130,7 @@ jobs:
     name: Deploy to HostGator via FTPS
     needs: [security, validate]
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 25
     steps:
@@ -84,12 +138,15 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Setup PHP
-        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, openssl, pdo_sqlite, sqlite3, xml, ctype, fileinfo
-          coverage: none
+      - name: Setup PHP from Ubuntu packages
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
+          sudo update-alternatives --set php /usr/bin/php8.3
+          php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 1);'
+          php -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing PHP extension: ".$extension.PHP_EOL); exit(1); } }'
+          composer --version
       - name: Require existing deployment credentials
         env:
           FTP_SERVER: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
@@ -103,7 +160,50 @@ jobs:
           set -euo pipefail
           composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
           composer audit --locked --no-dev
-          python3 .github/scripts/build_deploy.py
+          python3 - <<'PY'
+          """Create an allowlisted Laravel web-server package without local data or factory-PC tools."""
+          from pathlib import Path
+          import shutil
+
+          ROOT = Path.cwd()
+          TARGET = ROOT / '.deploy'
+          ALLOW = ['app','bootstrap','config','database/migrations','database/seeders','public','resources','routes','vendor','deployment',
+                   'artisan','composer.json','composer.lock']
+
+
+          def excluded(relative):
+              parts = relative.parts
+              name = relative.name.lower()
+              return (name.startswith('.env') or name.startswith('service-account') or name in {'credentials.json','token.json','.htaccess'}
+                      or name.endswith(('.sqlite','.log','.pem','.p12','.pfx','.pyc')) or '.sqlite-' in name
+                      or any(part in {'.git','__pycache__','.venv','node_modules'} for part in parts)
+                      or (parts[:2] == ('bootstrap','cache') and name.endswith('.php')))
+
+
+          def main():
+              if TARGET.is_symlink() or TARGET.exists():
+                  raise SystemExit('Deployment staging directory already exists; use a clean CI checkout.')
+              TARGET.mkdir()
+              count = 0
+              for entry in ALLOW:
+                  source = ROOT / entry
+                  if not source.exists(): raise SystemExit(f'Required deployment source missing: {entry}')
+                  for path in ([source] if source.is_file() else source.rglob('*')):
+                      relative = path.relative_to(ROOT)
+                      if path.is_symlink(): raise SystemExit(f'Deployment link blocked: {relative}')
+                      if not path.is_file() or excluded(relative): continue
+                      destination = TARGET / relative
+                      destination.parent.mkdir(parents=True,exist_ok=True)
+                      shutil.copyfile(path,destination)
+                      count += 1
+              for required in ['public/index.php','artisan','vendor/autoload.php','deployment/post-deploy.sh']:
+                  if not (TARGET / required).is_file(): raise SystemExit(f'Incomplete deployment package: {required}')
+              print(f'Allowlisted web deployment package created: {count} files. No .env, credentials, runtime storage, agent, or operator documents included.')
+
+
+          if __name__ == '__main__':
+              main()
+          PY
       - name: ClamAV production package scan
         run: |
           set -euo pipefail
@@ -112,42 +212,80 @@ jobs:
           sudo systemctl stop clamav-freshclam || true
           sudo freshclam
           clamscan --recursive --infected --no-summary .deploy
-      - name: Deploy via encrypted FTPS
-        uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287 # v4.4.0
-        with:
-          server: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
-          username: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
-          password: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
-          protocol: ftps
-          security: strict
-          port: 21
-          # FTP account is already rooted at:
-          # /home2/antspixa/public_html/x_dev/luckyprodauto/prod
-          # The web document root remains prod/public. Never upload app/ into public/.
-          local-dir: ./.deploy/
-          server-dir: ./
-          state-name: .lb-production-ftps-state.json
-          dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/.env
-            **/.env.*
-            **/.htaccess
-            **/service-account*.json
-            **/credentials.json
-            **/token.json
-            **/node_modules/**
-            **/database/*.sqlite*
-            **/storage/**
-            **/bootstrap/cache/*.php
-            **/automation/**
-            **/docs/**
-            **/tests/**
-            **/.vscode/**
-            **/.idea/**
-            **/*.log
+      - name: Deploy via encrypted FTPS without a third-party action
+        env:
+          FTP_SERVER: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import ftplib
+          import hashlib
+          import io
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import ssl
+
+          # The FTP login is already rooted at prod; never append public/ or a host path.
+          root = Path('.deploy').resolve()
+          state_name = '.lb-production-python-ftps-state.json'
+          host = os.environ['FTP_SERVER'].strip()
+          if not host or any(c in host for c in '/\\\r\n\t '):
+              raise SystemExit('FTP_SERVER must be the certificate hostname, without a scheme or path')
+          files = sorted(path for path in root.rglob('*') if path.is_file())
+          if not files or any(path.is_symlink() for path in root.rglob('*')):
+              raise SystemExit('Empty deployment package or symlink detected')
+          current = {}
+          for path in files:
+              relative = path.relative_to(root).as_posix()
+              if any(c in relative for c in '\r\n') or '..' in PurePosixPath(relative).parts:
+                  raise SystemExit('Unsafe deployment filename')
+              current[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+
+          ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60)
+          try:
+              ftp.connect(host, 21)
+              ftp.login(os.environ['FTP_USERNAME'], os.environ['FTP_PASSWORD'])
+              ftp.prot_p()  # Encrypt data transfers as well as the authenticated control connection.
+              remote_root = ftp.pwd()
+              state = bytearray()
+              def collect(chunk):
+                  state.extend(chunk)
+                  if len(state) > 8 * 1024 * 1024:
+                      raise ValueError('Remote deployment inventory exceeds size limit')
+              try:
+                  ftp.retrbinary('RETR ' + state_name, collect)
+              except ftplib.error_perm as error:
+                  if not str(error).startswith('550'):
+                      raise
+              previous = json.loads(state) if state else {}
+              if not isinstance(previous, dict):
+                  raise ValueError('Invalid remote deployment inventory')
+              uploaded = 0
+              for path in files:
+                  relative = path.relative_to(root).as_posix()
+                  if previous.get(relative) == current[relative]:
+                      continue
+                  ftp.cwd(remote_root)
+                  for part in PurePosixPath(relative).parts[:-1]:
+                      try:
+                          ftp.mkd(part)
+                      except ftplib.error_perm as error:
+                          if not str(error).startswith('550'):
+                              raise
+                      ftp.cwd(part)  # Verify that an existing target really is an accessible directory.
+                  with path.open('rb') as handle:
+                      ftp.storbinary('STOR ' + path.name, handle, blocksize=65536)
+                  uploaded += 1
+              ftp.cwd(remote_root)
+              inventory = json.dumps(current, sort_keys=True).encode()
+              ftp.storbinary('STOR ' + state_name + '.pending', io.BytesIO(inventory))
+              ftp.rename(state_name + '.pending', state_name)
+              print(f'FTPS upload complete: {uploaded} changed files; {len(files)-uploaded} unchanged. No remote files deleted.')
+          finally:
+              ftp.close()
+          PY
       - name: Record required server activation step
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
