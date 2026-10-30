@@ -1,6 +1,6 @@
 # Lucky Bags production deployment
 
-This replaces the previous upload-only workflow with the same three-stage layout as the supplied DinaPotha reference: security, validation, then deployment. It runs only through **Actions → Lucky Bags Secure Production Deployment → Run workflow**. Only a run selected from `main` can enter the deployment job. Merging or pushing does not deploy the site automatically.
+One unified deployment job checks the source, validates Laravel, builds the production package and uploads it. There is one checkout, one PHP setup and one source malware scan. It runs only through **Actions → Lucky Bags Secure Production Deployment → Run workflow**. Only a run selected from `main` can enter the deployment job. Merging or pushing does not deploy the site automatically.
 
 ## Existing hosting paths
 
@@ -26,7 +26,7 @@ Configure the GitHub `production` environment with the desired reviewers and dep
 1. Reject tracked secrets, local database files, dependency directories, suspicious known files and symlinks.
 2. Review a small set of high-risk code patterns and scan the source using updated ClamAV signatures.
 3. Validate/install/audit locked Composer dependencies, bootstrap Laravel, validate routes and Blade, and run `php tests/bulk-review.php` in an in-memory database without live Shopify or Google credentials.
-4. Build an allowlisted production package, audit production dependencies and run a second ClamAV scan over the actual package, including vendor files.
+4. Build an allowlisted production package from the audited lockfile. The additional ClamAV scan of installed vendor files is omitted to reduce deployment time; dependencies receive the Composer vulnerability audit above, not a malware scan.
 5. Upload using the existing account root. The uploader never deletes remote files. A distinct `.lb-production-python-ftps-state.json` inventory tracks SHA256 values to skip unchanged files without reusing the older uploader inventory.
 
 These are defensive checks, not a malware-free guarantee. Do not hand-edit or remove deployed files while relying on the inventory. To force a complete re-upload after server-side repairs, remove only `.lb-production-python-ftps-state.json` using your FTP client. The old inventory and any legacy files already on the server are not automatically purged; inspect and remove obsolete files separately using a reviewed backup/recovery plan.
@@ -68,6 +68,6 @@ Use a hostname matching the hosting server FTPS certificate for `PROD_FTP_SERVER
 
 The FTP account home must be `/home2/antspixa/public_html/x_dev/luckyprodauto/prod`, not `prod/public`. The website document root remains `prod/public`. The uploader refuses a root containing `index.php` to prevent accidentally publishing the full Laravel application inside the public directory.
 
-Security and Laravel validation run in parallel. PHP installation is skipped when the required runner packages already exist, and uploads skip unchanged files and reuse directory lookups. Malware and dependency checks remain enabled.
+All deployment steps are maintained in one job and run in order; a failed check prevents upload. PHP installation is skipped when the required runner packages already exist, and uploads skip unchanged files and reuse directory lookups. Malware and dependency checks remain enabled.
 
 The configured IP `192.185.52.143` presents a certificate covering `hostgator.com`; the workflow uses that verified TLS identity for this specific IP. `PROD_FTP_TLS_SERVER_NAME` can override it if HostGator changes the certificate. No certificate verification is disabled.
