@@ -75,3 +75,15 @@ The configured IP `192.185.52.143` presents a certificate covering `hostgator.co
 ### Required differences from DinaPotha
 
 Repository policy blocks the third-party PHP and FTP actions and requires full SHA pins. Ubuntu PHP setup and inline FTPS replace those actions. The allowlisted package excludes local secrets and the factory agent. The FTP account home must be `prod`, while the website document root stays `prod/public`. Uploading to `./` cannot escape an FTP account confined to `prod/public`; the root guard prevents publishing private Laravel files there.
+
+### First production login
+
+A new server database needs its own user. Deployment does not copy local users or seed demo accounts. After activating the release, run from the `prod` directory:
+
+```bash
+php artisan production:create-admin admin@localhost.test
+```
+
+Enter and confirm the intended password at the hidden prompts. The command hashes it and never writes it to source code or the shell command line. It refuses to overwrite an existing account. Do not run `db:seed` to provision production users.
+
+FTPS uploads use up to four parallel workers, with per-worker progress every 100 files. Unchanged files are skipped. The inventory is published only after all workers succeed; a failed upload remains retryable. The first vendor upload still transfers many files and will take longer than subsequent deployments.

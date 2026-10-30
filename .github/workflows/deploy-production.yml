@@ -223,6 +223,7 @@ jobs:
           from pathlib import Path, PurePosixPath
           import ssl
           import ipaddress
+          from concurrent.futures import ThreadPoolExecutor
 
           # The FTP login is already rooted at prod; never append public/ or a host path.
           root = Path('.deploy').resolve()
@@ -271,32 +272,49 @@ jobs:
               previous = json.loads(state) if state else {}
               if not isinstance(previous, dict):
                   raise ValueError('Invalid remote deployment inventory')
+              changed = [path for path in files if previous.get(path.relative_to(root).as_posix()) != current[path.relative_to(root).as_posix()]]
+              print(f'Package: {len(files)} files; {len(changed)} changed; {len(files)-len(changed)} unchanged. Uploading with up to 4 connections.', flush=True)
+              def upload_group(group):
+                  client = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60)
+                  try:
+                      client.connect(host, 21)
+                      client.host = tls_name
+                      client.login(os.environ['FTP_USERNAME'], os.environ['FTP_PASSWORD'])
+                      client.prot_p()
+                      client.cwd(remote_root)
+                      remote_parent = None
+                      known_dirs = set()
+                      for index, path in enumerate(group, 1):
+                          relative = path.relative_to(root).as_posix()
+                          parent = PurePosixPath(relative).parent.as_posix()
+                          if parent != remote_parent:
+                              client.cwd(remote_root)
+                              traversed = []
+                              for part in PurePosixPath(relative).parts[:-1]:
+                                  traversed.append(part)
+                                  directory = '/'.join(traversed)
+                                  if directory not in known_dirs:
+                                      try:
+                                          client.mkd(part)
+                                      except ftplib.error_perm as error:
+                                          if not str(error).startswith('550'):
+                                              raise
+                                      known_dirs.add(directory)
+                                  client.cwd(part)
+                              remote_parent = parent
+                          with path.open('rb') as handle:
+                              client.storbinary('STOR ' + path.name, handle, blocksize=262144)
+                          if index % 100 == 0 or index == len(group):
+                              print(f'Upload worker: {index}/{len(group)} files complete.', flush=True)
+                      return len(group)
+                  finally:
+                      client.close()
               uploaded = 0
-              remote_parent = None
-              known_dirs = set()
-              for path in files:
-                  relative = path.relative_to(root).as_posix()
-                  if previous.get(relative) == current[relative]:
-                      continue
-                  parent = PurePosixPath(relative).parent.as_posix()
-                  if parent != remote_parent:
-                      ftp.cwd(remote_root)
-                      traversed = []
-                      for part in PurePosixPath(relative).parts[:-1]:
-                          traversed.append(part)
-                          directory = '/'.join(traversed)
-                          if directory not in known_dirs:
-                              try:
-                                  ftp.mkd(part)
-                              except ftplib.error_perm as error:
-                                  if not str(error).startswith('550'):
-                                      raise
-                              known_dirs.add(directory)
-                          ftp.cwd(part)
-                      remote_parent = parent
-                  with path.open('rb') as handle:
-                      ftp.storbinary('STOR ' + path.name, handle, blocksize=262144)
-                  uploaded += 1
+              if changed:
+                  size = (len(changed) + 3) // 4
+                  groups = [changed[start:start+size] for start in range(0, len(changed), size)]
+                  with ThreadPoolExecutor(max_workers=4) as pool:
+                      uploaded = sum(pool.map(upload_group, groups))
               ftp.cwd(remote_root)
               inventory = json.dumps(current, sort_keys=True).encode()
               ftp.storbinary('STOR ' + state_name + '.pending', io.BytesIO(inventory))
