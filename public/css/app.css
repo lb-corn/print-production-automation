@@ -303,3 +303,16 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
  .mobile-nav a span:not(.nav-icon){display:grid;place-items:center;min-height:24px;line-height:1.2;overflow-wrap:normal}
  .mobile-nav a.active{border-color:var(--accent)}.mobile-nav .navigation-icon{width:16px;height:16px;flex-basis:16px}
 }
+
+/* Keep login controls and feedback aligned at every viewport size. */
+.login-bg{min-height:100vh;min-height:100dvh;padding:24px 16px;overflow-x:hidden}
+.login-card{width:100%;max-width:440px;margin:auto;padding:32px;min-width:0}
+.login-card .error{margin:0 0 18px;width:100%;padding:12px 14px;line-height:1.5;text-align:left}
+.login-card>p{line-height:1.6;margin:12px 0 22px}
+.login-card input[type=email],.login-card input[type=password]{min-height:46px;font-size:16px}
+.login-card .remember{margin:16px 0 8px;font-size:12px;line-height:1.5}
+.login-card .remember input{width:16px;height:16px;margin:0;flex:none;accent-color:var(--accent)}
+.login-card .wide{min-height:44px}
+.login-note,.app-copyright{font-size:11px;line-height:1.6;color:var(--muted);text-align:center}
+.app-copyright{padding:16px 20px 22px}
+@media(max-width:480px){.login-bg{padding:20px 14px}.login-card{padding:26px 22px}.login-card h1{font-size:23px}.login-logo{width:44px;height:44px}}
