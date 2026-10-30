@@ -61,7 +61,7 @@ class ShopifyService
             $this->store
         );
 
-        $response = Http::asForm()
+        $response = Http::asJson()
             ->timeout(30)
             ->post($url, [
                 'grant_type' => 'client_credentials',
