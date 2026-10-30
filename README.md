@@ -58,18 +58,9 @@ Change these passwords before any shared/hosted deployment.
 
 ## Factory agent
 
-```powershell
-cd automation
-py -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-$env:PRODUCTION_API="http://127.0.0.1:8000/api"
-$env:FACTORY_API_KEY="change-this-factory-key"
-$env:GOOGLE_SERVICE_ACCOUNT_FILE="C:\\secure\\service-account.json"
-python factory_agent.py
-```
+Use [the reviewed Factory Agent installation and operator guide](automation/README.md) and [security review](automation/SECURITY_REVIEW.md). Release 1.2.0 requires Windows x64 Python 3.13, HTTPS, a dedicated standard account, hash-locked dependencies and Defender scanning. Deploy the matching web migration before running the agent.
 
-The agent changes `QUEUED → CLAIMED → DOWNLOADING → PREPARED`, downloads the exact approved Drive originals, and writes `batch.json` beside the artwork. Automatic Edge Print hot-folder submission is intentionally left disabled until the controlled Epson test confirms the correct hot-folder/preset behavior.
+The agent prepares exact approved originals and supports named, double-confirmed single-set Edge Print handoff. Physical printing stays operator controlled with Auto Print OFF. Multi-set hot-folder delivery is blocked until quantity/preset behavior is validated. Do not interpret the agent as fully unattended printing or a malware-free guarantee.
 
 ## MySQL / HostGator later
 

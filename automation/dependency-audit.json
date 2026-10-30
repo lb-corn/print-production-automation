@@ -1,0 +1,123 @@
+{
+  "review_date": "2026-10-30",
+  "source": "https://api.osv.dev/v1/querybatch",
+  "platform": "Windows x64 Python 3.13",
+  "packages": [
+    {
+      "name": "certifi",
+      "version": "2026.10.23",
+      "advisories": []
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "advisories": []
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "advisories": []
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.2",
+      "advisories": []
+    },
+    {
+      "name": "google-api-core",
+      "version": "2.43.2",
+      "advisories": []
+    },
+    {
+      "name": "google-api-python-client",
+      "version": "2.201.0",
+      "advisories": []
+    },
+    {
+      "name": "google-auth",
+      "version": "2.62.0",
+      "advisories": []
+    },
+    {
+      "name": "google-auth-httplib2",
+      "version": "0.4.4",
+      "advisories": []
+    },
+    {
+      "name": "googleapis-common-protos",
+      "version": "1.76.0",
+      "advisories": []
+    },
+    {
+      "name": "httplib2",
+      "version": "0.32.1",
+      "advisories": []
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "advisories": []
+    },
+    {
+      "name": "opentelemetry-api",
+      "version": "1.45.2",
+      "advisories": []
+    },
+    {
+      "name": "proto-plus",
+      "version": "1.29.0",
+      "advisories": []
+    },
+    {
+      "name": "protobuf",
+      "version": "7.36.2",
+      "advisories": []
+    },
+    {
+      "name": "pyasn1",
+      "version": "0.6.5",
+      "advisories": []
+    },
+    {
+      "name": "pyasn1_modules",
+      "version": "0.4.2",
+      "advisories": []
+    },
+    {
+      "name": "pycparser",
+      "version": "3.12",
+      "advisories": []
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.3",
+      "advisories": []
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.4",
+      "advisories": []
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "advisories": []
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "advisories": []
+    },
+    {
+      "name": "uritemplate",
+      "version": "4.2.0",
+      "advisories": []
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "advisories": []
+    }
+  ],
+  "limitations": "Point-in-time advisory database check only; not malware certification or a guarantee against unknown vulnerabilities."
+}

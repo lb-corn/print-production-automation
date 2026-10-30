@@ -17,7 +17,7 @@ This package retains the September Laravel/Factory Agent functionality and repai
 - Set `PRODUCTION_API` to the Laravel API URL reachable from the factory PC, not `127.0.0.1` unless Laravel runs on that same PC.
 - Configure `GOOGLE_SERVICE_ACCOUNT_FILE`, `FACTORY_PRINT_DIR`, and `EDGE_PRINT_HOT_FOLDER` for that PC.
 - Run `automation/run-once.ps1` for a controlled test before enabling `install-autostart.ps1`.
-- The existing agent documentation says automatic Epson RIP handoff is pending validation; do not assume it is production-ready.
+- Use the current automation/README.md and automation/SECURITY_REVIEW.md. Single-set hot-folder handoff requires signed confirmation; multi-set quantity/preset integration remains blocked pending a controlled factory test.
 
 ## Security
 The previously shared Laravel APP_KEY, Shopify secret, and Google service-account private key should be considered exposed. Rotate credentials; changing APP_KEY can invalidate encrypted data/sessions, so plan that separately. Never commit `.env` or service-account files.

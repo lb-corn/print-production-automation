@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'factory' => ['api_key' => env('FACTORY_API_KEY')],
 
     'shopify' => [
         'store' => env('SHOPIFY_STORE'),

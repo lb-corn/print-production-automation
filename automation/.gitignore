@@ -6,3 +6,11 @@ logs/
 dist/
 __pycache__/
 *.pyc
+
+.audit-wheels/
+.audit-venv/
+.audit-tools/
+.audit-results.json
+
+backup-*/
+.update-*/
