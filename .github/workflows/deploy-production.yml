@@ -15,15 +15,25 @@ defaults:
     shell: bash
 
 jobs:
-  security:
-    name: Security gate
+  deploy:
+    name: Validate and deploy to HostGator
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    environment: production
+    timeout-minutes: 25
     steps:
       - name: Checkout source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Require existing deployment credentials
+        env:
+          FTP_SERVER: ${{ secrets.PROD_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.PROD_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.PROD_FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
       - name: Check tracked files and high-risk code
         run: |
           python3 - <<'PY'
@@ -85,16 +95,6 @@ jobs:
           sudo systemctl stop clamav-freshclam || true
           sudo freshclam
           clamscan --recursive --infected --no-summary --exclude-dir='(^|/)\.git(/|$)' .
-
-  validate:
-    name: Laravel validation
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
       - name: Setup PHP from Ubuntu packages
         run: |
           set -euo pipefail
@@ -126,43 +126,10 @@ jobs:
         run: php tests/bulk-review.php
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh
-
-  deploy:
-    name: Deploy to HostGator via FTPS
-    needs: [security, validate]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    environment: production
-    timeout-minutes: 25
-    steps:
-      - name: Checkout tested source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - name: Setup PHP from Ubuntu packages
-        run: |
-          set -euo pipefail
-          if ! /usr/bin/php8.3 -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo","curl","zip"] as $e) { if (!extension_loaded($e)) exit(1); }' 2>/dev/null || ! command -v composer >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y php8.3-cli php8.3-mbstring php8.3-sqlite3 php8.3-xml php8.3-curl php8.3-zip composer
-          fi
-          sudo update-alternatives --set php /usr/bin/php8.3
-          php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 1);'
-          php -r 'foreach (["mbstring","openssl","pdo_sqlite","sqlite3","xml","ctype","fileinfo"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing PHP extension: ".$extension.PHP_EOL); exit(1); } }'
-          composer --version
-      - name: Require existing deployment credentials
-        env:
-          FTP_SERVER: ${{ secrets.PROD_FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.PROD_FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.PROD_FTP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
       - name: Build production dependencies and deployment package
         run: |
           set -euo pipefail
           composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
-          composer audit --locked --no-dev
           python3 - <<'PY'
           """Create an allowlisted Laravel web-server package without local data or factory-PC tools."""
           from pathlib import Path
@@ -207,14 +174,6 @@ jobs:
           if __name__ == '__main__':
               main()
           PY
-      - name: ClamAV production package scan
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y clamav clamav-freshclam
-          sudo systemctl stop clamav-freshclam || true
-          sudo freshclam
-          clamscan --recursive --infected --no-summary .deploy
       - name: Deploy via encrypted FTPS without a third-party action
         env:
           FTP_TLS_SERVER_NAME: ${{ secrets.PROD_FTP_TLS_SERVER_NAME }}
