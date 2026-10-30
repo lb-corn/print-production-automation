@@ -1,80 +1,161 @@
-name: Lucky Bags Production Deployment
+name: Lucky Bags Secure Production Deployment
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: lucky-bags-production
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  deploy:
-    name: Deploy Lucky Bags Production
+  security:
+    name: Security gate
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout latest code
-        uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check tracked files and high-risk code
+        run: python3 .github/scripts/security_gate.py
+      - name: ClamAV source scan
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam
+          clamscan --recursive --infected --no-summary --exclude-dir='(^|/)\.git(/|$)' .
 
+  validate:
+    name: Laravel validation
+    needs: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.3'
-          extensions: mbstring, openssl, pdo, sqlite3, pdo_sqlite, tokenizer, xml, ctype, fileinfo
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3, xml, ctype, fileinfo
           coverage: none
-
-      - name: Validate Composer configuration
-        run: composer validate --no-check-publish
-
-      - name: Install dependencies for validation
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Validate Laravel application
-        run: php artisan about
-
-      - name: Build production dependencies
+      - name: Validate and audit dependencies
         run: |
-          rm -rf vendor
-          composer install \
-            --no-dev \
-            --prefer-dist \
-            --optimize-autoloader \
-            --no-interaction \
-            --no-progress
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress
+          composer audit --locked
+      - name: Check Laravel bootstrap, routes and views
+        run: |
+          set -euo pipefail
+          mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
+          cp .env.example .env
+          php artisan key:generate
+          php artisan about
+          php artisan route:list
+          php artisan view:cache
+          php artisan view:clear
+      - name: Run application regression checks
+        run: php tests/bulk-review.php
+      - name: Validate post-deployment shell script
+        run: bash -n deployment/post-deploy.sh
 
-      - name: FTP deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+  deploy:
+    name: Deploy to HostGator via FTPS
+    needs: [security, validate]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, openssl, pdo_sqlite, sqlite3, xml, ctype, fileinfo
+          coverage: none
+      - name: Require existing deployment credentials
+        env:
+          FTP_SERVER: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+      - name: Build production dependencies and deployment package
+        run: |
+          set -euo pipefail
+          composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+          composer audit --locked --no-dev
+          python3 .github/scripts/build_deploy.py
+      - name: ClamAV production package scan
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam
+          clamscan --recursive --infected --no-summary .deploy
+      - name: Deploy via encrypted FTPS
+        uses: SamKirkland/FTP-Deploy-Action@110f9186c050f71550953127052e77650219c287 # v4.4.0
         with:
           server: ${{ secrets.LB_PRODUCTION_FTP_SERVER }}
           username: ${{ secrets.LB_PRODUCTION_FTP_USERNAME }}
           password: ${{ secrets.LB_PRODUCTION_FTP_PASSWORD }}
-          protocol: ftp
+          protocol: ftps
+          security: strict
           port: 21
-
           # FTP account is already rooted at:
           # /home2/antspixa/public_html/x_dev/luckyprodauto/prod
-          local-dir: ./
+          # The web document root remains prod/public. Never upload app/ into public/.
+          local-dir: ./.deploy/
           server-dir: ./
-
+          state-name: .lb-production-ftps-state.json
+          dangerous-clean-slate: false
           exclude: |
             **/.git*
             **/.git*/**
             **/.github/**
             **/.env
+            **/.env.*
+            **/.htaccess
+            **/service-account*.json
+            **/credentials.json
+            **/token.json
             **/node_modules/**
-            **/database/*.sqlite
-            **/storage/logs/**
-            **/storage/framework/cache/**
-            **/storage/framework/sessions/**
-            **/storage/framework/views/**
-            **/automation/.venv/**
-            **/automation/.env
-            **/automation/logs/**
-            **/automation/factory_print/**
-            **/automation/dist/**
-            **/service-account.json
-            **/factory_print/**
+            **/database/*.sqlite*
+            **/storage/**
+            **/bootstrap/cache/*.php
+            **/automation/**
+            **/docs/**
+            **/tests/**
             **/.vscode/**
             **/.idea/**
-            **/tests/**
             **/*.log
+      - name: Record required server activation step
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Upload completed; server activation remains required
+          FTPS cannot execute PHP commands. In cPanel Terminal/SSH, from the existing `prod` application directory, run:
+          ```bash
+          bash deployment/post-deploy.sh
+          ```
+          This applies additive migrations and refreshes Laravel caches. Preserve the existing `.env`, `APP_KEY`, database, credentials and storage. Never run `migrate:fresh` or seed production demo users.
+          The FTP destination was `./` relative to the account already rooted at `.../prod`; the website document root remains `.../prod/public`.
+          SUMMARY

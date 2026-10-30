@@ -32,3 +32,6 @@ factory_edgeprint_test/
 
 /docs/.qa*/
 /docs/__pycache__/
+
+/.deploy/
+/.github/scripts/__pycache__/

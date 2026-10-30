@@ -1,2 +1,4 @@
 # Keep agent source bytes stable for the release SHA256 gate on every platform.
 automation/factory_agent.py text eol=lf
+
+*.sh text eol=lf
