@@ -177,6 +177,9 @@ jobs:
           def excluded(relative):
               parts = relative.parts
               name = relative.name.lower()
+              # This application uses only Google Drive. Do not upload every other Google API.
+              if parts[:4] == ('vendor', 'google', 'apiclient-services', 'src') and len(parts) > 4 and parts[4] not in {'Drive', 'Drive.php'}:
+                  return True
               return (name.startswith('.env') or name.startswith('service-account') or name in {'credentials.json','token.json','.htaccess'}
                       or name.endswith(('.sqlite','.log','.pem','.p12','.pfx','.pyc')) or '.sqlite-' in name
                       or any(part in {'.git','__pycache__','.venv','node_modules'} for part in parts)
@@ -199,7 +202,7 @@ jobs:
                       destination.parent.mkdir(parents=True,exist_ok=True)
                       shutil.copyfile(path,destination)
                       count += 1
-              for required in ['public/index.php','artisan','vendor/autoload.php','deployment/post-deploy.sh']:
+              for required in ['public/index.php','artisan','vendor/autoload.php','vendor/google/apiclient-services/src/Drive.php','vendor/google/apiclient-services/src/Drive/DriveFile.php','deployment/post-deploy.sh']:
                   if not (TARGET / required).is_file(): raise SystemExit(f'Incomplete deployment package: {required}')
               print(f'Allowlisted web deployment package created: {count} files. No .env, credentials, runtime storage, agent, or operator documents included.')
 
