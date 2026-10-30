@@ -137,9 +137,7 @@ def main():
             print("No changes to transfer", flush=True)
             return
 
-        # Each worker uploads sequentially. The coordinator checkpoints only
-        # successfully finished uploads, so retries are safe after interruption.
-        batches = [remaining[i::WORKERS] for i in range(WORKERS)]
+        # Checkpoint after each bounded round; interrupted rounds are safely retried.
         progress = 0
 
         def worker(batch):
