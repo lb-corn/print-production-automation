@@ -11,8 +11,7 @@ use Illuminate\Http\Request;
 class ProductionController extends Controller
 {
     public function __construct(
-        private ProductionService $svc,
-        private BacklogSyncService $backlogSync
+        private ProductionService $svc
     ) {}
 
     public function dashboard()
@@ -36,7 +35,7 @@ class ProductionController extends Controller
     public function syncBacklog()
     {
         try {
-            $r = $this->backlogSync->sync();
+            $r = app(BacklogSyncService::class)->sync();
             return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['processed_skipped']));
         } catch (\Throwable $e) {
             report($e);

@@ -74,7 +74,7 @@ $check($svc->queue()->isEmpty(), 'Failed batches require attention instead of si
 try { $svc->verify($a->fresh(),'WRONG',$user->id); throw new RuntimeException('Processed order changed'); }
 catch (Symfony\Component\HttpKernel\Exception\HttpException $e) { $check($e->getStatusCode()===422, 'Processed order cannot be reverified'); }
 view()->share('errors',new Illuminate\Support\ViewErrorBag);
-$view=(new App\Http\Controllers\ProductionController($svc,$sync))->verification();
+$view=(new App\Http\Controllers\ProductionController($svc))->verification();
 $data=$view->getData();
 $check($data['reviewSummary']['failed']===2 && $data['reviewSummary']['pending']===3, 'Summary separates processed and pending states');
 $html=$view->render();
@@ -141,3 +141,8 @@ try{$middleware->handle(Illuminate\Http\Request::create('/api/factory/batches/ne
 catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===401,'Factory API rejects unauthenticated requests');}
 $authorized=Illuminate\Http\Request::create('/api/factory/batches/next','GET',[],[],[],['HTTP_AUTHORIZATION'=>'Bearer '.str_repeat('a',64)]);
 $check($middleware->handle($authorized,fn()=>true)===true,'Configured factory bearer token is accepted');
+
+// Reading existing production data must not construct integration clients.
+$app->bind(App\Services\BacklogSyncService::class, function () { throw new RuntimeException('Sync service must not be constructed for read-only pages'); });
+$readOnlyController = $app->make(App\Http\Controllers\ProductionController::class);
+$check($readOnlyController->dashboard()->render() !== '', 'Dashboard loads without initializing Shopify or Google sync');

@@ -87,3 +87,5 @@ php artisan production:create-admin admin@localhost.test
 Enter and confirm the intended password at the hidden prompts. The command hashes it and never writes it to source code or the shell command line. It refuses to overwrite an existing account. Do not run `db:seed` to provision production users.
 
 FTPS uploads use up to four parallel workers, with per-worker progress every 100 files. Unchanged files are skipped. The inventory is published only after all workers succeed; a failed upload remains retryable. The first vendor upload still transfers many files and will take longer than subsequent deployments.
+
+The web package includes only the Google Drive API from `google/apiclient-services`; other Google API modules are excluded from staging. The Google client and shared dependencies remain included. Reading existing orders does not initialize integration clients; credentials are required when syncing.
