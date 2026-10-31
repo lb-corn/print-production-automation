@@ -5,7 +5,17 @@
     @endunless
     <section class="panel admin-user-list" aria-label="Portal users">
         @foreach($users as $user)
-            <article class="admin-user-row"><div><strong>{{ $user->name }}</strong><span>{{ $user->email }}</span></div><span class="admin-role">{{ $user->role === 'admin' ? 'Admin' : 'Normal user' }}</span><a href="{{ route('admin.users.edit', $user) }}" aria-label="Edit {{ $user->name }}">Edit →</a></article>
+            <article class="admin-user-row">
+                <div><strong>{{ $user->name }}</strong><span>{{ $user->email }}</span></div>
+                <div class="user-badges"><span class="admin-role">{{ $user->role === 'admin' ? 'Admin' : 'Normal user' }}</span><span class="user-status {{ $user->is_active ? '' : 'is-inactive' }}">{{ $user->is_active ? 'Active' : 'Inactive' }}</span></div>
+                <div class="user-actions">
+                    <a href="{{ route('admin.users.edit', $user) }}" aria-label="Edit {{ $user->name }}">Edit</a>
+                    @if($user->role !== 'admin')
+                        <form method="post" action="{{ route('admin.users.status', $user) }}">@csrf @method('PATCH')<input type="hidden" name="is_active" value="{{ $user->is_active ? '0' : '1' }}"><button type="submit" aria-label="{{ $user->is_active ? 'Deactivate' : 'Activate' }} {{ $user->name }}">{{ $user->is_active ? 'Deactivate' : 'Activate' }}</button></form>
+                        <a class="user-delete-link" href="{{ route('admin.users.delete', $user) }}" aria-label="Delete {{ $user->name }}">Delete</a>
+                    @endif
+                </div>
+            </article>
         @endforeach
     </section>
     {{ $users->links() }}

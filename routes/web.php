@@ -10,6 +10,9 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::post('/users', [\App\Http\Controllers\AdminController::class, 'store'])->name('users.store');
     Route::get('/users/{user}/edit', [\App\Http\Controllers\AdminController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [\App\Http\Controllers\AdminController::class, 'update'])->name('users.update');
+    Route::patch('/users/{user}/status', [\App\Http\Controllers\AdminController::class, 'status'])->name('users.status');
+    Route::get('/users/{user}/delete', [\App\Http\Controllers\AdminController::class, 'deletePage'])->name('users.delete');
+    Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroy'])->name('users.destroy');
     Route::get('/reset', [\App\Http\Controllers\AdminController::class, 'resetPage'])->name('reset');
     Route::post('/reset', [\App\Http\Controllers\AdminController::class, 'reset'])->middleware('throttle:3,1')->name('reset.store');
 });
