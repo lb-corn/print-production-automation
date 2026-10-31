@@ -124,7 +124,9 @@ jobs:
           php artisan view:cache
           php artisan view:clear
       - name: Run application regression checks
-        run: php tests/bulk-review.php
+        run: |
+          php tests/bulk-review.php
+          php tests/admin-controls.php
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh
 
