@@ -224,3 +224,26 @@ document.querySelectorAll('[data-account-menu]').forEach(menu => {
         }
     });
 });
+
+// The link remains a standalone confirmation page when dialogs are unavailable.
+const deleteDialog = document.querySelector('[data-delete-dialog]');
+if (deleteDialog && typeof deleteDialog.showModal === 'function') {
+    const deleteForm = deleteDialog.querySelector('[data-delete-form]');
+    let deleteTrigger;
+    document.querySelectorAll('[data-delete-user]').forEach(link => {
+        link.addEventListener('click', event => {
+            event.preventDefault();
+            deleteTrigger = link;
+            deleteForm.reset();
+            deleteForm.action = link.dataset.deleteAction;
+            deleteDialog.querySelector('[data-delete-target]').textContent = `${link.dataset.userName} · ${link.dataset.userEmail}`;
+            deleteDialog.querySelector('#modal-delete-email').placeholder = link.dataset.userEmail;
+            deleteDialog.showModal();
+        });
+    });
+    deleteDialog.querySelectorAll('[data-close-delete]').forEach(button => button.addEventListener('click', () => deleteDialog.close()));
+    deleteDialog.addEventListener('close', () => {
+        deleteForm.reset();
+        deleteTrigger?.focus();
+    });
+}
