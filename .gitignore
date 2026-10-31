@@ -5,6 +5,7 @@
 /storage/framework/cache/*
 /storage/framework/sessions/*
 /storage/framework/views/*
+/storage/framework/portal-write.lock
 /automation/.venv/
 /automation/service-account.json
 /factory_print/
