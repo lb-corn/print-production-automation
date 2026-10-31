@@ -366,3 +366,8 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .user-actions a,.user-actions button,.user-actions .user-activate,.user-actions .user-deactivate{width:34px;min-width:34px;height:34px;min-height:34px;padding:8px}.user-actions svg{width:16px;height:16px}.admin-user-columns,.admin-user-row{grid-template-columns:minmax(180px,1fr) 115px 100px 116px}
 @media(max-width:1050px){.admin-user-columns,.admin-user-row{grid-template-columns:minmax(140px,1fr) 100px 85px 116px}}
 @media(max-width:800px){.admin-user-row{grid-template-columns:minmax(0,1fr) auto}.user-actions a,.user-actions button,.user-actions .user-activate,.user-actions .user-deactivate{width:40px;min-width:40px;height:40px;min-height:40px;padding:10px}}
+
+/* Alerts share the content container, including its responsive page gutters. */
+.app-messages{display:grid;gap:10px;margin:0 0 20px;min-width:0}
+.app-messages>.flash,.app-messages>.error{margin:0;width:100%;min-width:0;line-height:1.6;overflow-wrap:anywhere}
+@media(max-width:700px){.app-messages{gap:8px;margin-bottom:16px}}
