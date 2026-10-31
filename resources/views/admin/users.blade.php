@@ -11,11 +11,12 @@
                 <div class="user-badges"><span class="admin-role">{{ $user->role === 'admin' ? 'Admin' : 'Normal user' }}</span></div>
                 <span class="user-status {{ $user->is_active ? '' : 'is-inactive' }}"><i aria-hidden="true"></i>{{ $user->is_active ? 'Active' : 'Inactive' }}</span>
                 <div class="user-actions">
-                    <a href="{{ route('admin.users.edit', $user) }}" aria-label="Edit {{ $user->name }}">Edit</a>
+
                     @if($user->role !== 'admin')
-                        <form method="post" action="{{ route('admin.users.status', $user) }}">@csrf @method('PATCH')<input type="hidden" name="is_active" value="{{ $user->is_active ? '0' : '1' }}"><button class="{{ $user->is_active ? 'user-deactivate' : 'user-activate' }}" type="submit" aria-label="{{ $user->is_active ? 'Deactivate' : 'Activate' }} {{ $user->name }}">{{ $user->is_active ? 'Deactivate' : 'Activate' }}</button></form>
-                        <a class="user-delete-link" href="{{ route('admin.users.delete', $user) }}" data-delete-user data-user-name="{{ $user->name }}" data-user-email="{{ $user->email }}" data-delete-action="{{ route('admin.users.destroy', $user) }}" aria-label="Delete {{ $user->name }}">Delete</a>
+                        <form method="post" action="{{ route('admin.users.status', $user) }}">@csrf @method('PATCH')<input type="hidden" name="is_active" value="{{ $user->is_active ? '0' : '1' }}"><button class="{{ $user->is_active ? 'user-deactivate' : 'user-activate' }}" type="submit" title="{{ $user->is_active ? 'Deactivate' : 'Activate' }} user" aria-label="{{ $user->is_active ? 'Deactivate' : 'Activate' }} {{ $user->name }}">@include('partials.user-action-icon', ['action' => 'status'])</button></form>
+                        <a class="user-delete-link" href="{{ route('admin.users.delete', $user) }}" data-delete-user data-user-name="{{ $user->name }}" data-user-email="{{ $user->email }}" data-delete-action="{{ route('admin.users.destroy', $user) }}" title="Delete user" aria-label="Delete {{ $user->name }}">@include('partials.user-action-icon', ['action' => 'delete'])</a>
                     @endif
+                    <a href="{{ route('admin.users.edit', $user) }}" title="Edit user" aria-label="Edit {{ $user->name }}">@include('partials.user-action-icon', ['action' => 'edit'])</a>
                 </div>
             </article>
         @endforeach
