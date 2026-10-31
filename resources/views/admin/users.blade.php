@@ -8,7 +8,7 @@
         @foreach($users as $user)
             <article class="admin-user-row">
                 <div><strong>{{ $user->name }}</strong><span>{{ $user->email }}</span></div>
-                <div class="user-badges"><span class="admin-role">{{ $user->role === 'admin' ? 'Admin' : 'Normal user' }}</span></div>
+                <div class="user-badges"><span class="admin-role">{{ $user->role === 'admin' ? 'Admin' : ($user->role === 'demo' ? 'Demo' : 'Normal user') }}</span></div>
                 <span class="user-status {{ $user->is_active ? '' : 'is-inactive' }}"><i aria-hidden="true"></i>{{ $user->is_active ? 'Active' : 'Inactive' }}</span>
                 <div class="user-actions">
 

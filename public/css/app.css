@@ -371,3 +371,5 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .app-messages{display:grid;gap:10px;margin:0 0 20px;min-width:0}
 .app-messages>.flash,.app-messages>.error{margin:0;width:100%;min-width:0;line-height:1.6;overflow-wrap:anywhere}
 @media(max-width:700px){.app-messages{gap:8px;margin-bottom:16px}}
+
+.demo-access-note{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;margin-bottom:18px;border:1px solid #cbdfea;border-radius:9px;background:#eef6fc;color:#315b78;font-size:12px;line-height:1.6}.demo-access-note strong{white-space:nowrap}.demo-access-note span{color:#526e81}
