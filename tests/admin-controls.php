@@ -88,4 +88,41 @@ foreach (['admin.users'=>['users'=>User::paginate(20)], 'admin.user-form'=>['use
 Auth::login($normal);
 $menu = view('partials.account-menu')->render();
 $check(!str_contains($menu, '/admin/'), 'Normal-user menu hides admin controls');
+Auth::login($admin);
+foreach (['status', 'deletePage', 'destroy'] as $action) {
+    try {
+        if ($action === 'deletePage') $controller->$action($admin);
+        else $controller->$action($request(['is_active'=>'0']), $admin);
+        throw new RuntimeException('Admin account protection failed');
+    } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        $check($e->getStatusCode() === 403, 'Admin protected from '.$action);
+    }
+}
+$controller->status($request(['is_active'=>'0']), $normal);
+$normal->refresh();
+$check(!$normal->is_active, 'Normal user can be deactivated');
+$check(!Auth::attempt(['email'=>$normal->email,'password'=>'NormalPassword123','is_active'=>true]), 'Inactive user cannot authenticate');
+$inactive = $request([], $normal);
+Auth::login($normal);
+$response = (new App\Http\Middleware\EnsureActiveUser)->handle($inactive, fn () => throw new RuntimeException('Inactive session admitted'));
+$check($response->isRedirect(route('login')) && Auth::guest(), 'Existing inactive session is logged out');
+Auth::login($admin);
+$controller->status($request(['is_active'=>'1']), $normal);
+$check($normal->fresh()->is_active && Auth::attempt(['email'=>$normal->email,'password'=>'NormalPassword123','is_active'=>true]), 'Reactivated user can authenticate');
+Auth::login($admin);
+foreach ([['password'=>'wrong','confirmation'=>$normal->email], ['password'=>'AdminPassword123','confirmation'=>'wrong']] as $invalid) {
+    try { $controller->destroy($request($invalid), $normal); throw new RuntimeException('Unconfirmed delete admitted'); }
+    catch (Illuminate\Validation\ValidationException $e) { $check(User::whereKey($normal->id)->exists(), 'Invalid deletion confirmation preserves user'); }
+}
+DB::table('verification_decisions')->insert(['line_item_id'=>'delete-history','decision'=>'CORRECT','drive_file_ids'=>'[]','updated_by'=>$normal->id]);
+$check(str_contains($controller->deletePage($normal)->render(), 'Delete user permanently'), 'Deletion confirmation screen renders');
+$controller->destroy($request(['password'=>'AdminPassword123','confirmation'=>$normal->email]), $normal);
+$check(!User::whereKey($normal->id)->exists(), 'Normal user permanently deleted');
+$history = DB::table('verification_decisions')->where('line_item_id','delete-history')->first();
+$check($history && $history->updated_by === null, 'Deleting user preserves production history');
+$check(!Auth::attempt(['email'=>$normal->email,'password'=>'NormalPassword123','is_active'=>true]), 'Deleted user cannot authenticate');
+app(App\Services\AccountRosterService::class)->replace('roster-admin@example.test', 'RosterAdminPass123', 'roster-mike@example.test', 'RosterMikePass123');
+$check(User::count() === 2 && User::where('role','admin')->count() === 1 && User::where('role','operator')->count() === 1, 'Roster replacement leaves exactly two active accounts');
+$check(User::where('is_active',true)->count() === 2 && Hash::check('RosterAdminPass123', User::where('role','admin')->first()->password), 'Roster passwords hashed and accounts active');
+$check(DB::table('verification_decisions')->where('line_item_id','delete-history')->exists(), 'Roster cleanup preserves production records');
 echo "Admin controls checks completed.\n";

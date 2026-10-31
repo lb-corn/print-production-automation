@@ -13,3 +13,18 @@ On the existing single HostGator server, all authenticated portal and factory AP
 After resetting, use Overview’s Shopify backlog refresh to import again. No automatic import or production reset runs during deployment.
 
 Validation: `php tests/admin-controls.php`, `php tests/bulk-review.php`, `php artisan view:cache`, and `php artisan route:list --path=admin`. The reset tests use only an isolated in-memory database.
+
+## User status and deletion
+
+Users shows Active/Inactive status and Activate/Deactivate and Delete actions for normal users. Admin accounts cannot be deactivated or deleted through these actions. Inactive users cannot sign in, and existing sessions are rejected on their next request. Deleting a user requires the acting admin password and the target email; production records and signed account names remain.
+
+## Replace the initial account roster
+
+After deploying this version, run from the production application directory:
+
+```bash
+php artisan migrate --force
+php artisan production:replace-users manojpoosalingam@gmail.com mike@luckycornhole.com
+```
+
+Confirm the two-account replacement, then enter and confirm the Admin password and Mike password at the hidden prompts. This transaction leaves exactly these two active accounts and deletes all other users. It preserves production history and migration records. Passwords are hashed and never stored in repository files or supplied as shell arguments. Do not run the demo DatabaseSeeder afterward. New users can be created through the production Admin UI.

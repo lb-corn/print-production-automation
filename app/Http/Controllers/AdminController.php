@@ -54,6 +54,7 @@ class AdminController extends Controller
         }
         if (empty($data['password'])) unset($data['password']);
         else $data['remember_token'] = Str::random(60);
+        if ($data['role'] === 'admin') $data['is_active'] = true;
         $user->forceFill($data)->save();
         return redirect()->route('admin.users')->with('ok', 'User updated.');
     }
@@ -62,6 +63,29 @@ class AdminController extends Controller
     {
         $counts = collect(self::RESET_TABLES)->mapWithKeys(fn ($table) => [$table => DB::table($table)->count()]);
         return view('admin.reset', compact('counts'));
+    }
+
+    public function status(Request $request, User $user)
+    {
+        abort_if($user->role === 'admin', 403, 'Admin accounts cannot be deactivated.');
+        $data = $request->validate(['is_active' => ['required', 'boolean']]);
+        $user->forceFill(['is_active' => (bool) $data['is_active'], 'remember_token' => Str::random(60)])->save();
+        return redirect()->route('admin.users')->with('ok', $data['is_active'] ? 'User activated.' : 'User deactivated. Access is blocked, including existing sessions.');
+    }
+
+    public function deletePage(User $user)
+    {
+        abort_if($user->role === 'admin', 403, 'Admin accounts cannot be deleted.');
+        return view('admin.user-delete', compact('user'));
+    }
+
+    public function destroy(Request $request, User $user)
+    {
+        abort_if($user->role === 'admin', 403, 'Admin accounts cannot be deleted.');
+        $request->validate(['password' => ['required', 'current_password'], 'confirmation' => ['required', Rule::in([$user->email])]]);
+        // Foreign keys null user references; historical production records remain.
+        $user->delete();
+        return redirect()->route('admin.users')->with('ok', 'User deleted. Production history was preserved.');
     }
 
     public function reset(Request $request)
