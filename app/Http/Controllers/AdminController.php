@@ -35,7 +35,7 @@ class AdminController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user?->id)],
-            'role' => ['required', Rule::in(['admin', 'operator'])],
+            'role' => ['required', Rule::in(['admin', 'operator', 'demo'])],
             'password' => [$user ? 'nullable' : 'required', 'confirmed', Password::min(12)],
         ]);
     }

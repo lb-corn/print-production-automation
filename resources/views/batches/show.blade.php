@@ -74,7 +74,7 @@
 
         @if($status === 'PREPARED')
             <div style="margin-top:22px;">
-                <button type="button" class="primary" data-print-confirm="HANDOFF" data-confirm-url="{{route('batch.edge-print',$batch)}}">Review &amp; sign handoff →</button>
+                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="HANDOFF" data-confirm-url="{{route('batch.edge-print',$batch)}}">Review &amp; sign handoff →</button>@endif
             </div>
 
         @elseif($status === 'HANDOFF_REQUESTED')
@@ -112,7 +112,7 @@
                     </div>
                 </div>
 
-                <button type="button" class="primary" data-print-confirm="PRINTED" data-confirm-url="{{route('batch.printed',$batch)}}">Confirm physical print completion →</button>
+                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="PRINTED" data-confirm-url="{{route('batch.printed',$batch)}}">Confirm physical print completion →</button>@endif
             </div>
 
         @elseif($status === 'PRINTED')
@@ -184,7 +184,7 @@
 @endforeach
 </section>
 <dialog id="print-confirmation" class="print-confirmation" aria-labelledby="print-confirm-title">
-<form method="post" data-signed-print-form>
+@if(auth()->user()?->role !== 'demo')<form method="post" data-signed-print-form>
 @csrf
 <h2 id="print-confirm-title">Review and sign</h2><p data-confirm-description></p>
 <div class="confirmation-facts"><strong>{{$batch->batch_id}}</strong><span>{{$batch->order_count}} items · {{collect($batch->payload['orders'] ?? [])->sum('quantity')}} sets · {{$batch->artwork_file_count}} artwork files</span></div>
@@ -194,5 +194,5 @@
 <label for="print-phrase">Type <strong data-confirm-phrase></strong> to confirm</label><input id="print-phrase" name="confirmation_phrase" required autocomplete="off">
 <p class="muted">Recorded under {{auth()->user()->name ?? 'your signed-in account'}} with server date/time. This records operator confirmation; it is not a cryptographic signature.</p>
 <div class="confirmation-actions"><button type="button" class="chip" data-cancel-print>Cancel</button><button type="submit" class="primary">Sign &amp; confirm</button></div>
-</form></dialog>
+</form>@endif</dialog>
 </x-layouts.app>

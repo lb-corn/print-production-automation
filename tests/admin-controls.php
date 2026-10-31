@@ -125,4 +125,33 @@ app(App\Services\AccountRosterService::class)->replace('roster-admin@example.tes
 $check(User::count() === 2 && User::where('role','admin')->count() === 1 && User::where('role','operator')->count() === 1, 'Roster replacement leaves exactly two active accounts');
 $check(User::where('is_active',true)->count() === 2 && Hash::check('RosterAdminPass123', User::where('role','admin')->first()->password), 'Roster passwords hashed and accounts active');
 $check(DB::table('verification_decisions')->where('line_item_id','delete-history')->exists(), 'Roster cleanup preserves production records');
+$demo = User::create(['name'=>'Demo','email'=>'demo@lbprint.com','password'=>'DemoTestPassword123','role'=>'operator']);
+$migration = require __DIR__.'/../database/migrations/2026_10_31_000004_assign_demo_viewer_role.php';
+$beforePassword = $demo->password;
+$migration->up();
+$demo->refresh();
+$check($demo->role === 'demo' && $demo->password === $beforePassword, 'Production demo mapping preserves password');
+$demoGuard = new App\Http\Middleware\ReadOnlyDemo;
+foreach (['POST','PUT','PATCH','DELETE'] as $method) {
+    $r = Request::create('/production/sync-backlog', $method); $r->setUserResolver(fn () => $demo);
+    try { $demoGuard->handle($r, fn () => 'unsafe'); throw new RuntimeException('Demo write admitted'); }
+    catch (Symfony\Component\HttpKernel\Exception\HttpException $e) { $check($e->getStatusCode() === 403, 'Demo blocked from '.$method.' requests'); }
+}
+$r = Request::create('/dashboard'); $r->setUserResolver(fn () => $demo);
+$check($demoGuard->handle($r, fn () => 'read') === 'read', 'Demo can browse');
+$r = Request::create('/logout', 'POST'); $r->setUserResolver(fn () => $demo);
+$logoutRoute = new Illuminate\Routing\Route('POST', 'logout', fn () => null); $logoutRoute->name('logout');
+$r->setRouteResolver(fn () => $logoutRoute);
+$check($demoGuard->handle($r, fn () => 'logout') === 'logout', 'Demo can sign out');
+foreach (app('router')->getRoutes() as $route) {
+    if (in_array('auth', $route->gatherMiddleware()) && array_diff($route->methods(), ['GET','HEAD','OPTIONS'])) {
+        $check(in_array(App\Http\Middleware\ReadOnlyDemo::class, $route->gatherMiddleware()), 'Demo guard covers '.$route->getName());
+    }
+}
+Auth::login($demo);
+$production = app(App\Http\Controllers\ProductionController::class);
+$dashboardHtml = $production->dashboard()->render();
+$reviewHtml = $production->verification()->render();
+$check(!str_contains($dashboardHtml, 'Refresh backlog') && str_contains($dashboardHtml, 'Demo · View only'), 'Demo dashboard hides sync and explains access');
+$check(!str_contains($reviewHtml, 'id="bulk-review"') && !str_contains($reviewHtml, 'class="review-select"'), 'Demo review hides selection and bulk editing');
 echo "Admin controls checks completed.\n";
