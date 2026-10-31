@@ -104,7 +104,11 @@ def main():
     host = os.environ["FTP_SERVER"].strip()
     user = os.environ["FTP_USERNAME"]
     password = os.environ["FTP_PASSWORD"]
-    tls_name = os.environ.get("FTP_TLS_SERVER_NAME", "").strip() or host
+    # Keep the verified identity used by the original deployment workflow.
+    # The connection IP and certificate hostname can differ on shared hosting.
+    tls_name = os.environ.get("FTP_TLS_SERVER_NAME", "").strip() or {
+        "192.185.52.143": "hostgator.com",
+    }.get(host, host)
     if not host or any(c in host for c in "/\\ \t\n\r"):
         raise SystemExit("FTP_SERVER must be a hostname or IP without scheme/path")
     try:
