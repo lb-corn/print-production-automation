@@ -326,15 +326,15 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .account-menu[open] summary>svg{transform:rotate(180deg)}
 .account-menu summary:hover,.account-menu[open] summary{border-color:var(--accent);background:#f5faf9}
 .account-menu summary:focus-visible,.account-dropdown a:focus-visible,.account-dropdown button:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
-.account-dropdown{position:absolute;right:0;top:calc(100% + 8px);width:272px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 12px 36px #15384624;overflow:hidden;text-align:left}
-.account-identity{padding:16px;border-bottom:1px solid var(--line)}
+.account-dropdown{position:absolute;right:0;top:calc(100% + 8px);width:240px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 12px 36px #15384624;overflow:hidden;text-align:left}
+.account-identity{padding:11px 14px;border-bottom:1px solid var(--line)}
 .account-identity strong,.account-identity>span{display:block;overflow-wrap:anywhere}
 .account-identity strong{font-size:13px}.account-identity>span{font-size:11px;color:var(--muted);margin-top:4px}
-.account-dropdown nav{display:grid;gap:3px;padding:7px}
-.account-dropdown nav a,.account-dropdown button{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:11px 12px;border-radius:7px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none}
+.account-dropdown nav{display:grid;gap:0;padding:4px 6px}
+.account-dropdown nav a,.account-dropdown button{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;padding:8px 9px;border-radius:7px;font-size:12px;font-weight:600;color:var(--ink);text-decoration:none}
 .account-dropdown nav a>span{font-size:11px;font-weight:400;color:var(--muted)}
 .account-dropdown nav a:hover,.account-dropdown nav a[aria-current=page]{background:#edf7f5;color:#166d65}
-.account-dropdown form{margin:0;padding:7px;border-top:1px solid var(--line)}
+.account-dropdown form{margin:0;padding:4px 6px;border-top:1px solid var(--line)}
 .account-dropdown button{width:100%;border:0;background:transparent;color:#a93243;cursor:pointer;text-align:left;font-family:inherit}
 .account-dropdown button:hover{background:#fff1f2}
 .profile-panel{max-width:680px;padding:24px}
@@ -344,3 +344,5 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .profile-details{margin:0}.profile-details>div{padding:16px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px}
 .profile-details dt{font-size:12px;color:var(--muted)}.profile-details dd{margin:0;font-size:13px;overflow-wrap:anywhere}
 @media(max-width:700px){.content>header{align-items:flex-start}.account-trigger-label{display:none}.account-menu summary{gap:4px;padding-right:6px}.profile-panel{padding:20px}.profile-details>div{grid-template-columns:70px minmax(0,1fr)}}
+
+@media(max-width:700px){.account-dropdown nav a,.account-dropdown button{min-height:44px;padding:8px 9px}}

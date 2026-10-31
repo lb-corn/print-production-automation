@@ -6,7 +6,7 @@
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
         </summary>
         <div class="account-dropdown">
-            <div class="account-identity"><strong>{{ auth()->user()->name }}</strong><span>{{ auth()->user()->email }}</span></div>
+            <div class="account-identity"><strong>{{ auth()->user()->name ?? 'Operator' }}</strong><span>{{ auth()->user()->email ?? '' }}</span></div>
             <nav aria-label="Account navigation">
                 <a href="{{ route('profile') }}" @if(request()->routeIs('profile')) aria-current="page" @endif>Profile</a>
                 <a href="{{ route('docs') }}" @if(request()->routeIs('docs')) aria-current="page" @endif>Docs <span>Quick guide</span></a>
