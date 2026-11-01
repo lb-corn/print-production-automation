@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='all-bags-active-reviewed-v3';
+    public const POLICY='compatible-names-once-v4';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 
@@ -189,6 +189,10 @@ class ArtworkNamingService
             return count($parts)===2 && in_array($parts[0],config('services.google_drive.allowed_root_folders',[]),true)
                 && $parts[1]===($folder['name']??null) && ArtworkMatcherService::seriesForFolder($folder['name'])!==null;
         }),null,'id');
+        $designOwners=[];
+        foreach($catalog as $row)$designOwners[$this->matcher->seriesFromSku($row['sku']).'/'.$this->matcher->designCodeFromSku($row['sku'])][$this->matcher->designIdentity($row['product'])]=true;
+        foreach($catalog as &$row)if(count($designOwners[$this->matcher->seriesFromSku($row['sku']).'/'.$this->matcher->designCodeFromSku($row['sku'])])>1)$row['naming_design']=$this->matcher->designIdentity($row['product']);
+        unset($row);
         $catalogColors=array_values(array_filter(array_map(fn($row)=>$this->matcher->catalogColor($row),$catalog)));
         $catalog=array_column($catalog,null,'catalog_key');$entries=[];$targets=[];$reviewedOwners=[];
         foreach($catalog as $row)if($choice=$this->matcher->reviewedSelection($row))foreach($choice['files'] as $side=>$file)$reviewedOwners[$file['source']['id']][$this->matcher->selectionKey($row)]=['source'=>$file['source'],'mapping'=>['catalog_key'=>$row['catalog_key'],'side'=>$side,'color'=>$file['color']??'']];
@@ -240,7 +244,7 @@ class ArtworkNamingService
             if($proposal)$targets[$file['parent_id'].'/'.$this->stem($proposal['target'])][]=$file['id'];
         }
         foreach($entries as &$entry) {
-            if(!$entry['proposal'] || $entry['status']==='locked')continue;
+            if(!$entry['proposal'] || in_array($entry['status'],['locked','standard'],true))continue;
             $key=$entry['source']['parent_id'].'/'.$this->stem($entry['proposal']['target']);
             $collision=count($targets[$key]??[])>1;
             foreach($entries as $other)if($other['id']!==$entry['id'] && $other['source']['parent_id']===$entry['source']['parent_id']
@@ -258,6 +262,7 @@ class ArtworkNamingService
             $proposal=$entry['proposal'];
             $entry['artwork_duplicate']=count($designGroups[$proposal['sku'].'/'.$proposal['color'].'/'.$proposal['side']]??[])>1
                 || count($variantGroups[$proposal['catalog_key'].'/'.$proposal['side']]??[])>1;
+            if($entry['artwork_duplicate'] && $entry['status']==='ready') { $entry['status']='conflict';$entry['reason']='Multiple artwork files fit this variant. Review the files instead of generating unique names.'; }
         }
         unset($entry);
         return $entries;

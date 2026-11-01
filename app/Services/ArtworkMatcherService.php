@@ -49,6 +49,8 @@ class ArtworkMatcherService
         return null;
     }
 
+    public function designCodeFromSku(?string $sku): ?string { return $this->skuParts($sku)['design']??null; }
+
     public function seriesFromSku(?string $sku): ?string { return $this->skuParts($sku)['series'] ?? null; }
 
     private function skuParts(?string $sku): ?array
@@ -110,7 +112,7 @@ class ArtworkMatcherService
                 if (count($review['mismatches']) < 10) {
                     $review['mismatches'][] = ['filename'=>$file['name'],'attributes'=>['color / variant']];
                     // A rename cannot fix image content. Show the convention only, preserving the extension.
-                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->productionFilename($series,$design,$color,$parsed['side'],pathinfo($file['name'],PATHINFO_EXTENSION),$file['id'])];
+                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->productionFilename($series,$design,$color,$parsed['side'],pathinfo($file['name'],PATHINFO_EXTENSION))];
                 }
                 continue;
             }
@@ -215,10 +217,9 @@ class ArtworkMatcherService
         return null;
     }
 
-    private function productionFilename(string $series,string $design,?string $color,string $side,string $extension,?string $fileId=null): string
+    private function productionFilename(string $series,string $design,?string $color,string $side,string $extension): string
     {
         $stem=implode('-',array_filter(['LB',$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
-        if($fileId!==null)$stem.='-ID-'.strtoupper(substr(hash('sha256',$fileId),0,12));
         return $stem.'.'.$extension;
     }
 
@@ -278,7 +279,10 @@ class ArtworkMatcherService
             if (!$parsed || ($variantColor!==null && $parsed['color']!==$variantColor)) return null;
             $side=$parsed['side']; $color=$parsed['color'];
         }
-        $target=$this->productionFilename($series,$this->norm($sku[2]),$color,$side,$extension,$file['id']);
+        // App-compatible names are already standardized, regardless of preferred spelling.
+        $strict=$name!==null?$this->parse($name,$series,$type,isset($row['naming_design'])?[$row['naming_design']]:$this->designs($row,$this->norm($sku[2]),$sku[1]),$sku[1],$variantColor):null;
+        $compatible=$strict && $strict['side']===$side && $strict['color']===$color;
+        $target=$compatible?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
         if(strlen($target)>255)return null;
         return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
             'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target,'design_identity'=>$this->designIdentity($row['product'] ?? '')];

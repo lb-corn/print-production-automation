@@ -164,7 +164,7 @@ $preselected=0;
 @endif
 
 @endif
-<details class="naming-advanced"><summary>Naming rules and setup</summary><p>Example: <code>LB-PSE-DUC-RED-SINGLE-ID-8F23A19C4D72.jpg</code>. No year is added. Actual extensions are preserved. Existing files get stable ID suffixes; missing-file suggestions get one after upload.</p><p>Rename permission requires Editor access for the existing service account. Files in batches, mockups and nested folders are excluded. Uncertain network outcomes stop without automatic retries.</p>
+<details class="naming-advanced"><summary>Naming rules and setup</summary><p>Example: <code>LB-PSE-DUC-RED-SINGLE.jpg</code>. No year is added. Actual extensions are preserved. App-compatible filenames stay unchanged, including existing ID suffixes. New names do not add IDs. Shared design codes use the full product design name when a reviewed correction is needed.</p><p>Rename permission requires Editor access for the existing service account. Files in batches, mockups and nested folders are excluded. Uncertain network outcomes stop without automatic retries.</p>
 @if(!config('services.google_drive.rename_enabled'))<p>Applying renames is disabled by server configuration.</p>
 @endif</details>
 <script src="{{asset('js/artwork-names.js')}}?v={{filemtime(public_path('js/artwork-names.js'))}}" defer></script>

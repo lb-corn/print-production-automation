@@ -6,19 +6,19 @@ The Admin account menu includes **Admin Settings**, with vertical sections for *
 
 The highlighted scope panel shows only the two configured manufacturing branches: `(GROUP A) Non Carpet` and `GROUP B (Carpet)`. The reader enters only recognized direct series/version folders, and indexes only files directly in those folders. It never enters MOCKUPS, PREVIEWS, ARCHIVE or any other nested folder. The preview shows links to the exact version folders checked. Source parent, file identity, version and destination are rechecked before writes. Files referenced by any batch status, including failed or printed batches, are protected.
 
-Bulk-generated names use:
+Only incompatible filenames are proposed for renaming. Any name already accepted by the production matcher is treated as standard and preserved exactly: short code names, established long names, aliases, capitalization, separators and existing validated ID-suffixed names. Neither local nor production adds a new ID simply to fit a preferred spelling.
 
-```text
-LB-PSE-DUC-RED-SINGLE-ID-8F23A19C4D72.jpg
-LB-SNP-CAN-BRL-FRONT-ID-81D7BA9C4F20.jpeg
-LB-SNP-CAN-BRL-BACK-ID-A0F24C8D3E91.jpeg
-```
+New corrections use portable names, for example:
 
-The 12-character ID suffix is derived from the full, stable Drive file ID. It stays the same on repeat scans. Every proposal preserves the real extension, including its original case; changing a name never converts an image format. Actual file IDs, file bytes and parent folders are preserved. The code also detects a destination collision rather than relying on the hash alone.
+~~~text
+LB-PSE-DUC-RED-SINGLE.jpg
+LB-SNP-CAN-BRL-FRONT.jpeg
+LB-SNP-CAN-BRL-BACK.jpeg
+~~~
 
-Missing-file suggestions follow the same readable LB/series/design/color/side convention but omit the ID suffix until a real Drive file exists. Production verification, the ready queue and future batches display actual filenames. Existing locked batch snapshots retain their recorded names.
+No year or ID suffix is added. Actual extensions and file contents are preserved. If different catalog designs share a series/design code, a reviewed correction uses the exact full normalized product design name to disambiguate it across environments. Existing compatible full-title names remain unchanged. Destination collisions and duplicate artwork require review; they are never fixed by appending unique IDs. After a successful standard rename, both local and production can match the shared Drive filename without repeating that rename or copying a local database.
 
-An ID suffix prevents filename clashes, not semantic ambiguity. Multiple images for the same design, variant or side remain ambiguous in the production matcher and need review. The preview flags these candidates. Naming does not approve an image and does not create a print batch or handoff request.
+Explicit operator choices for unresolved ambiguity remain private per-environment data. Filename standardization is not print approval. Repeat scans do not rename standard files; regular sync/rematch pulls their actual Drive filenames.
 
 ## Workflow
 

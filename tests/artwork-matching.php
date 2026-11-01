@@ -39,7 +39,7 @@ foreach (['PSE-DUC-BROWN.png','SUP-DUC-RED.png','PSE-DUCK-RED.png','PSE-DUC-RED-
 $drive->tree['pse']=[$file('invalid','PSE-DUC-BROWN.TIFF')];
 $missing=$matcher->match($row);
 $check($missing['artwork_review']['suggested_filenames']===['LB-PSE-DUC-RED-SINGLE.jpg'],'Missing artwork supplies conventional filename');
-$check(str_ends_with($missing['artwork_review']['corrections'][0]['suggested'],'.TIFF') && str_starts_with($missing['artwork_review']['corrections'][0]['suggested'],'LB-PSE-DUC-RED-SINGLE-ID-'),'Corrections preserve actual extension');
+$check(str_ends_with($missing['artwork_review']['corrections'][0]['suggested'],'.TIFF') && str_starts_with($missing['artwork_review']['corrections'][0]['suggested'],'LB-PSE-DUC-RED-SINGLE.'),'Corrections preserve actual extension');
 $check($missing['artwork_review']['expected_folder']==='GROUP B (Carpet) / PSE' && str_ends_with($missing['artwork_review']['folder_url'],'/pse'),'Expected folder and direct link supplied');
 $drive->tree['pse']=[$file('one','PSE-DUC-RED.png'),$file('two','pse_duc_red.tiff')];
 $ambiguous=$matcher->match($row);
