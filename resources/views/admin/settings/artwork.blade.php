@@ -98,15 +98,15 @@ $preselected=0;
 <div class="naming-table-wrap"><table><thead><tr><th>Status</th><th>Current file</th><th>New name</th></tr></thead><tbody>
 
 @foreach($plan['entries'] as $entry)
-<tr data-naming-row data-naming-status="{{$entry['status']}}" 
-@if($entry['status']!=='ready') hidden 
+<tr data-naming-row data-naming-status="{{$entry['status']}}"
+@if($entry['status']!=='ready') hidden
 @endif><td>
 @if($preview&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked($preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
 @endif<span class="badge">{{ucfirst($entry['status'])}}</span></td>
 <td><a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">{{$entry['source']['name']}} ↗</a><small>{{$entry['folder']}}</small></td>
 <td><code>{{$entry['proposal']['target']??'Confirm design first'}}</code>
 @if($entry['reason']??null)<small>{{$entry['reason']}}</small>
-@endif 
+@endif
 @if($entry['artwork_duplicate']??false)<small>Duplicate artwork still needs review.</small>
 @endif
 <details class="naming-row-detail"><summary>Details</summary><small>{{$entry['proposal']['sku']??''}} · {{$entry['proposal']['product']??''}} · {{$entry['proposal']['variant']??''}} · {{$entry['proposal']['side']??''}}<br>{{$entry['basis']??''}}</small></details></td></tr>
