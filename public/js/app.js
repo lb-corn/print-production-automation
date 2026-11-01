@@ -247,3 +247,56 @@ if (deleteDialog && typeof deleteDialog.showModal === 'function') {
         deleteTrigger?.focus();
     });
 }
+
+// Clipboard content is plain filename text; never interpreted as HTML.
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-copy-filename]');
+    if (!button) return;
+    try {
+        await navigator.clipboard.writeText(button.dataset.copyFilename);
+        button.textContent = 'Copied';
+    } catch (_) {
+        button.textContent = 'Copy unavailable — select the filename';
+    }
+});
+const rematchForms = [...document.querySelectorAll('[data-rematch-form]')];
+let rematchPending = false;
+rematchForms.forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (event.defaultPrevented) return;
+        if (rematchPending) { event.preventDefault(); return; }
+        if (!window.confirm('Rematch all unbatched stock artwork from Google Drive? Changed artwork loses approval. Print batches remain locked.')) {
+            event.preventDefault();
+            return;
+        }
+        rematchPending = true;
+        rematchForms.forEach((otherForm) => {
+            otherForm.setAttribute('aria-busy', 'true');
+            otherForm.querySelectorAll('button[type="submit"]').forEach((button) => {
+                button.dataset.rematchLabel = button.textContent;
+                button.disabled = true;
+                button.textContent = 'Rematching…';
+            });
+        });
+    });
+});
+// A browser back/forward-cache restore must not leave the controls disabled.
+window.addEventListener('pageshow', () => {
+    rematchPending = false;
+    rematchForms.forEach((form) => {
+        form.removeAttribute('aria-busy');
+        form.querySelectorAll('button[data-rematch-label]').forEach((button) => {
+            button.disabled = false;
+            button.textContent = button.dataset.rematchLabel;
+            delete button.dataset.rematchLabel;
+        });
+    });
+});
+
+// Returning a queue entry never sends a print action.
+const returnBatchForms = [...document.querySelectorAll('[data-return-batch]')];
+returnBatchForms.forEach(form => form.addEventListener('submit', event => {
+    const button = form.querySelector('button');
+    if (button.disabled || !window.confirm('Return only this selected item to Artwork Review? Other queued items and their approvals stay unchanged.')) { event.preventDefault(); return; }
+    returnBatchForms.filter(other => other.action === form.action || (form.dataset?.batchId && other.dataset?.batchId === form.dataset.batchId)).forEach(other => { const control = other.querySelector('button'); control.disabled = true; control.textContent = 'Returning…'; });
+}));

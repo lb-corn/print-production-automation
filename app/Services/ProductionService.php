@@ -19,12 +19,12 @@ class ProductionService{
  function batchIndex(bool $refresh = false): array {
   if ($refresh || $this->batchIndexCache === null) {
    $this->batchIndexCache = [];
-   foreach (PrintBatch::latest('id')->get() as $batch) {
+   foreach (PrintBatch::withExists('confirmations')->where('status','!=','CANCELLED')->latest('id')->get() as $batch) {
     foreach ($batch->payload['orders'] ?? [] as $order) {
      $key = $order['line_item_id'] ?? null;
      if (!$key) continue;
      if (!isset($this->batchIndexCache[$key]) || $batch->status === 'PRINTED') {
-      $this->batchIndexCache[$key] = ['id'=>$batch->id, 'batch_id'=>$batch->batch_id, 'status'=>$batch->status];
+      $this->batchIndexCache[$key] = ['id'=>$batch->id, 'batch_id'=>$batch->batch_id, 'status'=>$batch->status,'order_count'=>$batch->order_count,'can_return'=>$batch->status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations_exists];
      }
     }
    }
@@ -32,7 +32,7 @@ class ProductionService{
   return $this->batchIndexCache;
  }
  function processed($i): bool { return isset($this->batchIndex()[$i->line_item_id]); }
- function approved($i): bool { return !$i->is_custom && $i->decision?->decision === 'CORRECT' && count($this->ids($i)) && $this->current($i); }
+ function approved($i): bool { return ArtworkMatcherService::validSelection($i) && $i->decision?->decision === 'CORRECT' && count($this->ids($i)) && $this->current($i); }
  function ids($i){return collect($i->matches??[])->pluck('id')->filter()->sort()->values()->all();}
  function current($i){$d=$i->decision;return $d&&$this->ids($i)===collect($d->drive_file_ids??[])->sort()->values()->all();}
  function ready($i){return $this->approved($i) && !$this->processed($i);}
@@ -43,7 +43,7 @@ class ProductionService{
    abort_if($this->processed($locked),422,'This order is already in a print batch. Review its batch status instead.');
    abort_if($locked->is_custom,422,'Custom artwork uses a separate approval journey.');
    $ids=$this->ids($locked);
-   abort_if(!$ids,422,'No Drive artwork available.');
+   abort_unless(ArtworkMatcherService::validSelection($locked),422,'No complete, unambiguous production artwork selected. Rematch artwork first.');
    $this->workspaceStatsCache=null;
    return VerificationDecision::updateOrCreate(['line_item_id'=>$locked->line_item_id],['decision'=>$decision,'drive_file_ids'=>$ids,'updated_by'=>$uid]);
   });
@@ -79,6 +79,6 @@ class ProductionService{
    'printable_materials'=>$printable, 'nonprint_materials'=>$nonprint, 'printable_yards'=>$printYards,
    'nonprint_yards'=>$backYards, 'total_yards'=>round($printYards + $backYards, 3)];
  }
- function batch($uid){return DB::transaction(function()use($uid){$items=ProductionItem::with('decision')->lockForUpdate()->get();$this->batchIndex(true);$items=$items->filter(fn($i)=>$this->ready($i))->values();abort_if($items->isEmpty(),422,'No approved stock orders ready.');$orders=[];$fc=0;foreach($items as $i){$r=self::MATERIALS[$i->series_code]??null;abort_if(!$r,422,'Material mapping missing.');$ms=collect($i->matches??[]);$arts=[];if($i->design_type==='single'){$m=$ms->first();abort_if(!$m,422,'Single artwork missing.');$arts[]=$this->art('PRINT',$r[0],$m);$fc++;}else{$f=$ms->firstWhere('side','front');$b=$ms->firstWhere('side','back');abort_if(!$f||!$b,422,'Double artwork incomplete.');$arts[]=$this->art('FRONT',$r[0],$f);$arts[]=$this->art('BACK',$r[1],$b);$fc+=2;}$orders[]=['line_item_id'=>$i->line_item_id,'order'=>$i->order_number,'product'=>$i->product,'variant'=>$i->variant,'sku'=>$i->sku,'series_code'=>$i->series_code,'design_type'=>$i->design_type,'quantity'=>$i->quantity,'artworks'=>$arts,'artwork_approval'=>['user_id'=>$i->decision->updated_by,'account_name'=>$i->decision->user?->name,'approved_at'=>$i->decision->updated_at?->toIso8601String(),'drive_file_ids'=>$i->decision->drive_file_ids]];}abort_if(!$orders,422,'No supported approved stock orders ready.');$id='LB-BATCH-'.now('UTC')->format('Ymd-His').'-'.strtoupper(substr(bin2hex(random_bytes(3)),0,4));$payload=['batch_id'=>$id,'status'=>'QUEUED','created_at'=>now('UTC')->toIso8601String(),'yards_per_side_per_set'=>self::YARDS,'order_count'=>count($orders),'artwork_file_count'=>$fc,'orders'=>$orders];$batch=PrintBatch::create(['batch_id'=>$id,'status'=>'QUEUED','order_count'=>count($orders),'artwork_file_count'=>$fc,'total_yards'=>$this->summary($items)['total_yards'],'payload'=>$payload,'created_by'=>$uid]);$this->batchIndexCache=null;$this->workspaceStatsCache=null;return $batch;});}
+ function batch($uid){return DB::transaction(function()use($uid){$items=ProductionItem::with('decision')->orderBy('id')->lockForUpdate()->get();$this->batchIndex(true);$items=$items->filter(fn($i)=>$this->ready($i))->values();abort_if($items->isEmpty(),422,'No approved stock orders ready.');$orders=[];$fc=0;foreach($items as $i){$r=self::MATERIALS[$i->series_code]??null;abort_if(!$r,422,'Material mapping missing.');$ms=collect($i->matches??[]);$arts=[];if($i->design_type==='single'){$m=$ms->first();abort_if(!$m,422,'Single artwork missing.');$arts[]=$this->art('PRINT',$r[0],$m);$fc++;}else{$f=$ms->firstWhere('side','front');$b=$ms->firstWhere('side','back');abort_if(!$f||!$b,422,'Double artwork incomplete.');$arts[]=$this->art('FRONT',$r[0],$f);$arts[]=$this->art('BACK',$r[1],$b);$fc+=2;}$orders[]=['line_item_id'=>$i->line_item_id,'order'=>$i->order_number,'product'=>$i->product,'variant'=>$i->variant,'sku'=>$i->sku,'series_code'=>$i->series_code,'design_type'=>$i->design_type,'quantity'=>$i->quantity,'artworks'=>$arts,'artwork_approval'=>['user_id'=>$i->decision->updated_by,'account_name'=>$i->decision->user?->name,'approved_at'=>$i->decision->updated_at?->toIso8601String(),'drive_file_ids'=>$i->decision->drive_file_ids]];}abort_if(!$orders,422,'No supported approved stock orders ready.');$id='LB-BATCH-'.now('UTC')->format('Ymd-His').'-'.strtoupper(substr(bin2hex(random_bytes(3)),0,4));$payload=['batch_id'=>$id,'status'=>'QUEUED','created_at'=>now('UTC')->toIso8601String(),'yards_per_side_per_set'=>self::YARDS,'order_count'=>count($orders),'artwork_file_count'=>$fc,'orders'=>$orders];$batch=PrintBatch::create(['batch_id'=>$id,'status'=>'QUEUED','order_count'=>count($orders),'artwork_file_count'=>$fc,'total_yards'=>$this->summary($items)['total_yards'],'payload'=>$payload,'created_by'=>$uid]);$this->batchIndexCache=null;$this->workspaceStatsCache=null;return $batch;});}
  function art($s,$mat,$m){return ['side'=>$s,'material'=>$mat,'drive_file_id'=>$m['id']??null,'filename'=>$m['name']??null,'drive_link'=>$m['webViewLink']??null,'thumbnail'=>isset($m['id'])?'https://drive.google.com/thumbnail?id='.$m['id'].'&sz=w800':null];}
 }

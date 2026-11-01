@@ -125,7 +125,14 @@ jobs:
           php artisan view:clear
       - name: Run application regression checks
         run: |
+          php tests/artwork-naming.php
+          node tests/artwork-naming-controls.cjs
+          php tests/rematch-throttle.php
+          node tests/rematch-controls.cjs
+          php tests/drive-index.php
+          php tests/artwork-matching.php
           php tests/bulk-review.php
+          php tests/batch-return.php
           php tests/admin-controls.php
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh

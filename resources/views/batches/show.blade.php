@@ -1,6 +1,6 @@
 <x-layouts.app
     heading="{{ $batch->batch_id }}"
-    subheading="Factory production batch"
+    subheading="{{$batch->status==='CANCELLED'?'Cancelled history · not queued':'Factory production batch'}}"
 >
     @php
         $status = $batch->status;
@@ -25,12 +25,12 @@
         </div>
 
         <div class="stat">
-            <span>Orders</span>
+            <span>{{$status==='CANCELLED'?'Original items · history':'Orders'}}</span>
             <b>{{ $batch->order_count }}</b>
         </div>
 
         <div class="stat">
-            <span>Artwork Files</span>
+            <span>{{$status==='CANCELLED'?'Original files · history':'Artwork Files'}}</span>
             <b>{{ $batch->artwork_file_count }}</b>
         </div>
 
@@ -40,6 +40,13 @@
         </div>
     </div>
 
+    @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()?->role!=='demo')
+    <p class="admin-notice">Need an artwork correction? Use <b>Return this item to Artwork Review</b> beside that item below. Other items stay queued.</p>
+    @elseif($status==='CANCELLED')
+    <p class="admin-notice"><strong>Cancelled batch history — not in the print queue.</strong> Items were returned for artwork review. <a href="{{route('production')}}">Open Artwork Verification →</a>
+@if($batch->payload['returned_to_review']['replacement_batch_id']??null)<a href="{{route('batch.show',$batch->payload['returned_to_review']['replacement_batch_id'])}}">View replacement batch →</a>@endif</p>
+    @endif
+    @if($status!=='CANCELLED')
     <section class="panel">
         <div class="panel-head">
             <div>
@@ -152,6 +159,8 @@
         @endif
     </section>
 
+    @endif
+    @if($status==='CANCELLED')<details class="panel cancelled-batch-history"><summary>Original batch contents · history only</summary>@endif
     <section class="panel">
         <div class="panel-head">
             <div>
@@ -166,6 +175,9 @@
         @foreach($batch->payload['orders'] ?? [] as $order)
             <article class="batch-content-item">
                 <div class="batch-content-title"><div><span>{{$order['order']}}</span><h3 title="{{$order['product']}}">{{$order['product']}}</h3><p>{{$order['variant'] ?? 'Standard'}} · {{$order['series_code']}}</p></div><strong class="batch-quantity">{{$order['quantity']}} <small>{{$order['quantity'] === 1 ? 'set' : 'sets'}}</small></strong></div>
+                @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()?->role!=='demo' && isset($itemIds[$order['line_item_id']]))
+                <form method="post" action="{{route('batch.return-item',[$batch->id,$itemIds[$order['line_item_id']]])}}" data-return-batch data-return-scope="item" data-batch-id="{{$batch->id}}">@csrf<input type="hidden" name="return_confirmed" value="1"><button class="chip" type="submit">Return this item to Artwork Review</button></form>
+                @endif
                 <div class="batch-artwork-rows">
                 @foreach($order['artworks'] as $artwork)
                     <div class="batch-artwork-row"><span class="artwork-side">{{$artwork['side']}}</span><strong>{{$artwork['material']}}</strong>@include('partials.artwork-filename',['filename'=>$artwork['filename']])</div>
@@ -175,7 +187,8 @@
         @endforeach
         </div>
     </section>
-<section class="panel confirmation-history"><div class="panel-head"><div><h2>Approval &amp; print records</h2><p>Recorded account, operator name, quantities and timestamps</p></div></div>
+@if($status==='CANCELLED')</details>@endif
+<section class="panel confirmation-history"><div class="panel-head"><div><h2>{{$status==='CANCELLED'?'Historical approval records':'Approval & print records'}}</h2><p>Recorded account, operator name, quantities and timestamps</p></div></div>
 @forelse($batch->confirmations as $confirmation)
 <div class="confirmation-record"><strong>{{$confirmation->action === 'HANDOFF' ? 'Handoff authorized' : 'Physical print completed'}}</strong><p>{{$confirmation->signer_name}} · account: {{$confirmation->account_name}} · {{$confirmation->confirmed_at->timezone('Asia/Colombo')->format('Y-m-d H:i:s T')}}</p><span>{{$confirmation->order_count}} items · {{$confirmation->total_sets}} sets · {{$confirmation->artwork_file_count}} artwork files</span></div>
 @empty<p class="muted">No signed print confirmations recorded yet.</p>@endforelse

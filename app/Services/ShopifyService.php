@@ -396,4 +396,58 @@ GRAPHQL;
                 ?? null,
         ];
     }
+
+    /** Read only active manufacturing bags in the fixed All Bags collection. */
+    public function getArtworkCatalog(): array
+    {
+        $title=(string)config('services.shopify.artwork_collection','All Bags');
+        $after=null;$seen=[];$collections=[];
+        do {
+            $data=$this->graphql('query ArtworkCollections($after: String) { collections(first: 100, after: $after) { nodes { id title } pageInfo { hasNextPage endCursor } } }',['after'=>$after]);
+            $page=$data['collections']??null;$after=$this->artworkNextPage($page,$seen);
+            foreach($page['nodes'] as $collection)if(($collection['title']??null)===$title)$collections[$collection['id']]=$collection;
+        } while($after!==null);
+        if(count($collections)!==1)throw new RuntimeException('Expected exactly one Shopify collection named '.$title.'.');
+        $id=array_key_first($collections);$after=null;$seen=[];$rows=[];
+        $query=<<<'GRAPHQL'
+query ArtworkCollectionProducts($id: ID!, $after: String) {
+  collection(id: $id) { id title products(first: 10, after: $after) {
+    nodes { id title productType status featuredImage { url }
+      variants(first: 50) { nodes { id sku title image { url } } pageInfo { hasNextPage endCursor } }
+    } pageInfo { hasNextPage endCursor }
+  } }
+}
+GRAPHQL;
+        do {
+            $data=$this->graphql($query,['id'=>$id,'after'=>$after]);$collection=$data['collection']??[];
+            if(($collection['id']??null)!==$id || ($collection['title']??null)!==$title)throw new RuntimeException('Shopify artwork collection changed during scan.');
+            $page=$collection['products']??null;$after=$this->artworkNextPage($page,$seen);
+            foreach($page['nodes'] as $product) {
+                if(($product['status']??null)!=='ACTIVE' || stripos($product['title']??'','custom')!==false)continue;
+                $variants=$product['variants']??null;$variantSeen=[];
+                do {
+                    $variantAfter=$this->artworkNextPage($variants,$variantSeen);
+                    foreach($variants['nodes'] as $variant) {
+                        if(empty($variant['sku']))continue;
+                        $rows[$variant['id']]=['catalog_key'=>hash('sha256',$variant['id']),'sku'=>$variant['sku'],'product'=>$product['title'],
+                            'product_id'=>$product['id'],'variant'=>$variant['title']??'','image'=>$variant['image']['url']??$product['featuredImage']['url']??null];
+                    }
+                    if($variantAfter!==null) {
+                        $data=$this->graphql('query ArtworkProductVariants($id: ID!, $after: String) { product(id: $id) { id status variants(first: 100, after: $after) { nodes { id sku title image { url } } pageInfo { hasNextPage endCursor } } } }',['id'=>$product['id'],'after'=>$variantAfter]);
+                        if(($data['product']['id']??null)!==$product['id'] || ($data['product']['status']??null)!=='ACTIVE')throw new RuntimeException('Shopify product changed during scan.');
+                        $variants=$data['product']['variants']??null;
+                    }
+                } while($variantAfter!==null);
+            }
+        } while($after!==null);
+        return array_values($rows);
+    }
+    private function artworkNextPage(?array $page,array &$seen): ?string
+    {
+        if(!is_array($page) || !is_array($page['nodes']??null) || !is_bool($page['pageInfo']['hasNextPage']??null))throw new RuntimeException('Incomplete artwork catalog response.');
+        if(!$page['pageInfo']['hasNextPage'])return null;
+        $cursor=$page['pageInfo']['endCursor']??null;
+        if(!is_string($cursor) || $cursor==='' || isset($seen[$cursor]))throw new RuntimeException('Artwork catalog pagination did not advance.');
+        $seen[$cursor]=true;return $cursor;
+    }
 }

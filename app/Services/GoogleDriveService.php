@@ -72,7 +72,7 @@ class GoogleDriveService
                 'fields' =>
                     'nextPageToken,files(' .
                     'id,name,mimeType,parents,' .
-                    'webViewLink,imageMediaMetadata' .
+                    'webViewLink,imageMediaMetadata,modifiedTime,md5Checksum,version,capabilities(canRename)' .
                     ')',
 
                 'pageSize' => 1000,
@@ -89,6 +89,10 @@ class GoogleDriveService
 
                 $files[] = [
                     'id' => $file->getId(),
+                    'modifiedTime' => $file->getModifiedTime(),
+                    'version' => $file->getVersion(),
+                    'canRename' => $file->getCapabilities()?->getCanRename(),
+                    'md5Checksum' => $file->getMd5Checksum(),
                     'name' => $file->getName(),
                     'mimeType' => $file->getMimeType(),
                     'webViewLink' => $file->getWebViewLink(),
@@ -136,87 +140,24 @@ class GoogleDriveService
             ->all();
     }
 
-    /**
-     * Recursively index all artwork underneath
-     * Group A and Group B.
-     */
+    /** Only direct files in direct series folders are eligible. Never descend further. */
     public function artworkIndex(): array
     {
         $results = [];
-
         foreach ($this->manufacturingRoots() as $root) {
-            $this->walkFolder(
-                $root['id'],
-                $root['name'],
-                $results
-            );
+            foreach ($this->listChildren($root['id']) as $folder) {
+                if ($folder['mimeType'] !== 'application/vnd.google-apps.folder' || !ArtworkMatcherService::seriesForFolder($folder['name'])) continue;
+                if (preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:$|[^A-Z0-9])/i', $folder['name'])) continue;
+                $path = $root['name'].' / '.$folder['name'];
+                $results[] = ['kind'=>'series_folder','id'=>$folder['id'],'name'=>$folder['name'],'path'=>$path];
+                foreach ($this->listChildren($folder['id']) as $file) {
+                    if ($file['mimeType'] === 'application/vnd.google-apps.folder' || $file['mimeType'] === 'application/vnd.google-apps.shortcut') continue;
+                    if (!in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['jpg','jpeg','png','tif','tiff','webp','psd','pdf'], true)) continue;
+                    if (preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:$|[^A-Z0-9])/i', $file['name'])) continue;
+                    $results[] = [...$file,'kind'=>'artwork','parent_id'=>$folder['id'],'path'=>$path.' / '.$file['name']];
+                }
+            }
         }
-
         return $results;
-    }
-
-    private function walkFolder(
-        string $folderId,
-        string $path,
-        array &$results
-    ): void {
-        foreach (
-            $this->listChildren($folderId)
-            as $file
-        ) {
-            $currentPath =
-                $path . '/' . $file['name'];
-
-            if (
-                $file['mimeType']
-                === 'application/vnd.google-apps.folder'
-            ) {
-                $this->walkFolder(
-                    $file['id'],
-                    $currentPath,
-                    $results
-                );
-
-                continue;
-            }
-
-            /*
-             * Manufacturing artwork only.
-             */
-            $extension = strtolower(
-                pathinfo(
-                    $file['name'],
-                    PATHINFO_EXTENSION
-                )
-            );
-
-            if (!in_array(
-                $extension,
-                [
-                    'jpg',
-                    'jpeg',
-                    'png',
-                    'tif',
-                    'tiff',
-                    'webp',
-                    'psd',
-                    'pdf',
-                ],
-                true
-            )) {
-                continue;
-            }
-
-            $results[] = [
-                'id' => $file['id'],
-                'name' => $file['name'],
-                'path' => $currentPath,
-                'webViewLink' =>
-                    $file['webViewLink'],
-
-                'width' => $file['width'],
-                'height' => $file['height'],
-            ];
-        }
     }
 }

@@ -4,6 +4,7 @@ return [
     'factory' => ['api_key' => env('FACTORY_API_KEY')],
 
     'shopify' => [
+        'artwork_collection' => 'All Bags',
         'store' => env('SHOPIFY_STORE'),
         'client_id' => env('SHOPIFY_CLIENT_ID'),
         'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
@@ -11,6 +12,7 @@ return [
     ],
 
     'google_drive' => [
+        'rename_enabled' => (bool) env('GOOGLE_DRIVE_RENAME_ENABLED', true),
         'service_account_file' => base_path(
             env(
                 'GOOGLE_SERVICE_ACCOUNT_FILE',

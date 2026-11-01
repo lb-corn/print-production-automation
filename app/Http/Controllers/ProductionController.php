@@ -35,11 +35,29 @@ class ProductionController extends Controller
     public function syncBacklog()
     {
         try {
+            \App\Services\ArtworkRematchService::ensureSchemaReady();
             $r = app(BacklogSyncService::class)->sync();
-            return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['processed_skipped']));
+            return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
         } catch (\Throwable $e) {
+            if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
             report($e);
-            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
+            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
+        }
+    }
+
+    public function rematchArtwork(Request $request)
+    {
+        $request->validate(['confirm_rematch'=>'required|accepted']);
+        try {
+            \App\Services\ArtworkRematchService::ensureSchemaReady();
+            $counts = app(\App\Services\ArtworkRematchService::class)->rematch();
+            return redirect()->route('production')->with('ok', sprintf(
+                'Artwork rematched: %d matched · %d missing · %d ambiguous · %d skipped. Review artwork before approval.',
+                $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
+        } catch (\Throwable $e) {
+            if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
+            report($e);
+            return redirect()->route('production')->with('error', 'Artwork rematch failed. No changes were saved. Check the integration logs and try again.');
         }
     }
 
@@ -66,6 +84,18 @@ class ProductionController extends Controller
                 : ($this->svc->approved($item) ? 'approved' : ($item->decision?->decision === 'WRONG' && $this->svc->current($item) ? 'rejected' : 'pending'));
             $item->workflow_state = $state;
             $reviewSummary[$state]++;
+            $validArtwork = \App\Services\ArtworkMatcherService::validSelection($item);
+            if (!$item->artwork_review && !$item->production_batch && !$item->is_custom) {
+                // Explain legacy selections without constructing an integration client or saving data.
+                $expectations = (new \App\Services\ArtworkMatcherService())->match($item->toArray(), [])['artwork_review'];
+                unset($expectations['policy']);
+                $expectations['lookup_status'] = 'not_checked';
+                $expectations['issues'] = ['Run Rematch Artwork to check current Drive files.'];
+                $item->artwork_review = $expectations;
+            }
+            $item->display_matches = $item->production_batch || $validArtwork ? ($item->matches ?? [])
+                : (new \App\Services\ArtworkMatcherService())->savedPreviews($item->toArray(), $item->matches ?? []);
+            $item->valid_artwork = $validArtwork;
             $item->ready_for_print = $this->svc->ready($item);
             $item->approval_current = $this->svc->current($item);
         }
@@ -173,13 +203,29 @@ class ProductionController extends Controller
 
     public function showBatch(PrintBatch $batch)
     {
-        return view('batches.show', compact('batch'));
+        $itemIds=ProductionItem::whereIn('line_item_id',array_column($batch->payload['orders']??[],'line_item_id'))->pluck('id','line_item_id')->all();
+        return view('batches.show', compact('batch','itemIds'));
     }
 
     /**
      * Operator requests the prepared batch to be handed
      * from the Factory Agent to Epson Edge Print.
      */
+    public function returnItemToReview(Request $request, PrintBatch $batch, ProductionItem $item)
+    {
+        abort_unless($request->user() && $request->user()->role!=='demo',403);
+        $request->validate(['return_confirmed'=>'required|accepted']);
+        app(\App\Services\BatchReturnService::class)->returnItemToReview($batch,$item,$request->user()->id);
+        return redirect()->route('production')->with('ok','Selected item returned to artwork review. Other items remain queued. Rematch and approve this item again.');
+    }
+
+    public function returnBatchToReview(Request $request, PrintBatch $batch)
+    {
+        abort_unless($request->user() && $request->user()->role!=='demo',403);
+        $request->validate(['return_confirmed'=>'required|accepted']);
+        return redirect()->route('batch.show',$batch)->with('error','Choose Return this item next to the item you want to review. Whole-batch return is no longer available.');
+    }
+
     public function requestEdgePrint(Request $request, PrintBatch $batch)
     {
         return $this->confirmPrintAction($request, $batch, 'HANDOFF', 'PREPARED', 'HANDOFF_REQUESTED');
