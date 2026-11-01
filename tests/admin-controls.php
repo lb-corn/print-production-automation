@@ -76,10 +76,20 @@ foreach ([['password'=>'incorrect'], ['confirmation'=>'RESET'], ['agents_paused'
     catch (Illuminate\Validation\ValidationException $e) { $check(DB::table('production_items')->count() === 1, 'Invalid reset confirmation preserves records'); }
 }
 $usersBefore = User::orderBy('id')->get()->toJson();
+$primaryDirectory=storage_path('framework/cache/data/reset-primary-test-'.bin2hex(random_bytes(8)));
+$primaryStore=new App\Services\ArtworkRenameStore($primaryDirectory);
+$primaryStore->remember('REVERSE-CLOVER-CAMO','REVERSE-CAMO',$admin->id);
+$primaryStore->saveSelection('reset-preserve-choice',['actor'=>$admin->id,'files'=>['single'=>['source'=>['id'=>'keep-drive-file','name'=>'PSE-REV-RED.jpg']]]]);
+$primaryBefore=[];foreach(glob($primaryDirectory.'/*.json') as $primaryFile)$primaryBefore[$primaryFile]=hash_file('sha256',$primaryFile);
+$connectionsBefore=config('services');
 $controller->reset($request($valid));
 foreach (AdminController::RESET_TABLES as $table) $check(DB::table($table)->count() === 0, 'Reset clears '.$table);
 $check(User::orderBy('id')->get()->toJson() === $usersBefore, 'Reset preserves every user and credential');
 $check(DB::table('migrations')->count() === 1, 'Reset preserves migration history');
+$primaryAfter=[];foreach(glob($primaryDirectory.'/*.json') as $primaryFile)$primaryAfter[$primaryFile]=hash_file('sha256',$primaryFile);
+$check($primaryAfter===$primaryBefore && count($primaryStore->rules())===1 && count($primaryStore->selections())===1,'Reset preserves artwork rules and exact-file choices byte for byte');
+$check(config('services')===$connectionsBefore,'Reset preserves Shopify/Drive connection and primary service settings');
+foreach(glob($primaryDirectory.'/*.json') as $primaryFile)unlink($primaryFile);rmdir($primaryDirectory);
 App\Models\ProductionItem::create(['line_item_id'=>'reset-test','product'=>'Fresh Shopify import','quantity'=>1]);
 $check(DB::table('production_items')->count() === 1, 'Previously imported item can be imported after reset');
 foreach (['admin.users'=>['users'=>User::paginate(20)], 'admin.user-form'=>['user'=>$mike], 'admin.reset'=>['counts'=>collect(AdminController::RESET_TABLES)->mapWithKeys(fn($table)=>[$table=>DB::table($table)->count()])]] as $view=>$data) {

@@ -191,8 +191,8 @@ $groupPlan=$service->scan($admin->id);$check(count(array_filter($groupPlan['entr
 $mapping=['bubble-single'=>['catalog_key'=>$bubbleRow['catalog_key'],'side'=>'single','color'=>'']];
 $perFile=$service->revise($groupPlan['token'],$admin->id,$mapping,false);$check($store->rules()===[],'A file-only confirmation does not silently create a reusable rule');
 $grouped=$service->revise($groupPlan['token'],$admin->id,$mapping,true);
-$check(count(array_filter($grouped['entries'],fn($e)=>$e['status']==='ready'))===3,'One reusable design confirmation resolves matching SINGLE, FRONT and BACK files across versions');
-$future=$service->scan($admin->id);$check(count(array_filter($future['entries'],fn($e)=>$e['status']==='ready'))===3,'Fresh scans reuse the saved design confirmation without remapping each file');
+$check(count(array_filter($grouped['entries'],fn($e)=>$e['status']==='standard'))===3,'One reusable design confirmation resolves matching SINGLE, FRONT and BACK files across versions');
+$future=$service->scan($admin->id);$check(count(array_filter($future['entries'],fn($e)=>$e['status']==='standard'))===3,'Fresh scans reuse the saved design confirmation without remapping each file');
 $whiteOnly=[...$bubbleRow,'catalog_key'=>hash('sha256','white-only'),'variant'=>'Pro Sniper Elite / White'];
 $wrongColor=$service->build([$folder,$source('wrong-rule-color','PSE-BUBBLES-RED.jpg')],[$whiteOnly],[],[],$store->rules());
 $check($wrongColor[0]['status']==='review','Remembered designs never invent a missing color or choose the wrong catalog variant');
@@ -216,6 +216,25 @@ $oldPolicy=$store->create($admin->id,['status'=>'preview','entries'=>[],'naming_
 try{$service->begin($oldPolicy['token'],$admin->id,['anything'],false);throw new Exception('Old policy accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && str_contains($e->getMessage(),'Check files'),'Old year-based previews must be rebuilt before applying names');}
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+
+// Reviewed labels are accepted production names, not mandatory spelling corrections.
+$reviewedRow=[...$row,'product'=>'Lucky Bags 2027 Reverse Camo','sku'=>'2027-REV-PSE-0001'];
+$reviewedFile=$source('reviewed-legacy','PSN-ELT-REVERSE CLOVER CAMO-RED.jpg');
+$reviewedEntry=$service->build([$folder,$reviewedFile],[$reviewedRow],['reviewed-legacy'=>['catalog_key'=>$row['catalog_key'],'side'=>'single','color'=>'RED']],[])[0];
+$check($reviewedEntry['status']==='standard' && $reviewedEntry['proposal']['target']===$reviewedFile['name'],'A reviewed legacy design label is preserved instead of shortened to the SKU code');
+$sharedRows=[$reviewedRow,[...$reviewedRow,'catalog_key'=>'shared-other','product'=>'Lucky Bags 2027 Another Design']];
+$oldSharedId='existing-shared';$oldSharedName='LB-PSE-REV-RED-SINGLE-ID-'.strtoupper(substr(hash('sha256',$oldSharedId),0,12)).'.jpg';
+$oldShared=$source($oldSharedId,$oldSharedName);
+$oldSharedEntry=$service->build([$folder,$oldShared],$sharedRows,[$oldSharedId=>['catalog_key'=>$row['catalog_key'],'side'=>'single','color'=>'RED']],[])[0];
+$check($oldSharedEntry['status']==='standard' && $oldSharedEntry['proposal']['target']===$oldSharedName,'A shared SKU code does not force an existing ID-suffixed reviewed file to be renamed');
+$check($service->build([$folder,$oldShared],$sharedRows,[],[])[0]['status']==='review','Without an explicit choice shared design codes still require review rather than an arbitrary selection');
+$reviewedSide=[...$row,'sku'=>'2027-SLO-PSN-0001','product'=>'Lucky Bags 2027 Beach Animals','variant'=>'Pro Snipers / Black'];
+$sideFolder=['kind'=>'series_folder','id'=>'psn','name'=>'Pro Snipers','path'=>'(GROUP A) Non Carpet / Pro Snipers'];
+$sideFile=[...$source('reviewed-side','PSN-SLOTH-BLACK-BACK.jpg'),'parent_id'=>'psn','path'=>'(GROUP A) Non Carpet / Pro Snipers / PSN-SLOTH-BLACK-BACK.jpg'];
+$sideEntry=$service->build([$sideFolder,$sideFile],[$reviewedSide],['reviewed-side'=>['catalog_key'=>$row['catalog_key'],'side'=>'back','color'=>'BLACK']],[])[0];
+$check($sideEntry['status']==='standard' && $sideEntry['proposal']['target']===$sideFile['name'],'Reviewed FRONT/BACK legacy labels stay unchanged');
+$missingSide=[...$sideFile,'name'=>'PSN-SLOTH-BLACK.jpg','path'=>'(GROUP A) Non Carpet / Pro Snipers / PSN-SLOTH-BLACK.jpg'];
+$check($service->build([$sideFolder,$missingSide],[$reviewedSide],['reviewed-side'=>['catalog_key'=>$row['catalog_key'],'side'=>'back','color'=>'BLACK']],[])[0]['status']==='ready','A genuinely missing required side still needs a filename correction');
 // Explicit future catalog variant labels need no hardcoded color list.
 $midnight=[...$row,'catalog_key'=>hash('sha256','midnight'),'variant'=>'Pro Sniper Elite / Midnight'];
 $midnightFile=$source('midnight','PSE-DUCK CAMO-MIDNIGHT.jpg');
@@ -293,7 +312,7 @@ echo "$checks total admin naming/settings checks passed.\n";
 // Double-sided confirmation stores both files in one preview, with no live mutation.
 $shopify->rows=[$bubbleDouble];$drive->index=[$doubleFolder,$source('pair-front','SNP-BUBBLES-FRONT.jpg','snp'),$source('pair-back','SNP-BUBBLES-BACK.jpg','snp')];$pairPlan=$service->scan($admin->id);$writesBefore=$writer->writes;$batchCount=PrintBatch::count();
 $pair=$service->revisePair($pairPlan['token'],$admin->id,$bubbleDouble['catalog_key'],'pair-front','pair-back',false);
-$check(count($pair['mappings'])===2 && count(array_filter($pair['entries'],fn($e)=>$e['status']==='ready'))===2,'One confirmation prepares FRONT and BACK together');
+$check(count($pair['mappings'])===2 && count(array_filter($pair['entries'],fn($e)=>$e['status']==='standard'))===2,'One confirmation prepares FRONT and BACK together');
 $check($pair['mappings']['pair-front']['side']==='front' && $pair['mappings']['pair-back']['side']==='back' && $writer->writes===$writesBefore && PrintBatch::count()===$batchCount,'Pair preview retains separate sides without renaming, batching or print handoff');
 foreach([['pair-front','pair-front'],['pair-back','pair-front'],['pair-front','missing-back']] as [$front,$back]) {
  try{$service->revisePair($pairPlan['token'],$admin->id,$bubbleDouble['catalog_key'],$front,$back,false);throw new LogicException('Invalid pair accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Incomplete, duplicate or swapped FRONT/BACK pair is rejected');}
@@ -409,5 +428,19 @@ $shopify->rows=[$row];$drive->index=[$folder,$source('cross-environment','Duck C
 try{$service->begin($beforeOtherEnvironment['token'],$admin->id,['cross-environment'],false);throw new LogicException('Stale rename accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'If another environment already renamed the file, a stale preview cannot rename it again');}
 $afterOtherEnvironment=$service->scan($admin->id);$check($afterOtherEnvironment['entries'][0]['status']==='standard','Refresh after another environment’s rename imports the existing accepted filename');
 try{$service->begin($afterOtherEnvironment['token'],$admin->id,['cross-environment'],false);throw new LogicException('Standard file submitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'Server rejects attempts to submit already-standard files for renaming');}
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+config(['services.google_drive.reviewed_selections_enabled'=>true]);
+$store->remember('REVERSE-CLOVER-CAMO',$matcher->designIdentity($reviewedRow['product']),$admin->id);
+$matcher->refreshReviewedSelections();$shopify->rows=[$reviewedRow];$drive->index=[$folder,$reviewedFile];
+$rememberedPlan=$service->scan($admin->id);$writesBefore=$writer->writes;
+$check($rememberedPlan['entries'][0]['status']==='standard' && $matcher->match($reviewedRow,$drive->index)['match_status']==='REVIEW','Fresh scans and production matching reuse the reviewed label without a rename');
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$rememberedPlan['token'],'catalog_key'=>$reviewedRow['catalog_key'],'file_id'=>$reviewedFile['id'],'side'=>'single','color'=>'RED']);$request->setUserResolver(fn()=>$admin);
+$response=$controller->revise($request);$reloaded=$service->scan($admin->id);
+$check($response->getStatusCode()===302 && $reloaded['entries'][0]['status']==='standard' && $matcher->match($reviewedRow,$drive->index)['artwork_review']['selection_source']==='admin' && $writer->writes===$writesBefore,'Confirm artwork, reload Admin and rematch production all preserve the same file without invoking Drive rename');
+$wrongReviewed=[...$reviewedRow,'variant'=>'Pro Sniper Elite / Blue'];
+$check($matcher->match($wrongReviewed,$drive->index)['match_status']==='MISSING','Remembered labels never override the Shopify color');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";

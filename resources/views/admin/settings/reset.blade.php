@@ -1,5 +1,5 @@
 <section class="panel admin-form">
-        <h2>Start production fresh</h2><p>This permanently removes the portal’s production records, including print history. Users, migration records, connection settings, and files in Shopify and Google Drive are preserved.</p>
+        <h2>Start production fresh</h2><p>Clears synced orders, artwork approvals, print queues and print history. Keeps artwork mappings, naming rules, connection settings, users and migration records. Shopify products and Google Drive files stay unchanged.</p>
         <dl class="reset-counts">@foreach(['production_items' => 'Order items', 'verification_decisions' => 'Artwork decisions', 'print_batches' => 'Print batches', 'batch_confirmations' => 'Print confirmations'] as $table => $label)<div><dt>{{ $label }}</dt><dd>{{ number_format($counts[$table]) }}</dd></div>@endforeach</dl>
         <div class="reset-warning">Deleted records cannot be restored from this screen. Make a database backup first. Stop the factory agent and complete or cancel physical print jobs before resetting. Previously processed orders may become eligible for printing again after a fresh import.</div>
         <form method="post" action="{{ route('admin.reset.store') }}">

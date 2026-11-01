@@ -10,6 +10,8 @@ use Illuminate\Validation\Rules\Password;
 
 class AdminController extends Controller
 {
+    // Operational records only. Artwork mappings/rules and connection settings are
+    // primary configuration and must survive a production reset.
     public const RESET_TABLES = ['batch_confirmations', 'print_batches', 'verification_decisions', 'production_items'];
 
     public function index()
@@ -98,6 +100,6 @@ class AdminController extends Controller
         DB::transaction(function () {
             foreach (self::RESET_TABLES as $table) DB::table($table)->delete();
         });
-        return redirect()->route('dashboard')->with('ok', 'Portal production data reset. Users and migrations were preserved. Pull the Shopify backlog to start again.');
+        return redirect()->route('dashboard')->with('ok', 'Production records reset. Artwork mappings, naming rules, settings and users were preserved. Pull the Shopify backlog to start again.');
     }
 }
