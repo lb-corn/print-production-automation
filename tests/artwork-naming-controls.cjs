@@ -47,11 +47,19 @@ function setup(confirmResult, failStep = false) {
  const white={value:'white',dataset:{series:'SNP',color:'WHITE'}};
  const wrongSeries={value:'pse',dataset:{series:'PSE',color:'BLUE'}};
  catalog.options=[blue,white,wrongSeries];catalog.selectedOptions=[blue];
- const nodes={'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'.naming-review-advanced':advanced,'[data-naming-original]':link};
+ const sourceSearch=element(), productSearch=element();blue.textContent='Redline Grunge Blue';white.textContent='Redline Grunge White';wrongSeries.textContent='Redline Grunge Blue';source.options=[{value:'miami',textContent:'MIAMI-27 Luciano',dataset:{}},{value:'grunge',textContent:'RED-AND-BLACK-GRUNGE Snipers',dataset:{}}];
+ const nodes={'[data-naming-source-search]':sourceSearch,'[data-naming-product-search]':productSearch,'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'.naming-review-advanced':advanced,'[data-naming-original]':link};
  vm.runInNewContext(fs.readFileSync('public/js/artwork-names.js','utf8'),{document:{querySelector:s=>nodes[s]||null,querySelectorAll:()=>[]},window:{addEventListener(){}}});
  source.change();assert.equal(side.value,'back');assert.equal(color.value,'BLUE');assert.equal(catalog.value,'');assert(!blue.disabled&&white.disabled&&wrongSeries.disabled);assert.equal(drive.src,source.selectedOptions[0].dataset.thumbnail);
  catalog.change();assert.equal(product.src,blue.dataset.image);assert.equal(side.value,'back');assert(label.textContent.includes('BLUE · back'));
  source.selectedOptions[0].dataset.side='';source.change();assert.equal(advanced.open,true);
  blue.dataset.image='javascript:alert(1)';catalog.change();assert.equal(product.src,undefined);
+ productSearch.input({target:{value:'GRUNGE blue'}});assert(!blue.hidden && white.hidden && wrongSeries.hidden);
+ productSearch.input({target:{value:'not present'}});assert(blue.hidden);
+ productSearch.input({target:{value:''}});assert(!blue.hidden && white.hidden && wrongSeries.hidden);
+ sourceSearch.input({target:{value:'miami 27'}});assert(!source.options[0].hidden && source.options[1].hidden);
+ sourceSearch.input({target:{value:''}});assert(source.options.every(option=>!option.hidden));
+ assert.equal(catalog.value,'');
+ console.log('PASS: case-insensitive dropdown search handles spaces/hyphens, clears safely and preserves series/color restrictions');
  console.log('PASS: compact thumbnails filter variants, preserve BACK, expose missing sides and reject unsafe image URLs');
 }

@@ -43,6 +43,23 @@ document.querySelector('[data-naming-clear]')?.addEventListener('click', () => {
 });
 const sourceChoice = document.querySelector('[data-naming-source]');
 const catalogChoice = document.querySelector('[data-naming-catalog]');
+function namingChoiceFilter(select, query, product = false) {
+    if (!select) return;
+    const terms = query.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const source = sourceChoice?.selectedOptions[0];
+    let count = 0;
+    [...select.options].forEach(option => {
+        const label = (option.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+        const eligible = !product || !source?.dataset.series || (option.dataset.series === source.dataset.series && (!source.dataset.color || option.dataset.color === source.dataset.color));
+        option.hidden = !!option.value && (!eligible || !terms.every(term => label.includes(term)));
+        option.disabled = option.hidden;
+        if (option.value && !option.hidden) count++;
+    });
+    const empty = document.querySelector(product ? '[data-naming-product-empty]' : '[data-naming-source-empty]');
+    if (empty) empty.hidden = count > 0;
+}
+document.querySelector('[data-naming-source-search]')?.addEventListener('input', event => namingChoiceFilter(sourceChoice, event.target.value));
+document.querySelector('[data-naming-product-search]')?.addEventListener('input', event => namingChoiceFilter(catalogChoice, event.target.value, true));
 function namingThumbnail(selector, url) {
     const image = document.querySelector(selector);
     if (!image) return;
@@ -61,7 +78,7 @@ sourceChoice?.addEventListener('change', () => {
     namingThumbnail('[data-naming-product-image]', '');
     if (catalogChoice) {
         catalogChoice.value = '';
-        [...catalogChoice.options].forEach(option => { option.hidden = !!option.value && !!source?.dataset.series && (option.dataset.series !== source.dataset.series || (source.dataset.color && option.dataset.color !== source.dataset.color)); option.disabled = option.hidden; });
+        namingChoiceFilter(catalogChoice, document.querySelector('[data-naming-product-search]')?.value || '', true);
     }
     const color = document.querySelector('[data-naming-color]'); if (color) color.value = source?.dataset.color || '';
     const side = document.querySelector('[data-naming-side]'); if (side) side.value = source?.dataset.side || '';

@@ -445,3 +445,5 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 @media(max-width:600px){.naming-review-thumbnails{gap:8px}.naming-review-thumbnails img{width:48px;height:48px}}
 
 .naming-status-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 12px;margin:8px 0 12px;border:1px solid #dce7eb;border-radius:6px;background:#fff;font-size:12px}.naming-status-row b{color:#00878c;margin-right:4px}.naming-status-row small{color:#718898;margin-left:auto;font-size:11px}
+
+.naming-review-fields input[type="search"]{margin:4px 0 5px;height:32px;padding:5px 9px;font-size:12px}.naming-review-fields small{font-size:11px;color:#718898}
