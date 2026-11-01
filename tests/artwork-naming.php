@@ -311,3 +311,27 @@ $cancelledOnly=PrintBatch::create(['batch_id'=>'cancelled-lock-test','status'=>'
 $check(!isset($service->lockedFiles()['cancelled-only-file']),'Cancelled queue snapshots no longer lock artwork while other batch statuses stay protected');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+
+// A color-label correction is explicit, file-specific and audited, never an alias.
+$shopify->rows=[$row];$wrongLabel=$source('reviewed-label','PSE-DUC-NAVY.JPEG');$drive->index=[$folder,$wrongLabel];$correction=$service->scan($admin->id);$rulesBefore=$store->rules();$writeCount=$writer->writes;
+$mapping=['reviewed-label'=>['catalog_key'=>$row['catalog_key'],'side'=>'single','color'=>'RED']];
+try{$service->revise($correction['token'],$admin->id,$mapping,true);throw new LogicException('Unconfirmed correction accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $store->load($correction['token'],$admin->id)['mappings']===[],'Wrong-color files remain blocked without explicit color-label confirmation');}
+$mapping['reviewed-label']['color_correction_confirmed']=true;$corrected=$service->revise($correction['token'],$admin->id,$mapping,true);
+$check($corrected['entries'][0]['status']==='ready' && str_contains($corrected['entries'][0]['proposal']['target'],'-RED-SINGLE-ID-') && str_ends_with($corrected['entries'][0]['proposal']['target'],'.JPEG'),'Reviewed color-label correction proposes the exact Shopify color and preserves the actual extension');
+$review=$corrected['color_correction_reviews'][0];$check($review['from']==='NAVY' && $review['to']==='RED' && $review['actor']===$admin->id && $review['original_name']===$wrongLabel['name'],'Color correction records original filename, old/new labels, actor and timestamp');
+$check($store->rules()===$rulesBefore && $writer->writes===$writeCount && $matcher->match($row,[$folder,$wrongLabel])['match_status']==='MISSING','A reviewed exception creates no color alias, performs no rename and does not weaken automatic wrong-color matching');
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$correction['token'],'catalog_key'=>$row['catalog_key'],'file_id'=>'reviewed-label','side'=>'single','color'=>'RED','color_correction_confirmed'=>'0']);$request->setUserResolver(fn()=>$admin);
+try{$controller->revise($request);throw new LogicException('Unchecked correction admitted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['color_correction_confirmed']),'The endpoint requires an accepted explicit correction checkbox');}
+$render=$controller->index(Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$corrected['token']])->setUserResolver(fn()=>$admin),$store)->render();
+$dom=new DOMDocument();@$dom->loadHTML($render,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$check($xpath->query('//dialog[@data-artwork-match-dialog]/form/div[@class="artwork-match-top"]')->length===1 && $xpath->query('//dialog[@data-artwork-match-dialog]/form/div[@class="artwork-match-scroll"]')->length===1 && $xpath->query('//dialog[@data-artwork-match-dialog]/form/div[@class="artwork-match-bottom"]//button[@data-match-confirm]')->length===1,'The modal separates a fixed comparison header, one scrolling list and visible confirmation controls');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// The same explicit label review works for a pair without changing global color rules.
+$shopify->rows=[$blueDouble];$drive->index=[$doubleFolder,$source('color-pair-front','SNP-BUBBLES-BLUE-FRONT.jpg','snp'),$source('color-pair-back','SNP-BUBBLES-NAVY-BACK.jpg','snp')];$colorPair=$service->scan($admin->id);$rulesBefore=$store->rules();
+$reviewedPair=$service->revisePair($colorPair['token'],$admin->id,$blueDouble['catalog_key'],'color-pair-front','color-pair-back',false,true);
+$check(count($reviewedPair['mappings'])===2 && count($reviewedPair['color_correction_reviews'])===1 && $reviewedPair['color_correction_reviews'][0]['file_id']==='color-pair-back' && $reviewedPair['color_correction_reviews'][0]['to']==='BLUE','Explicit pair correction audits only the mislabeled side and keeps both target colors equal to Shopify');
+$check($store->rules()===$rulesBefore,'A pair color correction does not create a global color equivalence');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";

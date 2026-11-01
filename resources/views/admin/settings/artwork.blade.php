@@ -5,16 +5,16 @@
 </section>
 
 <div class="naming-status-row" aria-label="Artwork status">
-@foreach(['products'=>'Shopify products','images'=>'Linked images','catalog_matched'=>'Variants with artwork','catalog_missing'=>'Missing artwork','catalog_ambiguous'=>'Need review','ready'=>'Ready to rename'] as $key=>$label)
+@foreach(['products'=>'Products','images'=>'Linked files','catalog_matched'=>'Variants found','catalog_missing'=>'Missing','catalog_ambiguous'=>'Review','ready'=>'To rename'] as $key=>$label)
 <span><b>{{$summary[$key]??'—'}}</b> {{$label}}</span>
 @endforeach
 <small>@if($summary)Last checked {{date('d M, H:i',$summary['checked_at'])}} · {{$summary['variants']}} variants @else Click Check files to load counts @endif</small>
 </div>
 <section class="naming-scope naming-scope-compact" aria-label="Artwork scan scope">
-<strong>Shopify: All Bags · Active only</strong><br><strong>Scan scope · these folders only</strong><div class="naming-scope-roots">
+<div class="naming-scope-line"><strong>All Bags · Active only</strong><span class="naming-scope-roots">
 @foreach($scope as $root=>$folders)<span>✓ {{$root}}</span>
-@endforeach</div>
-<details><summary>Version folders · no MOCKUPS or nested folders</summary><div class="naming-scope-folders">
+@endforeach</span></div>
+<details><summary>Scan scope · these folders only</summary><small>Direct series files only · no MOCKUPS or nested folders</small><div class="naming-scope-folders">
 
 @foreach($scope as $root=>$folders)
 
@@ -74,6 +74,7 @@ $preselected=0;
 @if($preview&&count($catalog))
 <dialog class="artwork-match-dialog" data-artwork-match-dialog aria-labelledby="artwork-match-heading">
 <form method="post" action="{{route('admin.artwork-names.review')}}" data-artwork-match-form>
+<div class="artwork-match-top">
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
 <div class="artwork-dialog-heading"><strong id="artwork-match-heading">Match artwork</strong><button type="button" class="chip" data-match-close>Close</button></div>
 <select name="catalog_key" required data-naming-catalog hidden aria-label="Selected Shopify variant"><option value="">Choose product</option>
@@ -88,6 +89,7 @@ $preselected=0;
 <p class="muted" data-match-pair-error role="alert" hidden></p>
 <input type="hidden" name="pair_mode" value="1" data-match-pair-mode disabled><input type="hidden" name="front_file_id" data-match-front-input disabled><input type="hidden" name="back_file_id" data-match-back-input disabled>
 <div class="artwork-candidate-heading"><label>Choose the same design from Drive<input type="search" data-naming-source-search placeholder="Search filenames in this series…" autocomplete="off"></label><small data-match-candidate-count></small></div>
+</div><div class="artwork-match-scroll">
 <select name="file_id" required data-naming-source hidden aria-label="Selected Drive artwork"><option value="">Choose artwork</option>
 @foreach($reviewGroups as $group)
 @php($entry=$group['entry'])
@@ -100,15 +102,17 @@ $preselected=0;
 <details class="artwork-find-help"><summary>Can’t find it? <span data-match-excluded-count></span></summary>
 <p>Check the selected series and color above. For a different variant, close this window and choose that Shopify variant.</p>
 <div data-artwork-excluded class="artwork-candidate-grid"></div>
-<p>Excluded files cannot be selected. If a filename label is incorrect, inspect the full image in Drive, correct its name while preserving its extension, then refresh. If artwork is absent, upload it directly into the expected series folder.</p>
+<p>If a color label is incorrect, inspect the full image and choose Use & correct color. Batch-protected files remain unavailable. No file is renamed until you review and apply the filename preview.</p>
 <button type="submit" class="chip" form="artwork-scan-form">Refresh files from Drive</button>
 </details>
+</div><div class="artwork-match-bottom">
 <div class="artwork-selected-file" data-match-selection hidden><img data-naming-source-image alt="Selected Drive artwork" hidden><div><strong data-match-selection-name></strong><a data-naming-original target="_blank" rel="noopener noreferrer" hidden>Open full image ↗</a></div></div>
 <div data-naming-side-needed hidden><label>This filename has no FRONT/BACK. Choose its side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label></div>
 <input type="hidden" name="color" data-naming-color>
+<label class="artwork-color-confirm" data-match-color-confirm hidden><input type="checkbox" name="color_correction_confirmed" value="1" data-match-color-checkbox disabled> I checked the artwork: its actual color matches Shopify; the filename color label is wrong.</label>
 <div class="artwork-match-footer"><label><input type="checkbox" name="reuse" value="1" checked> Remember for matching versions</label><button type="submit" class="primary" data-match-confirm disabled>Confirm this artwork</button></div>
 <small class="muted">Confirm only when the images show the same design. This saves a filename preview; it does not approve printing.</small>
-</form></dialog>
+</div></form></dialog>
 @endif
 <details class="naming-advanced"><summary>Filename changes · {{$ready}} ready to rename</summary>
 <div class="naming-table-tools naming-simple-tools">

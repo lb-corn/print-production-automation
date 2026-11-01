@@ -59,13 +59,13 @@ class ArtworkNamingController extends Controller
     {
         $actor=$this->actor($request);
         if($request->boolean('pair_mode')) {
-            $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean']);
-            $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false));
+            $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
+            $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false),$request->boolean('color_correction_confirmed'));
             return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Front and back saved to the filename preview. Review Filename changes to apply names.');
         }
         $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','catalog_key'=>'required|string|size:64',
-            'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean']);
-        $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'']],(bool)($data['reuse']??false));
+            'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
+        $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'','color_correction_confirmed'=>$request->boolean('color_correction_confirmed')]],(bool)($data['reuse']??false));
         $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
         if(($entry['status']??'review')==='review')return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','This mapping does not match the folder, SKU, color or print side. Check it and update the preview.');
         return redirect()->route('admin.artwork-names',['plan'=>$plan['token']]);

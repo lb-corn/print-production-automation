@@ -27,10 +27,15 @@ class ArtworkNamingService
             $row=collect($plan['catalog'])->firstWhere('catalog_key',$mapping['catalog_key']??'');
             abort_unless($row,422,'Choose a Shopify variant from this preview.');
             $expectedColor=$this->matcher->catalogColor($row);
-            abort_if($expectedColor && !empty($attributes['color']) && $attributes['color']!==$expectedColor,422,'The filename color differs from the Shopify variant. Choose the correct artwork.');
+            $colorMismatch=$expectedColor && !empty($attributes['color']) && $attributes['color']!==$expectedColor;
+            abort_if($colorMismatch && ($mapping['color_correction_confirmed']??false)!==true,422,'The filename color differs from the Shopify variant. Explicitly confirm its incorrect color label first.');
+            if($colorMismatch) {
+                abort_unless(($mapping['color']??null)===$expectedColor,422,'The corrected color must equal the selected Shopify variant.');
+                $plan['color_correction_reviews'][]=['file_id'=>$id,'original_name'=>$entries[$id]['source']['name'],'from'=>$attributes['color'],'to'=>$expectedColor,'actor'=>$actor,'at'=>gmdate('c')];
+            }
             abort_if(in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
             if(!empty($mapping['catalog_key']))$plan['mappings'][$id]=$mapping;
-            if($reuse) {
+            if($reuse && !$colorMismatch) {
                 $folderName=trim(substr($entries[$id]['folder'],strrpos($entries[$id]['folder'],'/')+1));
                 $attributes=$entries[$id]['source_attributes']??$this->matcher->sourceAttributes($entries[$id]['source'],$folderName);
                 $row=collect($plan['catalog'])->firstWhere('catalog_key',$mapping['catalog_key']??'');
@@ -42,7 +47,7 @@ class ArtworkNamingService
         $plan['entries']=$this->build($plan['index'],$plan['catalog'],$plan['mappings'],$this->lockedFiles(),$plan['rules']);
         $this->store->save($plan);return $plan;
     }
-    public function revisePair(string $token,int $actor,string $catalogKey,string $frontId,string $backId,bool $reuse=false): array
+    public function revisePair(string $token,int $actor,string $catalogKey,string $frontId,string $backId,bool $reuse=false,bool $confirmColorCorrection=false): array
     {
         $plan=$this->store->load($token,$actor);$this->requirePolicy($plan);
         abort_unless($frontId!==$backId,422,'Front and back must be different files.');
@@ -58,13 +63,13 @@ class ArtworkNamingService
             abort_if(in_array($attributes['side']??null,['front','back'],true) && $attributes['side']!==$side,422,'FRONT/BACK in the filename must agree with the selected slot.');
             abort_if(($attributes['side']??null)==='single',422,'A SINGLE artwork file cannot be used for a double-sided pair.');
             $expected=$this->matcher->catalogColor($row);$named=$attributes['color']??null;
-            abort_if($expected && $named && $expected!==$named,422,'The artwork color differs from the Shopify variant.');
+            abort_if($expected && $named && $expected!==$named && !$confirmColorCorrection,422,'The artwork color differs from the Shopify variant.');
             if($named)$colors[]=$named;
-            $mapping=['catalog_key'=>$catalogKey,'side'=>$side,'color'=>$expected??$named??''];
+            $mapping=['catalog_key'=>$catalogKey,'side'=>$side,'color'=>$expected??$named??'','color_correction_confirmed'=>$confirmColorCorrection];
             abort_unless($this->matcher->namingCandidate($row,$entry['source'],$folder,$mapping),422,'The pair must use eligible production artwork from this series folder.');
             $mappings[$id]=$mapping;
         }
-        abort_if(count(array_unique($colors))>1,422,'Front and back have conflicting filename colors.');
+        abort_if(count(array_unique($colors))>1 && !($confirmColorCorrection && $this->matcher->catalogColor($row)),422,'Front and back have conflicting filename colors.');
         return $this->revise($token,$actor,$mappings,$reuse);
     }
     public function begin(string $token,int $actor,array $ids,bool $refresh): array
