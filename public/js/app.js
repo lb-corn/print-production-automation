@@ -259,8 +259,36 @@ document.addEventListener('click', async (event) => {
         button.textContent = 'Copy unavailable — select the filename';
     }
 });
-document.querySelectorAll('[data-rematch-form]').forEach((form) => {
+const rematchForms = [...document.querySelectorAll('[data-rematch-form]')];
+let rematchPending = false;
+rematchForms.forEach((form) => {
     form.addEventListener('submit', (event) => {
-        if (!window.confirm('Rematch all unbatched stock artwork from Google Drive? Changed artwork loses approval. Print batches remain locked.')) event.preventDefault();
+        if (event.defaultPrevented) return;
+        if (rematchPending) { event.preventDefault(); return; }
+        if (!window.confirm('Rematch all unbatched stock artwork from Google Drive? Changed artwork loses approval. Print batches remain locked.')) {
+            event.preventDefault();
+            return;
+        }
+        rematchPending = true;
+        rematchForms.forEach((otherForm) => {
+            otherForm.setAttribute('aria-busy', 'true');
+            otherForm.querySelectorAll('button[type="submit"]').forEach((button) => {
+                button.dataset.rematchLabel = button.textContent;
+                button.disabled = true;
+                button.textContent = 'Rematching…';
+            });
+        });
+    });
+});
+// A browser back/forward-cache restore must not leave the controls disabled.
+window.addEventListener('pageshow', () => {
+    rematchPending = false;
+    rematchForms.forEach((form) => {
+        form.removeAttribute('aria-busy');
+        form.querySelectorAll('button[data-rematch-label]').forEach((button) => {
+            button.disabled = false;
+            button.textContent = button.dataset.rematchLabel;
+            delete button.dataset.rematchLabel;
+        });
     });
 });

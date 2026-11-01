@@ -1,9 +1,24 @@
 <?php
 namespace App\Providers;
+
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\ProductionService::class);}
  public function boot():void {
+  RateLimiter::for('artwork-rematch', function (Request $request) {
+   return Limit::perMinute(3)
+    ->by('artwork-rematch:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+    ->response(function (Request $request, array $headers) {
+     $seconds=max(1,(int)($headers['Retry-After'] ?? 60));
+     $message='Artwork rematch limit reached. Please wait '.$seconds.' seconds and try again. No artwork or batches were changed by this request.';
+     if ($request->expectsJson()) return response()->json(['message'=>$message],429,$headers);
+     return redirect()->route('production')->with('error',$message)->withHeaders($headers);
+    });
+  });
   \Illuminate\Support\Facades\View::composer('partials.workspace-status',function($view){
    $view->with('workspaceStats',app(\App\Services\ProductionService::class)->workspaceStats());
   });

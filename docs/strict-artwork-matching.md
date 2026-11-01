@@ -18,3 +18,7 @@ The reported failed rematch was traced to the missing artwork_review column, rat
 The top rematch action is a compact row. Missing-artwork instructions use a short status, folder link, small filename/copy rows and an action row; verbose diagnostics are collapsed under Naming guidance & details. Legacy records say Check production artwork until a fresh lookup, rather than falsely claiming the series folder does not exist. Correct previews and locked batches remain visible.
 
 The final generic rule was validated against real Drive listings and isolated fixtures. Nonstandard names without series tokens, shortened design synonyms, wrong colors, duplicates and side typos still need review or a standard rename. No per-design mapping table is used.
+
+## Rematch rate-limit feedback
+
+Rematching retains its three-attempts-per-minute protection, scoped to the signed-in operator. Browser requests that exceed the limit return to Artwork Verification with the remaining wait time; JSON requests retain HTTP 429 and Retry-After. The client disables all rematch controls while an accepted submission is running, blocks duplicate submits, and restores controls after browser history navigation. No automatic retry runs. Cache/session-only PHP tests and isolated JavaScript behavior tests cover these cases without invoking Drive, a database write or a print operation.
