@@ -35,7 +35,7 @@ class ProductionService{
  function approved($i): bool { return ArtworkMatcherService::validSelection($i) && $i->decision?->decision === 'CORRECT' && count($this->ids($i)) && $this->current($i); }
  function ids($i){return collect($i->matches??[])->pluck('id')->filter()->sort()->values()->all();}
  function current($i){$d=$i->decision;return $d&&$this->ids($i)===collect($d->drive_file_ids??[])->sort()->values()->all();}
- function ready($i){return $this->approved($i) && !$this->processed($i);}
+ function ready($i){return $this->approved($i) && !$this->processed($i) && isset(self::MATERIALS[$i->series_code]) && in_array($i->design_type,['single','double'],true) && (int)$i->quantity>0;}
  function verify($item,$decision,$uid){
   return DB::transaction(function() use($item,$decision,$uid) {
    $locked=ProductionItem::lockForUpdate()->findOrFail($item->id);

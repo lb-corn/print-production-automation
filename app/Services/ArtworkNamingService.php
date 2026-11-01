@@ -100,7 +100,9 @@ class ArtworkNamingService
                 $oldIdentity=array_map(fn($file)=>ArtworkMatcherService::artworkFingerprint($file),$item->matches??[]);sort($oldIdentity);
                 if($oldIdentity!==$newIdentity) {
                     VerificationDecision::where('line_item_id',$item->line_item_id)->delete();
-                    $item->update(['matches'=>[],'match_status'=>'MISSING','confidence'=>null,'artwork_review'=>null]);
+                    $clear=['matches'=>[],'match_status'=>'MISSING','confidence'=>null];
+                    if(ArtworkRematchService::schemaReady())$clear['artwork_review']=null;
+                    $item->update($clear);
                 }
             }
         });

@@ -95,3 +95,9 @@ echo "$checks batch return checks passed.\n";
 $beforeLegacy=PrintBatch::all()->toJson();$request=Illuminate\Http\Request::create('/batches/return','POST',['return_confirmed'=>'1']);$request->setUserResolver(fn()=>$user);$response=$controller->returnBatchToReview($request,$requeued);
 $check($response->getStatusCode()===302 && PrintBatch::all()->toJson()===$beforeLegacy && str_contains(session('error'),'Whole-batch return is no longer available'),'A stale whole-batch POST cannot return all items');
 echo "$checks batch return checks passed.\n";
+
+$legacyReturn=$create('pre-schema-return');$svc->verify($legacyReturn,'CORRECT',$user->id);$legacyBatch=$svc->batch($user->id);
+Illuminate\Support\Facades\Schema::table('production_items',fn($table)=>$table->dropColumn('artwork_review'));
+$check($return->returnItemToReview($legacyBatch,$legacyReturn,$user->id)===1 && $legacyReturn->fresh()->matches===[] && !$legacyReturn->fresh('decision')->decision,'Selected-item return and approval invalidation work before the optional review column is deployed');
+(require __DIR__.'/../database/migrations/2026_11_01_000005_add_artwork_review.php')->up();
+echo "$checks batch return checks passed.\n";

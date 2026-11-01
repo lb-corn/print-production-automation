@@ -222,6 +222,17 @@ catch(App\Exceptions\ArtworkSchemaNotReady $e) { $check($drive->visited===$visit
 $request=Illuminate\Http\Request::create('/production/rematch','POST',['confirm_rematch'=>'1']);
 $response=$controller->rematchArtwork($request);
 $check($response->isRedirect() && str_contains(session('error'),'artwork_review migration'),'Rematch UI explains missing setup instead of returning a generic integration error');
+// Backlog import still runs against the pre-migration schema; printing remains gated.
+$drive->tree=['group-b'=>[$folder('pse','PSE')],'pse'=>[$file('schema-correct','PSE-DUC-RED.png'),$file('schema-amb-a','PSE-AMB-RED.jpg'),$file('schema-amb-b','PSE-AMB-RED.png')]];
+$legacyMatch=$matcher->match($row);unset($legacyMatch['artwork_review']);$schemaItem=ProductionItem::create(['line_item_id'=>'schema-existing',...$row,...$legacyMatch]);
+VerificationDecision::create(['line_item_id'=>$schemaItem->line_item_id,'decision'=>'CORRECT','drive_file_ids'=>['schema-correct'],'updated_by'=>$user->id]);
+$shopify->rows=[['line_item_id'=>'schema-existing',...$row],['line_item_id'=>'schema-new',...$row],['line_item_id'=>'schema-missing',...$row,'sku'=>'2027-MIS-PSE-0001','product'=>'Lucky Bags Missing'],['line_item_id'=>'schema-ambiguous',...$row,'sku'=>'2027-AMB-PSE-0001','product'=>'Lucky Bags Ambiguous']];
+$result=$sync->sync();
+$check($result['added']===3 && $result['matched']===2 && $result['missing']===1 && $result['ambiguous']===1 && !$result['artwork_schema_ready'],'Missing review column does not block importing and checking mixed valid/missing/ambiguous orders');
+$check($schemaItem->fresh('decision')->decision!==null && !$svc->ready($schemaItem->fresh()),'Unchanged legacy approval records survive sync without granting print eligibility before setup');
+$check(ProductionItem::where('line_item_id','schema-new')->first()->match_status==='REVIEW' && ProductionItem::where('line_item_id','schema-missing')->first()->matches===[],'Pre-migration sync safely stores matching results in existing columns');
+$app->instance(BacklogSyncService::class,$sync);session()->forget('error');$response=$controller->syncBacklog();
+$check($response->isRedirect() && str_contains(session('ok'),'backlog refreshed') && str_contains(session('warning'),'server still needs'),'Backlog UI reports a successful sync separately from the server migration notice');
 (require __DIR__.'/../database/migrations/2026_11_01_000005_add_artwork_review.php')->up();
 echo "$checks total artwork checks passed.\n";
 // Legacy spelling retains a whole, explicit series alias; PSN alone can never match PSE.
@@ -248,4 +259,20 @@ foreach (['CLV-BUB.jpg','CLV-BUBBLE FUSION.jpg'] as $name) {
     $drive->tree['clover']=[$file('bubble',$name)];
     $check($matcher->match($bubble)['match_status']==='REVIEW','Bubble Fusion follows the same standard rule: '.$name);
 }
+echo "$checks total artwork checks passed.\n";
+
+// A problem on one product cannot hold up valid approved work from the same order.
+$drive->tree=['group-b'=>[$folder('pse','PSE')],'pse'=>[$file('mixed-correct','PSE-DUC-RED.jpg'),$file('mixed-amb-a','PSE-AMB-RED.jpg'),$file('mixed-amb-b','PSE-AMB-RED.png')]];
+$drive->tree['pse'][]=$file('previously-approved-missing','PSE-MIS-RED.jpg');
+$oldMissingRow=[...$row,'sku'=>'2027-MIS-PSE-0001','product'=>'Lucky Bags Missing','order_number'=>'same-order'];
+$oldMissing=ProductionItem::create(['line_item_id'=>'independent-missing',...$oldMissingRow,...$matcher->match($oldMissingRow)]);$svc->verify($oldMissing,'CORRECT',$user->id);array_pop($drive->tree['pse']);
+$shopify->rows=[['line_item_id'=>'independent-good',...$row,'order_number'=>'same-order'],['line_item_id'=>'independent-missing',...$row,'order_number'=>'same-order','sku'=>'2027-MIS-PSE-0001','product'=>'Lucky Bags Missing'],['line_item_id'=>'independent-ambiguous',...$row,'order_number'=>'same-order','sku'=>'2027-AMB-PSE-0001','product'=>'Lucky Bags Ambiguous']];
+$before=PrintBatch::count();$result=$sync->sync();$check($result['matched']===1 && $result['missing']===1 && $result['ambiguous']===1 && PrintBatch::count()===$before,'Sync checks only order artwork and reports individual problems without creating print batches');
+$good=ProductionItem::where('line_item_id','independent-good')->first();$missingItem=ProductionItem::where('line_item_id','independent-missing')->first();$ambiguousItem=ProductionItem::where('line_item_id','independent-ambiguous')->first();
+$svc->verify($good,'CORRECT',$user->id);
+$check(!$missingItem->fresh('decision')->decision && $good->fresh('decision')->decision!==null,'Sync removes stale approval only from the product whose artwork disappeared');
+foreach([$missingItem,$ambiguousItem] as $blocked)try{$svc->verify($blocked,'CORRECT',$user->id);throw new RuntimeException('Invalid artwork approved');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Only the item with invalid or ambiguous artwork is blocked from approval');}
+$batch=$svc->batch($user->id);$check(array_column($batch->payload['orders'],'line_item_id')===['independent-good'],'Valid approved work enters the batch while missing and ambiguous sibling products stay out');
+$check(!$svc->processed($missingItem) && !$svc->processed($ambiguousItem) && !VerificationDecision::whereIn('line_item_id',[$missingItem->line_item_id,$ambiguousItem->line_item_id])->exists(),'Blocked products remain pending and unapproved without blocking the rest of the order');
+$check(!$batch->confirmations()->exists(),'Per-item gating never authorizes Epson handoff or physical printing automatically');
 echo "$checks total artwork checks passed.\n";

@@ -31,21 +31,25 @@ class ArtworkRematchService
         return $counts;
     }
 
+    public static function schemaReady(): bool { return \Illuminate\Support\Facades\Schema::hasColumn('production_items','artwork_review'); }
+
     public static function ensureSchemaReady(): void
     {
-        if (!\Illuminate\Support\Facades\Schema::hasColumn('production_items', 'artwork_review')) {
+        if (!self::schemaReady()) {
             throw new \App\Exceptions\ArtworkSchemaNotReady();
         }
     }
 
     /** Caller must hold the item lock (or be creating a new item). */
-    public function apply(ProductionItem $item, array $match): void
+    public function apply(ProductionItem $item, array $match,bool $persistReview=true): void
     {
         $before = $this->identity($item->matches ?? []);
         $oldPolicy = $item->artwork_review['policy'] ?? null;
+        $validMatch=ArtworkMatcherService::validSelection((object)$match);
+        if(!$persistReview)unset($match['artwork_review']);
         $item->fill($match);
         if ($before !== $this->identity($item->matches ?? [])
-            || $oldPolicy !== ArtworkMatcherService::POLICY || !ArtworkMatcherService::validSelection($item)) {
+            || ($persistReview && $oldPolicy !== ArtworkMatcherService::POLICY) || !$validMatch) {
             VerificationDecision::where('line_item_id', $item->line_item_id)->delete();
             $item->unsetRelation('decision');
         }
