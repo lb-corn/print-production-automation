@@ -22,6 +22,13 @@ class ArtworkNamingService
         $entries=array_column($plan['entries'],null,'id');
         foreach($mappings as $id=>$mapping) {
             abort_unless(isset($entries[$id]) && $entries[$id]['status']!=='locked',422,'Choose an unbatched file from this preview.');
+            $folderName=trim(substr($entries[$id]['folder'],strrpos($entries[$id]['folder'],'/')+1));
+            $attributes=$entries[$id]['source_attributes']??$this->matcher->sourceAttributes($entries[$id]['source'],$folderName);
+            $row=collect($plan['catalog'])->firstWhere('catalog_key',$mapping['catalog_key']??'');
+            abort_unless($row,422,'Choose a Shopify variant from this preview.');
+            $expectedColor=$this->matcher->catalogColor($row);
+            abort_if($expectedColor && !empty($attributes['color']) && $attributes['color']!==$expectedColor,422,'The filename color differs from the Shopify variant. Choose the correct artwork.');
+            abort_if(in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
             if(!empty($mapping['catalog_key']))$plan['mappings'][$id]=$mapping;
             if($reuse) {
                 $folderName=trim(substr($entries[$id]['folder'],strrpos($entries[$id]['folder'],'/')+1));

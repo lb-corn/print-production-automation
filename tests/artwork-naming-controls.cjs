@@ -75,7 +75,7 @@ function setup(confirmResult, failStep = false) {
  const select=new Node();select.options=[{value:'',textContent:'Choose design'},{value:'miami',textContent:'Miami 27',hidden:false,disabled:false},{value:'grunge',textContent:'Redline Grunge',hidden:false,disabled:false}];
  Object.defineProperty(select,'selectedOptions',{get(){return [select.options.find(option=>option.value===select.value)];}});
  const doc=new Node();doc.createElement=()=>new Node();
- const code=fs.readFileSync('public/js/artwork-names.js','utf8');const begin=code.indexOf('function namingSearchableSelect(');const end=code.indexOf('namingSearchableSelect(sourceChoice);',begin);
+ const code=fs.readFileSync('public/js/artwork-names.js','utf8');const begin=code.indexOf('function namingSearchableSelect(');const end=code.indexOf("if (!document.querySelector('[data-artwork-match-dialog]'))",begin);
  const context={document:doc,Event:class{constructor(type){this.type=type;}},namingChoiceFilter:(node,query)=>{for(const option of node.options)option.hidden=!!query&&!option.textContent.toLowerCase().includes(query.toLowerCase());node.namingRefresh();},select};
  vm.runInNewContext(code.slice(begin,end)+'namingSearchableSelect(select);',context);
  const [trigger,panel]=select.wrapper.children;const [search,list]=panel.children;
@@ -88,4 +88,37 @@ function setup(confirmResult, failStep = false) {
  trigger.dispatchEvent({type:'click'});doc.dispatchEvent({type:'click',target:new Node()});assert(panel.hidden);
  trigger.dispatchEvent({type:'click'});search.value='absent';search.dispatchEvent({type:'input'});assert.equal(list.children[0].textContent,'No matches found');
  console.log('PASS: integrated dropdown search opens inside menu, filters, selects with keyboard, resets and closes safely');
+}
+
+// The visual worklist exposes all eligible thumbnails and requires an explicit selection.
+{
+ class Element {
+  constructor(dataset={}){this.dataset=dataset;this.value='';this.hidden=false;this.children=[];this.handlers={};this.attributes={};}
+  addEventListener(type,fn){(this.handlers[type]??=[]).push(fn);} dispatchEvent(e){for(const fn of this.handlers[e.type]||[])fn(e);}
+  setAttribute(k,v){this.attributes[k]=v;}removeAttribute(k){delete this[k];}append(...nodes){this.children.push(...nodes);}replaceChildren(){this.children=[];}
+  showModal(){this.open=true;}close(){this.open=false;}focus(){}contains(node){return this===node;}
+ }
+ const source=new Element(),catalog=new Element(),dialog=new Element(),grid=new Element(),search=new Element(),confirm=new Element(),side=new Element(),color=new Element();
+ const option=(value,name,dataset)=>Object.assign(new Element(dataset),{value,textContent:name});
+ const sku=option('sku','Shopify Elite S / Navy',{series:'ELT-S',color:'NAVY',type:'single',image:'https://cdn.shopify.com/navy.jpg',folder:'Group B / Elite S',folderUrl:'https://drive.google.com/drive/folders/elite',folderId:'elite',scopeReady:'1'});
+ catalog.options=[option('','Choose',{}),sku];
+ const standard=option('standard','ELT-S-NAVY-ART.jpg',{series:'ELT-S',color:'NAVY',side:'single',parentId:'elite',thumbnail:'https://drive.google.com/thumbnail?id=standard',linked:'Existing catalog design'});
+ const unknown=option('unknown','ELT-S-OLD-NAME.jpg',{series:'ELT-S',color:'',side:'single',parentId:'elite'});
+ const wrong=option('wrong','ELT-S-RED.jpg',{series:'ELT-S',color:'RED',side:'single',parentId:'elite'});
+ const elsewhere=option('elsewhere','ELT-S-NAVY.jpg',{series:'ELT-S',color:'NAVY',side:'single',parentId:'other-folder'});
+ source.options=[option('','Choose',{}),standard,unknown,wrong,elsewhere];
+ for(const select of [source,catalog])Object.defineProperty(select,'selectedOptions',{get(){return [select.options.find(item=>item.value===select.value)];}});
+ const button=new Element({matchProduct:'sku'}),row=new Element({artworkStatus:'missing'});row.textContent='Shopify Navy sku';
+ const nodes={'[data-artwork-match-dialog]':dialog,'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-artwork-candidates]':grid,'[data-naming-source-search]':search,'[data-match-confirm]':confirm,'[data-naming-side]':side,'[data-naming-color]':color};
+ for(const key of ['data-match-title','data-match-folder','data-match-folder-link','data-match-selection','data-match-selection-name','data-naming-source-image','data-naming-product-image','data-naming-original','data-artwork-candidate-empty','data-match-candidate-count','data-naming-side-needed','data-match-close','data-artwork-match-form'])nodes['['+key+']']=new Element();
+ const document={createElement:()=>new Element(),querySelector:s=>nodes[s]||null,querySelectorAll:s=>s==='[data-match-product]'?[button]:s==='[data-catalog-row]'?[row]:s==='[data-artwork-file]'?grid.children:[],addEventListener(){}};
+ vm.runInNewContext(fs.readFileSync('public/js/artwork-names.js','utf8'),{document,window:{addEventListener(){}},Event:class{constructor(type){this.type=type;}}});
+ button.dispatchEvent({type:'click'});assert(dialog.open);assert.equal(catalog.value,'sku');assert.equal(source.value,'');assert(confirm.disabled);assert.equal(grid.children.length,2);
+ assert(grid.children[0].children[1].children[1].textContent.includes('Linked: Existing catalog design'));
+ grid.children[0].dispatchEvent({type:'click'});assert.equal(source.value,'standard');assert(!confirm.disabled);assert.equal(side.value,'single');assert.equal(color.value,'NAVY');
+ search.value='absent';search.dispatchEvent({type:'input',target:search});assert.equal(source.value,'standard');assert.equal(standard.disabled,false);
+ search.value='old name';search.dispatchEvent({type:'input',target:search});assert.equal(grid.children.length,1);assert.equal(grid.children[0].dataset.artworkFile,'unknown');
+ button.dispatchEvent({type:'click'});assert.equal(source.value,'');assert(confirm.disabled);assert.equal(search.value,'');assert.equal(grid.children.length,2);
+ sku.dataset.scopeReady='0';button.dispatchEvent({type:'click'});assert.equal(grid.children.length,0);assert(nodes['[data-artwork-candidate-empty]'].textContent.includes('missing or ambiguous'));
+ console.log('PASS: one worklist opens thumbnail choices, includes linked files, excludes wrong color/parent, clears stale choices and requires confirmation');
 }

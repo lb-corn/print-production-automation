@@ -259,9 +259,24 @@ $check($coverage['images']===1 && $coverage['catalog_matched']===1 && $coverage[
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$catalogPlan['token']]);$request->setUserResolver(fn()=>$admin);
 $catalogPage=$controller->index($request,$store);$data=$catalogPage->getData();
 $check(count($data['catalogStatus'])===2 && count($data['visibleEntries'])===1 && $data['catalogStatus'][0]['status']==='matched' && $data['catalogStatus'][1]['status']==='missing','Coverage begins with all Shopify variants, while unrelated Drive files stay outside the monitored table');
-$html=$catalogPage->render();$check(strpos($html,'Shopify product / variant<select')<strpos($html,'Drive artwork<select'),'Mapping asks for the Shopify product before the Drive artwork');
+$html=$catalogPage->render();$check(str_contains($html,'data-match-product=') && str_contains($html,'data-artwork-candidates') && !str_contains($html,'data-naming-picker'),'The worklist opens a visual artwork chooser instead of two disconnected dropdowns');
 $check($matcher->namingCandidate($gta,$gtaFile,'Luciano',['side'=>'single','color'=>'BLACK'])!==null,'A Shopify series-only variant can map verified BLACK-labeled GTA artwork');
 $drive->index=[$luc,$folder,$gtaFile,[...$gtaFile,'id'=>'gta-duplicate']];$duplicates=$service->scan($admin->id);
 $check(ArtworkRenameStore::summary($duplicates)['catalog_ambiguous']===1,'Multiple Drive candidates remain ambiguous in Shopify coverage');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Correctly named artwork stays available when visually reviewing a Shopify product.
+$shopify->rows=[$row];$drive->index=[$folder,$source('standard-chooser','PSE-DUC-RED.jpg')];$candidate=$service->build($drive->index,[$row],[],[])[0];
+$standardSource=$source('standard-chooser',$candidate['proposal']['target']);$drive->index=[$folder,$standardSource];$chooserPlan=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$chooserPlan['token']]);$request->setUserResolver(fn()=>$admin);
+$chooser=$controller->index($request,$store);$check(isset($chooser->getData()['reviewGroups']['standard-chooser']),'The visual chooser includes correctly named files, not only review/conflict files');
+$chooserHtml=$chooser->render();$dom=new DOMDocument();@$dom->loadHTML($chooserHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$check($xpath->query('//dialog[@data-artwork-match-dialog]//select[@data-naming-catalog and @hidden]')->length===1 && $xpath->query('//button[@data-match-product]')->length===1,'A single product worklist opens one focused visual comparison without visible mapping dropdowns');
+$check($xpath->query('//details[summary[contains(text(),"Filename changes")]]//form[@id="artwork-naming-apply"]')->length===1,'Advanced filename controls are collapsed instead of competing with product matching');
+$blueDouble=[...$bubbleDouble,'catalog_key'=>hash('sha256','blue-double'),'variant'=>'Snipers / Blue'];$shopify->rows=[$blueDouble];$drive->index=[$doubleFolder,$source('side-guard','SNP-BUBBLES-BLUE-FRONT.jpg','snp')];$guard=$service->scan($admin->id);
+try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$blueDouble['catalog_key'],'side'=>'back','color'=>'BLUE']],false);throw new LogicException('Wrong side mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts explicit FRONT/BACK');}
+$redDouble=[...$blueDouble,'catalog_key'=>hash('sha256','red-double'),'variant'=>'Snipers / Red'];$shopify->rows=[$redDouble];$guard=$service->scan($admin->id);
+try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$redDouble['catalog_key'],'side'=>'front','color'=>'RED']],false);throw new LogicException('Wrong color mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts the explicit filename color');}
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";

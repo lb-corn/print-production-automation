@@ -60,44 +60,44 @@ $preselected=0;
 
 @endif
 
-@if($preview&&count($catalog))
-<details class="naming-simple-review" data-naming-review>
-<summary>Match a Shopify product <span>Choose the product, then its Drive artwork</span></summary>
-<form method="post" action="{{route('admin.artwork-names.review')}}">
-@csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
-<div class="naming-review-thumbnails"><a data-naming-original href="#" target="_blank" rel="noopener noreferrer" hidden><img data-naming-source-image alt="Drive artwork" hidden><span>Drive artwork ↗</span></a><div><img data-naming-product-image alt="Catalog product" hidden><span data-naming-detected>Choose a Shopify product below</span></div></div>
-<div class="naming-review-fields">
 
-<label>Shopify product / variant<select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
-@foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}">{{$row['product']}} · {{$row['variant']}}</option>
-@endforeach</select><small data-naming-product-empty hidden>No matching products. Try another search.</small></label>
-<label>Drive artwork<select name="file_id" required data-naming-source><option value="">Choose Drive artwork</option>
-
-@foreach($reviewGroups as $group)
-
-@php($entry=$group['entry'])
-
-@php($folderName=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1)))
-
-@php($source=$entry['source_attributes']??(new \App\Services\ArtworkMatcherService())->sourceAttributes($entry['source'],$folderName))
-<option value="{{$entry['id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view">{{$entry['source_design']??$entry['source']['name']}} · {{$folderName}} · {{$source['color']??'No color label'}} · {{$source['side']??'Side not named'}}</option>
-
+<section class="artwork-worklist" aria-label="Shopify artwork matching">
+<div class="artwork-worklist-tools"><input type="search" data-catalog-search placeholder="Find a Shopify product or SKU…" aria-label="Search Shopify products" autocomplete="off"><select data-catalog-status aria-label="Product artwork status"><option value="attention">Needs artwork or review</option><option value="all">All products</option><option value="matched">Artwork found</option></select></div>
+<div class="naming-table-wrap"><table><thead><tr><th>Shopify product</th><th>Artwork</th><th></th></tr></thead><tbody>
+@foreach($catalogStatus as $row)
+<tr data-catalog-row data-artwork-status="{{$row['status']}}" @if($row['status']==='matched') hidden @endif>
+<td><div class="artwork-product-cell">@if(str_starts_with($row['image']??'','https://'))<img src="{{$row['image']}}" alt="" loading="lazy">@endif<div><strong>{{$row['product']}}</strong><small>{{$row['variant']}} · {{$row['sku']}}</small></div></div></td>
+<td>{{$row['status']==='matched'?'Found':($row['status']==='ambiguous'?'Review duplicates':'Missing artwork')}}</td><td>@if($preview)<button class="chip" type="button" data-match-product="{{$row['catalog_key']}}">{{$row['status']==='matched'?'View / change':'Match artwork'}}</button>@endif</td></tr>
 @endforeach
-</select></label>
-</div>
-<div data-naming-side-needed hidden><label>Filename is missing FRONT/BACK. Which side is this?<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
-</div><input type="hidden" name="color" maxlength="40" data-naming-color>
-<div class="naming-review-actions"><label><input type="checkbox" name="reuse" value="1" checked> Apply to matching versions and future files</label><button type="submit" class="chip">Use this design</button></div>
-<p class="muted">Preview only · no files renamed.</p>
-</form>
-</details>
-
+</tbody></table><p data-catalog-empty hidden>No products in this view. Choose All products to see the full catalog.</p></div>
+</section>
+@if($preview&&count($catalog))
+<dialog class="artwork-match-dialog" data-artwork-match-dialog aria-labelledby="artwork-match-heading">
+<form method="post" action="{{route('admin.artwork-names.review')}}" data-artwork-match-form>
+@csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
+<div class="artwork-dialog-heading"><strong id="artwork-match-heading">Match artwork</strong><button type="button" class="chip" data-match-close>Close</button></div>
+<select name="catalog_key" required data-naming-catalog hidden aria-label="Selected Shopify variant"><option value="">Choose product</option>
+@foreach($catalogStatus as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}" data-scope-ready="{{$row['folder_url']?'1':'0'}}" data-folder-id="{{$row['folder_url']?rawurldecode(basename($row['folder_url'])):''}}" data-folder="{{$row['expected_folder']}}" data-folder-url="{{$row['folder_url']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>@endforeach
+</select>
+<div class="artwork-match-product"><img data-naming-product-image alt="Shopify product" hidden><div><strong data-match-title></strong><small data-match-folder></small><a data-match-folder-link target="_blank" rel="noopener noreferrer" hidden>Open Drive folder ↗</a></div></div>
+<div class="artwork-candidate-heading"><label>Choose the same design from Drive<input type="search" data-naming-source-search placeholder="Search filenames in this series…" autocomplete="off"></label><small data-match-candidate-count></small></div>
+<select name="file_id" required data-naming-source hidden aria-label="Selected Drive artwork"><option value="">Choose artwork</option>
+@foreach($reviewGroups as $group)
+@php($entry=$group['entry'])
+@php($source=$entry['source_attributes'])
+<option value="{{$entry['id']}}" data-parent-id="{{$entry['source']['parent_id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" data-linked="{{$entry['proposal']['product']??''}}">{{$entry['source']['name']}}</option>
+@endforeach
+</select>
+<div class="artwork-candidate-grid" data-artwork-candidates role="group" aria-label="Drive artwork choices"></div>
+<p class="muted" data-artwork-candidate-empty hidden>No eligible artwork found here. Upload the production file to the folder above, then Check files.</p>
+<div class="artwork-selected-file" data-match-selection hidden><img data-naming-source-image alt="Selected Drive artwork" hidden><div><strong data-match-selection-name></strong><a data-naming-original target="_blank" rel="noopener noreferrer" hidden>Open full image ↗</a></div></div>
+<div data-naming-side-needed hidden><label>This filename has no FRONT/BACK. Choose its side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label></div>
+<input type="hidden" name="color" data-naming-color>
+<div class="artwork-match-footer"><label><input type="checkbox" name="reuse" value="1" checked> Remember for matching versions</label><button type="submit" class="primary" data-match-confirm disabled>Confirm this artwork</button></div>
+<small class="muted">Confirm only when the images show the same design. This saves a filename preview; it does not approve printing.</small>
+</form></dialog>
 @endif
-<details class="naming-catalog-status" open><summary>Shopify products · artwork coverage</summary>
-<input type="search" data-catalog-search placeholder="Search Shopify products or SKU…" aria-label="Search Shopify artwork coverage" autocomplete="off">
-<div class="naming-table-wrap"><table><thead><tr><th>Shopify product / variant</th><th>Artwork</th></tr></thead><tbody>
-@foreach($catalogStatus as $row)<tr data-catalog-row><td>{{$row['product']}} · {{$row['variant']}}<small>{{$row['sku']}}</small></td><td>{{$row['status']==='matched'?'Found · approval still required':($row['status']==='ambiguous'?'Multiple files · review':'Missing artwork')}}</td></tr>@endforeach
-</tbody></table></div></details>
+<details class="naming-advanced"><summary>Filename changes · {{$ready}} ready to rename</summary>
 <div class="naming-table-tools naming-simple-tools">
 <div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Linked files to review</button><button type="button" class="chip" data-naming-mode="all">Linked files</button></div>
 <input type="search" name="artwork_filename_filter" id="artwork-filename-filter" data-naming-search autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="Filter filenames" aria-label="Filter filenames">
@@ -135,7 +135,7 @@ $preselected=0;
 </dialog>
 
 @endif
-</form>
+</form></details>
 
 @if($plan['events'])<details class="naming-advanced"><summary>Rename audit · {{count($plan['events'])}} events</summary>
 @foreach($plan['events'] as $event)<p><code>{{$event['old_name']}}</code> → <code>{{$event['new_name']}}</code> · {{$event['status']}} · {{$event['at']}}</p>

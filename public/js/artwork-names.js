@@ -51,9 +51,10 @@ function namingChoiceFilter(select, query, product = false) {
     let count = 0;
     [...select.options].forEach(option => {
         const label = (option.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const eligible = product || !catalog?.value || !catalog?.dataset.series || (option.dataset.series === catalog.dataset.series && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color));
+        const eligible = product || !catalog?.value || !catalog?.dataset.series || (catalog.dataset.scopeReady !== '0' && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.dataset.series === catalog.dataset.series && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color));
         option.hidden = !!option.value && (!eligible || !terms.every(term => label.includes(term)));
-        option.disabled = option.hidden;
+        // Searching hides rows; only scope/variant incompatibility disables submission.
+        option.disabled = !!option.value && !eligible;
         if (option.value && !option.hidden) count++;
     });
     const empty = document.querySelector(product ? '[data-naming-product-empty]' : '[data-naming-source-empty]');
@@ -107,10 +108,19 @@ catalogChoice?.addEventListener('change', () => {
     const link = document.querySelector('[data-naming-original]'); if (link) link.hidden = true;
     namingMappingAttributes();
 });
-document.querySelector('[data-catalog-search]')?.addEventListener('input', event => {
-    const terms = event.target.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    document.querySelectorAll('[data-catalog-row]').forEach(row => { row.hidden = !terms.every(term => row.textContent.toLowerCase().includes(term)); });
-});
+function namingCatalogFilter() {
+    const query = document.querySelector('[data-catalog-search]')?.value || '';
+    const status = document.querySelector('[data-catalog-status]')?.value || 'attention';
+    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean); let count = 0;
+    document.querySelectorAll('[data-catalog-row]').forEach(row => {
+        const state = row.dataset.artworkStatus;
+        row.hidden = !(terms.every(term => row.textContent.toLowerCase().includes(term)) && (status === 'all' || (status === 'attention' ? state !== 'matched' : state === status)));
+        if (!row.hidden) count++;
+    });
+    const empty = document.querySelector('[data-catalog-empty]'); if (empty) empty.hidden = count > 0;
+}
+document.querySelector('[data-catalog-search]')?.addEventListener('input', namingCatalogFilter);
+document.querySelector('[data-catalog-status]')?.addEventListener('change', namingCatalogFilter);
 function openNamingConfirmation() {
     const count = namingSelected().filter(input => input.checked).length;
     if (!count || namingRunning) return;
@@ -241,5 +251,60 @@ function namingSearchableSelect(select, product = false) {
     select.before(wrapper); wrapper.append(trigger, panel); panel.append(search, list);
     select.hidden = true; select.namingRefresh = render; render();
 }
-namingSearchableSelect(sourceChoice);
-namingSearchableSelect(catalogChoice, true);
+if (!document.querySelector('[data-artwork-match-dialog]')) {
+    namingSearchableSelect(sourceChoice);
+    namingSearchableSelect(catalogChoice, true);
+}
+
+
+// One worklist, with a focused visual choice for the selected Shopify variant.
+const artworkMatchDialog = document.querySelector('[data-artwork-match-dialog]');
+function namingMatchSelection() {
+    const option = sourceChoice?.selectedOptions[0];
+    const selection = document.querySelector('[data-match-selection]'); if (selection) selection.hidden = !option?.value;
+    const name = document.querySelector('[data-match-selection-name]'); if (name) name.textContent = option?.value ? option.textContent : '';
+    const confirm = document.querySelector('[data-match-confirm]');
+    if (confirm) confirm.disabled = !sourceChoice?.value || !catalogChoice?.value || !document.querySelector('[data-naming-side]')?.value;
+    document.querySelectorAll('[data-artwork-file]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.artworkFile === sourceChoice?.value)));
+}
+function namingArtworkGallery() {
+    const grid = document.querySelector('[data-artwork-candidates]'); if (!grid) return;
+    grid.replaceChildren();
+    const options = [...sourceChoice.options].filter(option => option.value && !option.hidden && !option.disabled);
+    options.forEach(option => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'artwork-file-choice';
+        button.dataset.artworkFile = option.value; button.setAttribute('aria-pressed', String(option.value === sourceChoice.value));
+        const image = document.createElement('img'); image.alt = ''; image.loading = 'lazy';
+        if (option.dataset.thumbnail?.startsWith('https://')) image.src = option.dataset.thumbnail;
+        image.onerror = () => { image.hidden = true; };
+        const text = document.createElement('span'); text.textContent = option.textContent;
+        const detail = document.createElement('small'); detail.textContent = [option.dataset.side || 'Side not named', option.dataset.color || 'No color label', option.dataset.linked ? 'Linked: ' + option.dataset.linked : 'Not linked'].join(' · ');
+        const caption = document.createElement('span'); caption.append(text, detail); button.append(image, caption);
+        button.addEventListener('click', () => { sourceChoice.value = option.value; sourceChoice.dispatchEvent(new Event('change', {bubbles:true})); namingMatchSelection(); });
+        grid.append(button);
+    });
+    const empty = document.querySelector('[data-artwork-candidate-empty]'); if (empty) { empty.hidden = options.length > 0; empty.textContent = catalogChoice?.selectedOptions[0]?.dataset.scopeReady === '0' ? 'The series folder is missing or ambiguous. Fix the folder location, then Check files.' : 'No eligible artwork found here. Upload the production file to the folder above, then Check files.'; }
+    const count = document.querySelector('[data-match-candidate-count]'); if (count) count.textContent = options.length + ' eligible files · choose by image, not filename alone';
+}
+if (artworkMatchDialog && sourceChoice) {
+    sourceChoice.namingRefresh = namingArtworkGallery;
+    document.querySelectorAll('[data-match-product]').forEach(button => button.addEventListener('click', () => {
+        catalogChoice.value = button.dataset.matchProduct;
+        const option = catalogChoice.selectedOptions[0];
+        const search = document.querySelector('[data-naming-source-search]'); if (search) search.value = '';
+        catalogChoice.dispatchEvent(new Event('change', {bubbles:true}));
+        document.querySelector('[data-match-title]').textContent = option.textContent;
+        document.querySelector('[data-match-folder]').textContent = option.dataset.folder || '';
+        const link = document.querySelector('[data-match-folder-link]'); link.hidden = !option.dataset.folderUrl; link.href = option.dataset.folderUrl || '#';
+        namingMatchSelection(); artworkMatchDialog.showModal(); search?.focus();
+    }));
+    document.querySelector('[data-match-close]')?.addEventListener('click', () => artworkMatchDialog.close());
+    sourceChoice.addEventListener('change', namingMatchSelection);
+    document.querySelector('[data-naming-side]')?.addEventListener('change', namingMatchSelection);
+    document.querySelector('[data-artwork-match-form]')?.addEventListener('submit', event => {
+        namingMatchSelection(); const button = document.querySelector('[data-match-confirm]');
+        if (button.disabled) { event.preventDefault(); return; }
+        button.disabled = true; button.textContent = 'Saving preview…';
+    });
+}
+namingCatalogFilter();

@@ -24,7 +24,8 @@ class ArtworkNamingController extends Controller
                 $required=$row['type']==='double'?['front','back']:['single'];
                 $ambiguous=false;$complete=true;
                 foreach($required as $side){if(($sides[$side]??0)>1)$ambiguous=true;if(!($sides[$side]??0))$complete=false;}
-                $catalogStatus[]=[...$row,'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
+                $context=(new ArtworkMatcherService())->match($row,array_values(array_filter($plan['index'],fn($entry)=>($entry['kind']??'')==='series_folder')));
+                $catalogStatus[]=[...$row,'expected_folder'=>$context['artwork_review']['expected_folder'],'folder_url'=>$context['artwork_review']['folder_url'],'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
             }
         }
         $scope=[];
@@ -34,12 +35,15 @@ class ArtworkNamingController extends Controller
             $parts=array_map('trim',explode('/',$entry['path']));
             if(count($parts)===2 && array_key_exists($parts[0],$scope))$scope[$parts[0]][]=['name'=>$entry['name'],'id'=>$entry['id']];
         }
+        // Candidates include already-standard artwork; no file is selected automatically.
         $reviewGroups=[];
-        if($plan)foreach($plan['entries'] as $entry)if(in_array($entry['status'],['review','conflict'],true)) {
-            $attributes=$entry['source_attributes']??[];
-            $key=implode('/',[$entry['source_design']??$entry['id'],$attributes['series']??'',$attributes['color']??'',$attributes['side']??'']);
-            if(!isset($reviewGroups[$key]))$reviewGroups[$key]=['entry'=>$entry,'count'=>0];
-            $reviewGroups[$key]['count']++;
+        if($currentPlan)foreach($plan['entries'] as $entry) {
+            if($entry['status']==='locked' || !in_array(strtolower(pathinfo($entry['source']['name'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true))continue;
+            $folderName=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1));
+            $attributes=$entry['source_attributes']??(new ArtworkMatcherService())->sourceAttributes($entry['source'],$folderName);
+            if(!$attributes)continue;
+            $entry['source_attributes']=$attributes;
+            $reviewGroups[$entry['id']]=['entry'=>$entry,'count'=>1];
         }
         return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries'));
     }
