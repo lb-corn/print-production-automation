@@ -418,3 +418,4 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 @media(max-width:900px){.admin-settings-layout{grid-template-columns:1fr;gap:16px}.admin-settings-nav{position:static;display:flex;flex-wrap:wrap}.admin-settings-label,.admin-settings-nav>p{display:none}.admin-settings-nav>a{flex:1;min-width:180px}}
 
 .admin-settings-nav>a>span{display:block}.admin-settings-nav .admin-settings-tab-icon{display:flex}
+.admin-settings-content>.admin-form{width:100%;max-width:none}
