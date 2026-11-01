@@ -431,3 +431,15 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .naming-confirm-dialog{width:min(440px,calc(100vw - 28px));border:1px solid var(--line);border-radius:12px;padding:22px;color:var(--ink)}.naming-confirm-dialog::backdrop{background:#102c3d66}.naming-confirm-dialog h3{font-size:17px;margin:0 0 8px}.naming-confirm-dialog p{font-size:12px;line-height:1.5;color:var(--muted)}.naming-confirm-dialog>label{display:grid;gap:6px;font-size:12px;margin-top:15px}.naming-confirm-dialog input[type=password]{border:1px solid var(--line);border-radius:7px;padding:10px;width:100%}.naming-confirm-dialog .naming-dialog-check{display:flex;align-items:center;gap:7px;font-size:11px}.naming-confirm-dialog>div{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.naming-advanced{font-size:10px;color:var(--muted);margin:12px 0}.naming-advanced summary{cursor:pointer}.naming-advanced p{font-size:11px;line-height:1.5}
 @media(max-width:650px){.naming-review-fields{grid-template-columns:1fr}.naming-simple-review>summary>span{display:block;margin:5px 0 0}.naming-simple-summary>div{padding:9px}.naming-simple-summary span{font-size:9px}}
 .admin-settings-content .primary,.admin-settings-content .chip,.admin-settings-content .panel{box-shadow:none}
+
+/* Compact artwork comparison: thumbnails, with manual overrides tucked away. */
+.naming-review-thumbnails{display:flex;gap:16px;align-items:center;margin:10px 0}
+.naming-review-thumbnails>a,.naming-review-thumbnails>div{display:flex;align-items:center;gap:10px;min-width:0;flex:1;font-size:12px}
+.naming-review-thumbnails img{width:64px;height:64px;object-fit:contain;border:1px solid #dce7eb;border-radius:6px;background:#f5f8f9;flex:none}
+.naming-review-thumbnails img[hidden]{display:none}
+.naming-review-advanced{margin:8px 0;font-size:12px}
+.naming-simple-review .naming-review-fields{gap:8px 12px}
+.naming-simple-review .naming-review-actions{gap:10px;margin-top:8px}
+.naming-simple-review .naming-review-actions label{font-size:12px}
+.naming-simple-review>form>p{margin:5px 0 0;font-size:11px}
+@media(max-width:600px){.naming-review-thumbnails{gap:8px}.naming-review-thumbnails img{width:48px;height:48px}}

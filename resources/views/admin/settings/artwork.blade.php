@@ -62,6 +62,7 @@ $preselected=0;
 <summary>Review {{count($reviewGroups)}} unclear designs <span>Confirm once; reuse safe matches across versions</span></summary>
 <form method="post" action="{{route('admin.artwork-names.review')}}">
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
+<div class="naming-review-thumbnails"><a data-naming-original href="#" target="_blank" rel="noopener noreferrer" hidden><img data-naming-source-image alt="Drive artwork" hidden><span>Drive artwork ↗</span></a><div><img data-naming-product-image alt="Catalog product" hidden><span data-naming-detected>Choose a design below</span></div></div>
 <div class="naming-review-fields">
 <label>Design to check<select name="file_id" required data-naming-source><option value="">Choose an unclear design</option>
 
@@ -72,18 +73,19 @@ $preselected=0;
 @php($folderName=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1)))
 
 @php($source=$entry['source_attributes']??(new \App\Services\ArtworkMatcherService())->sourceAttributes($entry['source'],$folderName))
-<option value="{{$entry['id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view">{{$entry['source_design']??$entry['source']['name']}} · {{$group['count']}} files · {{$folderName}}</option>
+<option value="{{$entry['id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view">{{$entry['source_design']??$entry['source']['name']}} · {{$group['count']}} files · {{$folderName}}</option>
 
 @endforeach
 </select></label>
-<label>Correct product / variant<select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
-@foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>
+<label>Matching product<select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
+@foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}">{{$row['product']}} · {{$row['variant']}}</option>
 @endforeach</select></label>
-<label>Print side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
-<label>Color<input name="color" maxlength="40" data-naming-color autocomplete="off" placeholder="Blank if not named"></label>
 </div>
-<div class="naming-review-actions"><a data-naming-original href="#" target="_blank" rel="noopener noreferrer" hidden>Inspect source image ↗</a><label><input type="checkbox" name="reuse" value="1" checked> Remember this design for matching versions and future files</label><button type="submit" class="chip">Use this design</button></div>
-<p class="muted">This updates the preview only. Colors and FRONT/BACK must agree; unclear files remain for review.</p>
+<details class="naming-review-advanced"><summary>Change detected side or color</summary><div class="naming-review-fields"><label>Print side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
+<label>Color<input name="color" maxlength="40" data-naming-color autocomplete="off" placeholder="Blank if not named"></label>
+</div></details>
+<div class="naming-review-actions"><label><input type="checkbox" name="reuse" value="1" checked> Apply to matching versions and future files</label><button type="submit" class="chip">Use this design</button></div>
+<p class="muted">Preview only · no files renamed.</p>
 </form>
 </details>
 

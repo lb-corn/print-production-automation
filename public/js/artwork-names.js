@@ -43,21 +43,40 @@ document.querySelector('[data-naming-clear]')?.addEventListener('click', () => {
 });
 const sourceChoice = document.querySelector('[data-naming-source]');
 const catalogChoice = document.querySelector('[data-naming-catalog]');
+function namingThumbnail(selector, url) {
+    const image = document.querySelector(selector);
+    if (!image) return;
+    image.hidden = !url;
+    if (url && url.startsWith('https://')) image.src = url; else image.removeAttribute('src');
+    image.onerror = () => { image.hidden = true; };
+}
+function namingDetected() {
+    const label = document.querySelector('[data-naming-detected]');
+    const source = sourceChoice?.selectedOptions[0];
+    if (label) label.textContent = [source?.dataset.series, document.querySelector('[data-naming-color]')?.value, document.querySelector('[data-naming-side]')?.value || 'Choose print side under details'].filter(Boolean).join(' · ');
+}
 sourceChoice?.addEventListener('change', () => {
     const source = sourceChoice.selectedOptions[0];
+    namingThumbnail('[data-naming-source-image]', source?.dataset.thumbnail);
+    namingThumbnail('[data-naming-product-image]', '');
     if (catalogChoice) {
         catalogChoice.value = '';
-        [...catalogChoice.options].forEach(option => { option.hidden = !!option.value && !!source?.dataset.series && option.dataset.series !== source.dataset.series; option.disabled = option.hidden; });
+        [...catalogChoice.options].forEach(option => { option.hidden = !!option.value && !!source?.dataset.series && (option.dataset.series !== source.dataset.series || (source.dataset.color && option.dataset.color !== source.dataset.color)); option.disabled = option.hidden; });
     }
     const color = document.querySelector('[data-naming-color]'); if (color) color.value = source?.dataset.color || '';
     const side = document.querySelector('[data-naming-side]'); if (side) side.value = source?.dataset.side || '';
     const link = document.querySelector('[data-naming-original]'); if (link) { link.hidden = !source?.dataset.url; link.href = source?.dataset.url || '#'; }
+    namingDetected();
+    const sideDetails = document.querySelector('.naming-review-advanced');
+    if (sideDetails) sideDetails.open = !!source?.value && !source?.dataset.side;
 });
 catalogChoice?.addEventListener('change', () => {
     const option = catalogChoice.selectedOptions[0];
+    namingThumbnail('[data-naming-product-image]', option?.dataset.image);
     document.querySelector('[data-naming-color]').value = option?.dataset.color || sourceChoice?.selectedOptions[0]?.dataset.color || '';
     const sourceSide = sourceChoice?.selectedOptions[0]?.dataset.side;
     document.querySelector('[data-naming-side]').value = option?.dataset.type === 'double' ? (['front','back'].includes(sourceSide) ? sourceSide : '') : 'single';
+    namingDetected();
 });
 function openNamingConfirmation() {
     const count = namingSelected().filter(input => input.checked).length;

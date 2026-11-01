@@ -37,3 +37,21 @@ function setup(confirmResult, failStep = false) {
     await failed.form.submit({preventDefault(){}});assert.equal(failed.calls.length,2);
     console.log('PASS: uncertain network outcomes stop and do not retry automatically');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+// Compact mapping preserves detected attributes and never selects a product by itself.
+{
+ const element = (dataset={}) => ({dataset, value:'', hidden:false, addEventListener(n,fn){this[n]=fn;}, removeAttribute(n){delete this[n];}});
+ const source=element(), catalog=element(), side=element(), color=element(), drive=element(), product=element(), label=element(), advanced=element(), link=element();
+ source.selectedOptions=[{value:'file',dataset:{series:'SNP',color:'BLUE',side:'back',thumbnail:'https://drive.google.com/thumbnail?id=file',url:'https://drive.google.com/file/d/file/view'}}];
+ const blue={value:'blue',dataset:{series:'SNP',color:'BLUE',type:'double',image:'https://cdn.shopify.com/blue.jpg'}};
+ const white={value:'white',dataset:{series:'SNP',color:'WHITE'}};
+ const wrongSeries={value:'pse',dataset:{series:'PSE',color:'BLUE'}};
+ catalog.options=[blue,white,wrongSeries];catalog.selectedOptions=[blue];
+ const nodes={'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'.naming-review-advanced':advanced,'[data-naming-original]':link};
+ vm.runInNewContext(fs.readFileSync('public/js/artwork-names.js','utf8'),{document:{querySelector:s=>nodes[s]||null,querySelectorAll:()=>[]},window:{addEventListener(){}}});
+ source.change();assert.equal(side.value,'back');assert.equal(color.value,'BLUE');assert.equal(catalog.value,'');assert(!blue.disabled&&white.disabled&&wrongSeries.disabled);assert.equal(drive.src,source.selectedOptions[0].dataset.thumbnail);
+ catalog.change();assert.equal(product.src,blue.dataset.image);assert.equal(side.value,'back');assert(label.textContent.includes('BLUE · back'));
+ source.selectedOptions[0].dataset.side='';source.change();assert.equal(advanced.open,true);
+ blue.dataset.image='javascript:alert(1)';catalog.change();assert.equal(product.src,undefined);
+ console.log('PASS: compact thumbnails filter variants, preserve BACK, expose missing sides and reject unsafe image URLs');
+}

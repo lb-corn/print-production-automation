@@ -403,7 +403,7 @@ GRAPHQL;
         $query = <<<'GRAPHQL'
 query ArtworkCatalog($after: String) {
   productVariants(first: 100, after: $after) {
-    nodes { id sku title product { title productType status } }
+    nodes { id sku title image { url } product { title productType status featuredImage { url } } }
     pageInfo { hasNextPage endCursor }
   }
 }
@@ -417,7 +417,7 @@ GRAPHQL;
                 $product=$variant['product'] ?? [];
                 if (!preg_match('/^ACL Pro Stamped \d{4}$/', $product['productType'] ?? '') || ($product['status'] ?? '') === 'ARCHIVED'
                     || stripos($product['title'] ?? '', 'custom') !== false || empty($variant['sku'])) continue;
-                $rows[]=['catalog_key'=>hash('sha256',$variant['id']),'sku'=>$variant['sku'],'product'=>$product['title'],'variant'=>$variant['title'] ?? ''];
+                $rows[]=['catalog_key'=>hash('sha256',$variant['id']),'sku'=>$variant['sku'],'product'=>$product['title'],'variant'=>$variant['title'] ?? '', 'image'=>$variant['image']['url'] ?? $product['featuredImage']['url'] ?? null];
             }
             $next=$page['pageInfo']['hasNextPage'];
             $after=$page['pageInfo']['endCursor'] ?? null;
