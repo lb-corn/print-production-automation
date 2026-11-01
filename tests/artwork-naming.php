@@ -211,3 +211,17 @@ $check($xpath->query('//input[@name="ids[]" and @checked]')->length===1,'Safe re
 $check(!str_contains($simpleHtml,'Check and standardize Drive names') && !str_contains($simpleHtml,'Destructive production reset'),'Settings navigation has no subtitles or explanatory filler');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+
+// Page-load counts use the latest private snapshot, without reviving a rename plan.
+$summaryPlan=$store->create($admin->id,['naming_policy'=>ArtworkNamingService::POLICY,'created_at'=>100,'expires_at'=>101,'catalog'=>[$row,$yearAlias],
+    'entries'=>[['status'=>'standard'],['status'=>'ready'],['status'=>'review'],['status'=>'conflict'],['status'=>'locked'],['status'=>'renamed']]]);
+$store->create($operator->id,['naming_policy'=>ArtworkNamingService::POLICY,'created_at'=>200,'catalog'=>[],'entries'=>[]]);
+$store->create($admin->id,['naming_policy'=>'obsolete','created_at'=>300,'catalog'=>[],'entries'=>[]]);
+$summary=$store->latestSummary($admin->id);
+$check($summary['images']===6 && $summary['products']===1 && $summary['variants']===2 && $summary['good']===2 && $summary['ready']===1 && $summary['review']===2 && $summary['protected']===1,'Dashboard counts distinguish products, variants, correct names, renames, review and protected files');
+$check($summary['checked_at']===100 && $store->latestSummary(99999)===null,'Status snapshots remain actor-scoped and exclude obsolete naming rules');
+$request=Illuminate\Http\Request::create('/admin/settings','GET');$request->setUserResolver(fn()=>$admin);
+$page=$controller->index($request,$store);$check($page->getData()['plan']===null && $page->getData()['summary']===$summary,'Loading settings shows existing counts without restoring an expired actionable preview');
+$check(str_contains($page->render(),'Artwork status') && str_contains($page->render(),'Last checked'),'A compact status row and snapshot time render before a new scan');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";

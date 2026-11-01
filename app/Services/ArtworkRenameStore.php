@@ -22,6 +22,27 @@ class ArtworkRenameStore
         abort_if(!$allowExpired && ($plan['expires_at']??0)<time(),422,'This preview expired. Scan again.');
         return $plan;
     }
+    /** Read-only dashboard counts; never restores authorization from an old preview. */
+    public function latestSummary(int $actor): ?array
+    {
+        $latest=null;
+        foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json') ?: [] as $path) {
+            if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
+            try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
+            if(($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY)continue;
+            if($latest===null || ($plan['created_at']??0)>($latest['created_at']??0))$latest=$plan;
+        }
+        return $latest ? self::summary($latest) : null;
+    }
+    public static function summary(array $plan): array
+    {
+        $counts=array_count_values(array_column($plan['entries'],'status'));
+        $matcher=new ArtworkMatcherService();
+        $products=array_unique(array_map(fn($row)=>$matcher->designIdentity($row['product']),$plan['catalog']));
+        return ['images'=>count($plan['entries']),'products'=>count($products),'variants'=>count($plan['catalog']),
+            'good'=>($counts['standard']??0)+($counts['renamed']??0),'ready'=>$counts['ready']??0,
+            'review'=>($counts['review']??0)+($counts['conflict']??0),'protected'=>$counts['locked']??0,'checked_at'=>$plan['created_at']];
+    }
     public function rules(): array
     {
         $path=$this->directory.DIRECTORY_SEPARATOR.'design-mappings.json';

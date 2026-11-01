@@ -11,6 +11,7 @@ class ArtworkNamingController extends Controller
     {
         $actor=$this->actor($request);
         $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):null;
+        $summary=$plan?ArtworkRenameStore::summary($plan):$store->latestSummary($actor);
         $catalog=[];
         if($plan)foreach($plan['catalog'] as $row){$profile=(new ArtworkMatcherService())->match($row,[]);if($profile['artwork_review']['suggested_filenames'])$catalog[]=[...$row,'color'=>$profile['color'],'type'=>$profile['design_type'],'series'=>$profile['series_code']];}
         $scope=[];
@@ -26,7 +27,7 @@ class ArtworkNamingController extends Controller
             if(!isset($reviewGroups[$key]))$reviewGroups[$key]=['entry'=>$entry,'count'=>0];
             $reviewGroups[$key]['count']++;
         }
-        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups'));
+        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary'));
     }
     public function scan(Request $request)
     {

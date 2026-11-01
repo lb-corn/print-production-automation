@@ -3,6 +3,13 @@
 <form method="post" action="{{route('admin.artwork-names.scan')}}">
 @csrf<button class="primary" type="submit" data-naming-scan>Check files</button></form>
 </section>
+
+<div class="naming-status-row" aria-label="Artwork status">
+@foreach(['images'=>'Images','products'=>'Products','good'=>'Correct names','ready'=>'Ready to rename','review'=>'Need review','protected'=>'Protected'] as $key=>$label)
+<span><b>{{$summary[$key]??'—'}}</b> {{$label}}</span>
+@endforeach
+<small>@if($summary)Last checked {{date('d M, H:i',$summary['checked_at'])}} · {{$summary['variants']}} variants @else Click Check files to load counts @endif</small>
+</div>
 <section class="naming-scope naming-scope-compact" aria-label="Artwork scan scope">
 <strong>Scan scope · these folders only</strong><div class="naming-scope-roots">
 @foreach($scope as $root=>$folders)<span>✓ {{$root}}</span>
@@ -41,10 +48,6 @@ $preselected=0;
 <p class="admin-notice">Naming rules were updated. Click <b>Check files</b> for a fresh preview without years. Nothing in this old preview will be renamed.</p>
 
 @else
-<div class="naming-simple-summary">
-<div><b>{{$ready}}</b><span>Ready automatically</span></div><div><b>{{$needsReview}}</b><span>Need a check · {{count($reviewGroups)}} designs</span></div><div><b>{{$protected}}</b><span>Protected / already standard</span></div>
-</div>
-
 @if($plan['status']!=='preview')
 <div class="admin-notice"><b>{{ucfirst($plan['status'])}} · {{$plan['renamed']??0}} renamed</b><p>{{$plan['warning']??'Names updated. Artwork still needs operator approval before printing.'}}</p>
 
