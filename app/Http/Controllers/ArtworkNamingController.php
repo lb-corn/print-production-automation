@@ -87,6 +87,7 @@ class ArtworkNamingController extends Controller
         if(config('services.google_drive.reviewed_selections_enabled',true)) {
             app(ArtworkNamingService::class)->saveReviewedChoice($plan,$actor,$catalogKey,$ids);
             try { app(\App\Services\ArtworkRematchService::class)->rematch(); }
+            catch(\App\Exceptions\ArtworkSchemaNotReady $e) { return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('warning','Artwork choice saved. Orders can sync, but the server needs the artwork_review migration before refreshing approval metadata and printing.'); }
             catch(\Throwable $e) { report($e);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','Your artwork choice was saved, but order matches could not refresh. Run Rematch Artwork.'); }
         }
         return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Artwork choice saved and unbatched matches refreshed. Print approval is still required. Apply any filename changes separately.');

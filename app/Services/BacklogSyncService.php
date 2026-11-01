@@ -11,13 +11,13 @@ class BacklogSyncService
 
     public function sync(): array
     {
-        ArtworkRematchService::ensureSchemaReady();
+        $hasReview=ArtworkRematchService::schemaReady();
         $this->matcher->refreshReviewedSelections();
         $backlog = $this->shopify->getProductionBacklog();
         $index = $this->drive->artworkIndex();
         $added = $updated = $unchanged = $matched = $missing = $ambiguous = $skipped = 0;
         $rematcher = new ArtworkRematchService($this->drive, $this->matcher);
-        DB::transaction(function () use ($backlog,$index,$rematcher,&$added,&$updated,&$unchanged,&$matched,&$missing,&$ambiguous,&$skipped) {
+        DB::transaction(function () use ($backlog,$index,$rematcher,$hasReview,&$added,&$updated,&$unchanged,&$matched,&$missing,&$ambiguous,&$skipped) {
             foreach ($backlog['items'] as $row) {
                 $item = ProductionItem::where('line_item_id', $row['line_item_id'])->lockForUpdate()->first();
                 if (isset(app(ProductionService::class)->batchIndex(true)[$row['line_item_id']])) { $skipped++; continue; }
@@ -28,15 +28,16 @@ class BacklogSyncService
                     $item->fill($fields);
                     if ($contextChanged) VerificationDecision::where('line_item_id',$item->line_item_id)->delete();
                     $item->isDirty() || $item->matches !== $match['matches'] ? $updated++ : $unchanged++;
-                    $rematcher->apply($item,$match);
+                    $rematcher->apply($item,$match,$hasReview);
                 } else {
+                    if(!$hasReview)unset($match['artwork_review']);
                     ProductionItem::create(['line_item_id'=>$row['line_item_id'],...$fields,...$match]);
                     $added++;
                 }
                 match ($match['match_status']) { 'REVIEW'=>$matched++, 'AMBIGUOUS'=>$ambiguous++, default=>$missing++ };
             }
         });
-        return ['shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
+        return ['artwork_schema_ready'=>$hasReview,'shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
             'updated'=>$updated,'unchanged'=>$unchanged,'matched'=>$matched,'missing'=>$missing,'ambiguous'=>$ambiguous,
             'processed_skipped'=>$skipped,'drive_files'=>count(array_filter($index,fn($f)=>($f['kind']??'')==='artwork'))];
     }

@@ -26,3 +26,11 @@ Rematching retains its three-attempts-per-minute protection, scoped to the signe
 ## Admin bulk filenames
 
 The admin-only **Artwork filenames** tool adds catalog-backed reviewed bulk renaming, stable Drive-ID suffixes, explicit FRONT/BACK/SINGLE names, extension preservation, highlighted folder scope, protected batches and a private before/after audit. See [Admin artwork naming](admin-artwork-naming.md) for setup, tests, partial-failure behavior and deployment requirements. Normal read-only matching is preserved. Missing-file suggestions use the same LB/series/design/color/side convention; only real existing files receive a stable ID suffix.
+
+## Order sync and item-level print eligibility
+
+Backlog sync checks artwork for imported Shopify order lines; it never requires the full All Bags catalog to be fixed first. Missing, mismatched and ambiguous artwork are normal per-item results. Other complete, approved, supported items can enter Ready for Print and a batch even when sibling items in the same order need review. Unchanged approvals remain valid; stale selections lose approval. Sync never creates a print batch or authorizes handoff.
+
+If the optional `artwork_review` column has not yet been deployed, sync still imports and updates orders and stores lookup results in the existing columns. The success message reports matched/missing/ambiguous counts, with a separate server-setup notice. Approval and strict rematching still require the existing additive migration so incomplete legacy proof cannot become print-ready. No migration runs from a web request. Apply the existing migration during the normal server activation process; this code change adds no migration. Drive/Shopify integration failures still fail the sync transaction safely.
+
+Matching conventions live in code. Explicit Admin selections and naming audit data live under private `storage/app/private/artwork-names`; they are not stored in the orders database and are not automatically transferred by a code deployment. Production orders, approvals and batch locks remain transactional database records. Sign in as Admin to review production-specific choices.

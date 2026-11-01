@@ -380,3 +380,12 @@ $check($loaded->getData()['plan']!==null && count($loaded->getData()['catalogSta
 $check($store->latestPreview($operator->id)===null,'Default preview reuse remains bound to the signed-in admin');
 config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+
+// Reviewed choices remain private-file data even before the optional review column is deployed.
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();$shopify->rows=[$row];$drive->index=[$folder,$source('pre-schema-choice','PSE-DUC-RED.jpg')];$preSchema=$service->scan($admin->id);
+$unreviewed=ProductionItem::create(['line_item_id'=>'pre-schema-choice-order',...$row,...$matcher->match($row,$drive->index)]);$unreviewed->update(['matches'=>[['id'=>'stale-before-schema','side'=>'single']]]);
+Illuminate\Support\Facades\Schema::table('production_items',fn($table)=>$table->dropColumn('artwork_review'));
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$preSchema['token'],'catalog_key'=>$row['catalog_key'],'file_id'=>'pre-schema-choice','side'=>'single','color'=>'RED']);$request->setUserResolver(fn()=>$admin);$response=$controller->revise($request);
+$check($response->getStatusCode()===302 && $store->selections()!==[] && $unreviewed->fresh()->matches===[] && str_contains(session('warning'),'artwork_review migration'),'Admin can save reviewed JSON choices and invalidate stale selections before the review-column migration, with a clear printing setup notice');
+(require __DIR__.'/../database/migrations/2026_11_01_000005_add_artwork_review.php')->up();config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";

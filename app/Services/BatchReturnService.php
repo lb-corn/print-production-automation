@@ -37,7 +37,9 @@ class BatchReturnService
                 $replacement=PrintBatch::create(['batch_id'=>$newId,'status'=>'QUEUED','order_count'=>count($remaining),'artwork_file_count'=>$files,'total_yards'=>$summary['total_yards'],'payload'=>$payload,'created_by'=>$locked->created_by]);
             }
             VerificationDecision::whereIn('line_item_id',$ids)->delete();
-            foreach($items->whereIn('line_item_id',$ids) as $item)$item->update(['matches'=>[],'match_status'=>'MISSING','confidence'=>null,'artwork_review'=>null]);
+            $clear=['matches'=>[],'match_status'=>'MISSING','confidence'=>null];
+            if(ArtworkRematchService::schemaReady())$clear['artwork_review']=null;
+            foreach($items->whereIn('line_item_id',$ids) as $item)$item->update($clear);
             $payload=$locked->payload;
             $payload['returned_to_review']=['user_id'=>$actor,'at'=>now('UTC')->toIso8601String(),'line_item_ids'=>$ids,'scope'=>'item','replacement_batch_id'=>$replacement?->id,'reason'=>'Operator returned selected unclaimed artwork for correction'];
             $locked->update(['status'=>'CANCELLED','payload'=>$payload]);
