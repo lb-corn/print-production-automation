@@ -3,7 +3,7 @@
 require __DIR__.'/../vendor/autoload.php';
 $app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 set_exception_handler(function(Throwable $e):void{fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL);exit(1);});
-config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'naming_test','logging.channels.naming_test'=>['driver'=>'monolog','handler'=>Monolog\Handler\NullHandler::class],'services.google_drive.rename_enabled'=>true]);
+config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'naming_test','logging.channels.naming_test'=>['driver'=>'monolog','handler'=>Monolog\Handler\NullHandler::class],'services.google_drive.rename_enabled'=>true]);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach(glob(__DIR__.'/../database/migrations/*.php') as $file)(require $file)->up();
 use App\Services\{ArtworkNamingService,ArtworkMatcherService,ArtworkRenameStore,GoogleDriveService,GoogleDriveRenameService,ShopifyService,ProductionService};
@@ -127,7 +127,7 @@ echo "$checks admin artwork naming checks passed.\n";
 // Scope is visible before a scan and exact folders are highlighted afterwards.
 $request=Illuminate\Http\Request::create('/admin/artwork-names');$request->setUserResolver(fn()=>$admin);
 $initial=$controller->index($request,$store)->render();
-$check(str_contains($initial,'Scan scope · these folders only')&&str_contains($initial,'GROUP B (Carpet)')&&str_contains($initial,'MOCKUPS')&&str_contains($initial,'Snipers'),'Initial admin page clearly highlights approved roots, version folders and exclusions');
+$check(str_contains($initial,'Scan scope · these folders only')&&str_contains($initial,'GROUP B (Carpet)')&&str_contains($initial,'MOCKUPS')&&str_contains($initial,'PSE'),'Initial admin page clearly highlights approved roots, version folders and exclusions');
 $rogueFolder=[...$folder,'path'=>'Outside manufacturing / PSE'];
 $check($service->build([$rogueFolder,$source('rogue','PSE-DUC-RED.jpg')],[$row],[],[])===[],'Planner rejects folders outside the approved branches');
 $nestedFolder=[...$folder,'path'=>'GROUP B (Carpet) / MOCKUPS / PSE'];
@@ -243,7 +243,7 @@ $summary=$store->latestSummary($admin->id);
 $check($summary['images']===0 && $summary['products']===1 && $summary['variants']===2 && $summary['catalog_missing']===2 && $summary['catalog_matched']===0 && $summary['review']===0,'Shopify coverage counts missing catalog variants and excludes unrelated Drive entries');
 $check($summary['checked_at']===100 && $store->latestSummary(99999)===null,'Status snapshots remain actor-scoped and exclude obsolete naming rules');
 $request=Illuminate\Http\Request::create('/admin/settings','GET');$request->setUserResolver(fn()=>$admin);
-$page=$controller->index($request,$store);$check($page->getData()['plan']===null && $page->getData()['summary']===$summary,'Loading settings shows existing counts without restoring an expired actionable preview');
+$page=$controller->index($request,$store);$check($page->getData()['plan']['token']!==$summaryPlan['token'] && $page->getData()['plan']['expires_at']>time() && $page->getData()['summary']['checked_at']>100,'Default settings loads a fresh preview without restoring an expired actionable plan');
 $check(str_contains($page->render(),'Artwork status') && str_contains($page->render(),'Last checked'),'A compact status row and snapshot time render before a new scan');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
@@ -334,4 +334,49 @@ $reviewedPair=$service->revisePair($colorPair['token'],$admin->id,$blueDouble['c
 $check(count($reviewedPair['mappings'])===2 && count($reviewedPair['color_correction_reviews'])===1 && $reviewedPair['color_correction_reviews'][0]['file_id']==='color-pair-back' && $reviewedPair['color_correction_reviews'][0]['to']==='BLUE','Explicit pair correction audits only the mislabeled side and keeps both target colors equal to Shopify');
 $check($store->rules()===$rulesBefore,'A pair color correction does not create a global color equivalence');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Expected operator corrections return to the page rather than invoking the debug renderer.
+$shopify->rows=[$row];$drive->index=[$folder,$source('save-error','PSE-DUC-NAVY.jpg')];$savePlan=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$savePlan['token'],'catalog_key'=>$row['catalog_key'],'file_id'=>'save-error','side'=>'single','color'=>'RED']);$request->setUserResolver(fn()=>$admin);$response=$controller->revise($request);
+$check($response->getStatusCode()===302 && str_contains(session('error'),'Explicitly confirm') && $store->load($savePlan['token'],$admin->id)['mappings']===[],'An unconfirmed correction redirects with a clear error and saves no mapping instead of rendering an exception page');
+$compiler=new Illuminate\View\Compilers\BladeCompiler(new Illuminate\Filesystem\Filesystem(),storage_path('framework/views'));
+$markdown=$compiler->compileString(file_get_contents(base_path('vendor/laravel/framework/src/Illuminate/Foundation/resources/exceptions/renderer/markdown.blade.php')));token_get_all($markdown,TOKEN_PARSE);
+$check(!str_contains($markdown,'$__empty_-'),'Fresh framework exception-template compilation produces valid PHP without negative loop counters');
+$ambiguous=$matcher->match($row,[$folder,$source('ui-duplicate-a','PSE-DUC-RED.jpg'),$source('ui-duplicate-b','PSE-DUC-RED.jpeg')]);
+$check($ambiguous['match_status']==='AMBIGUOUS' && $ambiguous['artwork_review']['suggested_filenames']===[],'Ambiguous matches produce no misleading filename suggestion');
+auth()->setUser($admin);$ambiguous['artwork_review']['suggested_filenames']=['legacy-misleading.jpg'];$viewItem=(object)[...$row,...$ambiguous,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$check($xpath->query('//button[@data-copy-filename]')->length===0 && str_contains($html,'PSE-DUC-RED.jpeg'),'Ambiguous-artwork UI hides even stale copy suggestions and shows conflicting filenames');
+$missing=$matcher->match($row,[$folder]);$viewItem=(object)[...$row,...$missing,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$check((new DOMXPath($dom))->query('//button[@data-copy-filename]')->length===1,'Missing artwork still presents its standard filename suggestion');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Explicit Admin choice resolves duplicate files and survives later scans, without print approval.
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();$shopify->rows=[$row];
+$first=$source('review-choice-a','PSE-DUC-RED.jpg');$second=$source('review-choice-b','PSE-DUC-RED.jpeg');$drive->index=[$folder,$first];
+$choiceItem=ProductionItem::create(['line_item_id'=>'review-choice-order',...$row,...$matcher->match($row,$drive->index)]);app(ProductionService::class)->verify($choiceItem,'CORRECT',$admin->id);
+$drive->index=[$folder,$first,$second];$choicePlan=$service->scan($admin->id);$choicePlan=$service->revise($choicePlan['token'],$admin->id,['review-choice-b'=>['catalog_key'=>$row['catalog_key'],'side'=>'single','color'=>'RED']],false);
+$service->saveReviewedChoice($choicePlan,$admin->id,$row['catalog_key'],['review-choice-b']);
+$check(!$choiceItem->fresh('decision')->decision && $choiceItem->fresh()->matches===[],'Changing the reviewed choice invalidates stale selection/approval before any refresh can fail');
+$chosen=$matcher->match($row,$drive->index);$check($chosen['match_status']==='REVIEW' && $chosen['matches'][0]['id']==='review-choice-b' && $chosen['artwork_review']['selection_source']==='admin','An explicit Admin choice resolves duplicates for that exact product/variant/side');
+app(App\Services\ArtworkRematchService::class)->rematch();$check($choiceItem->fresh()->matches[0]['id']==='review-choice-b' && !$choiceItem->fresh('decision')->decision,'Order rematch uses the chosen artwork but never approves it');
+$otherDesign=[...$row,'product'=>'Lucky Bags 2027 Different Design'];$check($matcher->match($otherDesign,$drive->index)['match_status']==='AMBIGUOUS','A different product sharing the same SKU cannot inherit another design’s choice');
+$otherColor=[...$row,'variant'=>'Pro Sniper Elite / Blue'];$check($matcher->match($otherColor,$drive->index)['match_status']==='MISSING','A reviewed choice never crosses Shopify color variants');
+$freshPlan=$service->scan($admin->id);$mapped=collect($freshPlan['entries'])->firstWhere('id','review-choice-b');$check($mapped['proposal']['catalog_key']===$row['catalog_key'] && ArtworkRenameStore::summary($freshPlan)['catalog_matched']===1,'Fresh Admin scans preserve the reviewed choice and show artwork found');
+$changed=[...$second,'version'=>'changed'];$check($matcher->match($row,[$folder,$first,$changed])['match_status']==='MISSING','Changed chosen file invalidates the pin instead of silently selecting another duplicate');
+$check($matcher->match($row,[$folder,$first])['match_status']==='MISSING','A missing chosen file does not fall back to an arbitrary duplicate');
+$renamed=[...$second,'name'=>$mapped['proposal']['target'],'version'=>'2','modifiedTime'=>'t2'];$store->refreshRenamedSelection($second,$renamed);$matcher->refreshReviewedSelections();$check($matcher->match($row,[$folder,$first,$renamed])['matches'][0]['id']==='review-choice-b','A verified app rename preserves the reviewed identity while updating its metadata fingerprint');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Paired manual choices persist by exact variant and require fresh metadata on both sides.
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();$shopify->rows=[$bubbleDouble];
+$pairFront=$source('pin-front','SNP-BUBBLES-FRONT.jpg','snp');$pairBack=$source('pin-back','SNP-BUBBLES-BACK.jpg','snp');$drive->index=[$doubleFolder,$pairFront,$pairBack];$pinPair=$service->scan($admin->id);
+$pinPair=$service->revisePair($pinPair['token'],$admin->id,$bubbleDouble['catalog_key'],'pin-front','pin-back',false);$service->saveReviewedChoice($pinPair,$admin->id,$bubbleDouble['catalog_key'],['pin-front','pin-back']);
+$pinMatch=$matcher->match($bubbleDouble,$drive->index);$check($pinMatch['match_status']==='REVIEW' && array_column($pinMatch['matches'],'id')===['pin-front','pin-back'],'Reviewed FRONT/BACK choices persist even when legacy labels need standardization');
+$changedBack=[...$pairBack,'modifiedTime'=>'changed'];$check($matcher->match($bubbleDouble,[$doubleFolder,$pairFront,$changedBack])['matches']===[],'A changed side invalidates the whole reviewed pair, never a partial printable selection');
+$beforeLoadBatches=PrintBatch::all()->toJson();$beforeLoadWrites=$writer->writes;$request=Illuminate\Http\Request::create('/admin/settings','GET');$request->setUserResolver(fn()=>$admin);$loaded=$controller->index($request,$store);
+$check($loaded->getData()['plan']!==null && count($loaded->getData()['catalogStatus'])>0 && PrintBatch::all()->toJson()===$beforeLoadBatches && $writer->writes===$beforeLoadWrites,'Default Settings loads the catalog automatically without creating a batch or renaming a file');
+$check($store->latestPreview($operator->id)===null,'Default preview reuse remains bound to the signed-in admin');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";

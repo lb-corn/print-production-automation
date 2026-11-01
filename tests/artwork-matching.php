@@ -4,7 +4,7 @@ require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 set_exception_handler(function (Throwable $error): void { fwrite(STDERR, 'FAIL: '.$error->getMessage().PHP_EOL); exit(1); });
-config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'stderr']);
+config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'stderr']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $migration) (require $migration)->up();
 use App\Services\{GoogleDriveService,ArtworkMatcherService,ArtworkRematchService,ProductionService,BacklogSyncService,ShopifyService};

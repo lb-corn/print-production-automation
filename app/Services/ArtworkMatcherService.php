@@ -22,7 +22,25 @@ class ArtworkMatcherService
     private const COMPOUND_COLORS = ['BLACK-LEATHER','BBY-BLUE','BABY-BLUE','ROYAL-BLUE','NAVY-BLUE'];
     public const POLICY = 'strict-v2';
 
+    private ?array $reviewedSelections=null;
     public function __construct(private ?GoogleDriveService $drive = null) {}
+    public function refreshReviewedSelections(): void { $this->reviewedSelections=null; }
+    public function selectionKey(array $row): string
+    {
+        $parts=$this->skuParts($row['sku']??'');
+        return hash('sha256',json_encode([$parts['series']??null,$parts['design']??null,$this->designIdentity($row['product']??''),$this->catalogColor($row)]));
+    }
+    public function reviewedSelection(array $row): ?array
+    {
+        if(!config('services.google_drive.reviewed_selections_enabled',true))return null;
+        $this->reviewedSelections??=app(ArtworkRenameStore::class)->selections();
+        return $this->reviewedSelections[$this->selectionKey($row)]??null;
+    }
+    public static function artworkFingerprint(array $file): string
+    {
+        $data=[];foreach(['id','name','parent_id','version','modifiedTime','md5Checksum'] as $key)$data[$key]=$file[$key]??null;
+        return hash('sha256',json_encode($data));
+    }
 
     public static function seriesForFolder(string $name): ?string
     {
@@ -71,7 +89,7 @@ class ArtworkMatcherService
             && in_array($this->norm($f['name']), self::FOLDERS[$series], true)));
         if (count($folders) !== 1) {
             $review['issues'][] = count($folders) ? 'Multiple series folders found. Resolve duplicates before matching.' : 'Series folder not found in the approved manufacturing branches.';
-            if (count($folders)) $result['match_status'] = 'AMBIGUOUS';
+            if (count($folders)) { $result['match_status'] = 'AMBIGUOUS'; $review['suggested_filenames'] = []; }
             return [...$result,'artwork_review'=>$review];
         }
         $folder = $folders[0];
@@ -101,6 +119,31 @@ class ArtworkMatcherService
             $file['filename_color'] = $parsed['color'];
             $bySide[$parsed['side']][] = $file;
         }
+        $reviewed=$this->reviewedSelection($row);
+        if($reviewed) {
+            $chosen=[];
+            foreach($type==='double'?['front','back']:['single'] as $side) {
+                $saved=$reviewed['files'][$side]['source']??null;$found=null;
+                foreach($index as $candidate) {
+                    if(($candidate['kind']??'')!=='artwork' || ($candidate['parent_id']??null)!==$folder['id'] || !$saved || self::artworkFingerprint($candidate)!==self::artworkFingerprint($saved))continue;
+                    $attributes=$this->sourceAttributes($candidate,$folder['name'],array_filter([$color]));
+                    if(!$attributes || (empty($candidate['version']) && empty($candidate['modifiedTime']) && empty($candidate['md5Checksum'])))continue;
+                    if($type==='double' && ($attributes['side']??null)!==null && $attributes['side']!==$side)continue;
+                    if($type==='single' && ($attributes['side']??null)==='back')continue;
+                    if($color && !empty($attributes['color']) && $attributes['color']!==$color && empty($reviewed['files'][$side]['color_corrected']))continue;
+                    if(!$this->namingCandidate([...$row,'catalog_key'=>$reviewed['catalog_key']],$candidate,$folder['name'],['side'=>$side,'color'=>$reviewed['files'][$side]['color']??$color??'']))continue;
+                    $found=[...$candidate,'side'=>$side];
+                }
+                if(!$found) {
+                    $review['issues']=['The artwork chosen in Admin changed, is missing, or needs its filename correction applied. Review the selection in Admin Settings.'];
+                    $review['suggested_filenames']=[];$review['selection_source']='invalidated_admin';
+                    return [...$result,'artwork_review'=>$review];
+                }
+                $chosen[]=$found;
+            }
+            $review['selection_source']='admin';$review['reviewed_by']=$reviewed['actor'];$review['suggested_filenames']=[];
+            return [...$result,'match_status'=>'REVIEW','matches'=>$chosen,'artwork_review'=>$review];
+        }
         $ambiguous = false; $selected = [];
         foreach ($type === 'double' ? ['front','back'] : ['single'] as $side) {
             $files = $bySide[$side] ?? [];
@@ -115,7 +158,7 @@ class ArtworkMatcherService
             $review['issues'][] = 'Front and back colors differ; review the artwork pair.';
         }
         if (!$review['issues']) { $result['matches'] = $selected; $result['match_status'] = 'REVIEW'; }
-        elseif ($ambiguous) $result['match_status'] = 'AMBIGUOUS';
+        elseif ($ambiguous) { $result['match_status'] = 'AMBIGUOUS'; $review['suggested_filenames'] = []; $review['corrections'] = []; }
         return [...$result,'artwork_review'=>$review];
     }
 

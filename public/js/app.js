@@ -297,6 +297,6 @@ window.addEventListener('pageshow', () => {
 const returnBatchForms = [...document.querySelectorAll('[data-return-batch]')];
 returnBatchForms.forEach(form => form.addEventListener('submit', event => {
     const button = form.querySelector('button');
-    if (button.disabled || !window.confirm('Return every item in this unclaimed batch to Artwork Review? Its artwork selections and approvals will be cleared.')) { event.preventDefault(); return; }
-    returnBatchForms.filter(other => other.action === form.action).forEach(other => { const control = other.querySelector('button'); control.disabled = true; control.textContent = 'Returning…'; });
+    if (button.disabled || !window.confirm('Return only this selected item to Artwork Review? Other queued items and their approvals stay unchanged.')) { event.preventDefault(); return; }
+    returnBatchForms.filter(other => other.action === form.action || (form.dataset?.batchId && other.dataset?.batchId === form.dataset.batchId)).forEach(other => { const control = other.querySelector('button'); control.disabled = true; control.textContent = 'Returning…'; });
 }));

@@ -104,7 +104,7 @@
 @forelse($item->display_matches??[] as $m)<div class="art">
 <label>DRIVE {{strtoupper($m['side']??'ARTWORK')}}</label>
 <img src="https://drive.google.com/thumbnail?id={{$m['id']}}&sz=w800" alt="Drive {{$m['side']??'artwork'}}: {{$m['name']??'Artwork'}}" loading="lazy">
-@include('partials.artwork-filename',['filename'=>$m['name']??''])<small>{{$item->production_batch ? 'Locked batch artwork' : ($item->valid_artwork ? 'Exact filename match · operator approval required' : 'Saved artwork preview · rematch to verify')}}</small>
+@include('partials.artwork-filename',['filename'=>$m['name']??''])<small>{{$item->production_batch ? 'Locked batch artwork' : ($item->valid_artwork ? (($item->artwork_review['selection_source']??'')==='admin'?'Admin-reviewed artwork choice · operator approval required':'Exact filename match · operator approval required') : 'Saved artwork preview · rematch to verify')}}</small>
 <a target="_blank" rel="noopener noreferrer" href="{{$m['webViewLink']??'#'}}">Open original</a>
 </div>
 @empty<div class="placeholder">{{$item->is_custom?'Custom artwork pending':'No Drive artwork matched'}}</div>
@@ -120,8 +120,8 @@
 @else NOT VERIFIED
 @endif</div>
 @if(auth()->user()?->role !== 'demo' && ($item->production_batch['can_return']??false))
-<form method="post" action="{{route('batch.return-to-review',$item->production_batch['id'])}}" data-return-batch>
-@csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button><small class="muted">Entire batch · {{$item->production_batch['order_count']}} items</small>
+<form method="post" action="{{route('batch.return-item',[$item->production_batch['id'],$item->id])}}" data-return-batch data-return-scope="item" data-batch-id="{{$item->production_batch['id']}}">
+@csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button><small class="muted">This item only</small>
 </form>
 @elseif(auth()->user()?->role !== 'demo' && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<div class="individual-actions">
 <form method="post" action="/production/{{$item->id}}/verify">

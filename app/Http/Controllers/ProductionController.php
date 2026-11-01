@@ -203,19 +203,27 @@ class ProductionController extends Controller
 
     public function showBatch(PrintBatch $batch)
     {
-        return view('batches.show', compact('batch'));
+        $itemIds=ProductionItem::whereIn('line_item_id',array_column($batch->payload['orders']??[],'line_item_id'))->pluck('id','line_item_id')->all();
+        return view('batches.show', compact('batch','itemIds'));
     }
 
     /**
      * Operator requests the prepared batch to be handed
      * from the Factory Agent to Epson Edge Print.
      */
+    public function returnItemToReview(Request $request, PrintBatch $batch, ProductionItem $item)
+    {
+        abort_unless($request->user() && $request->user()->role!=='demo',403);
+        $request->validate(['return_confirmed'=>'required|accepted']);
+        app(\App\Services\BatchReturnService::class)->returnItemToReview($batch,$item,$request->user()->id);
+        return redirect()->route('production')->with('ok','Selected item returned to artwork review. Other items remain queued. Rematch and approve this item again.');
+    }
+
     public function returnBatchToReview(Request $request, PrintBatch $batch)
     {
         abort_unless($request->user() && $request->user()->role!=='demo',403);
         $request->validate(['return_confirmed'=>'required|accepted']);
-        $count=app(\App\Services\BatchReturnService::class)->returnToReview($batch,$request->user()->id);
-        return redirect()->route('production')->with('ok',$count.' items returned to artwork review. Rematch and approve again before creating another batch.');
+        return redirect()->route('batch.show',$batch)->with('error','Choose Return this item next to the item you want to review. Whole-batch return is no longer available.');
     }
 
     public function requestEdgePrint(Request $request, PrintBatch $batch)

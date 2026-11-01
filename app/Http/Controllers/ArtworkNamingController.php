@@ -10,7 +10,12 @@ class ArtworkNamingController extends Controller
     public function index(Request $request,ArtworkRenameStore $store)
     {
         $actor=$this->actor($request);
-        $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):null;
+        $loadError=null;
+        $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);
+        if(!$plan && !$request->query('plan')) {
+            try{$plan=app(ArtworkNamingService::class)->scan($actor);}
+            catch(\Throwable $e){report($e);$loadError='Artwork could not load automatically. Check Drive access and the Active All Bags collection, then retry Check files.';}
+        }
         $currentPlan=$plan && ($plan['naming_policy']??null)===ArtworkNamingService::POLICY;
         $summary=$currentPlan?ArtworkRenameStore::summary($plan):$store->latestSummary($actor);
         $catalog=[];
@@ -24,7 +29,9 @@ class ArtworkNamingController extends Controller
                 $required=$row['type']==='double'?['front','back']:['single'];
                 $ambiguous=false;$complete=true;
                 foreach($required as $side){if(($sides[$side]??0)>1)$ambiguous=true;if(!($sides[$side]??0))$complete=false;}
-                $context=(new ArtworkMatcherService())->match($row,array_values(array_filter($plan['index'],fn($entry)=>($entry['kind']??'')==='series_folder')));
+                $context=(new ArtworkMatcherService())->match($row,$plan['index']);
+                if(($context['artwork_review']['selection_source']??'')==='admin'){$complete=true;$ambiguous=false;}
+                elseif(($context['artwork_review']['selection_source']??'')==='invalidated_admin'){$complete=false;$ambiguous=false;}
                 $identity=(new ArtworkMatcherService())->designIdentity($row['product']);
                 $skuConflict=false;foreach($catalog as $other)if($other['sku']===$row['sku'] && (new ArtworkMatcherService())->designIdentity($other['product'])!==$identity)$skuConflict=true;
                 $catalogStatus[]=[...$row,'sku_conflict'=>$skuConflict,'expected_folder'=>$context['artwork_review']['expected_folder'],'folder_url'=>$context['artwork_review']['folder_url'],'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
@@ -47,7 +54,7 @@ class ArtworkNamingController extends Controller
             $entry['source_attributes']=$attributes;
             $reviewGroups[$entry['id']]=['entry'=>$entry,'count'=>1];
         }
-        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries'));
+        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries','loadError'));
     }
     public function scan(Request $request)
     {
@@ -58,17 +65,31 @@ class ArtworkNamingController extends Controller
     public function revise(Request $request)
     {
         $actor=$this->actor($request);
-        if($request->boolean('pair_mode')) {
-            $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
-            $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false),$request->boolean('color_correction_confirmed'));
-            return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Front and back saved to the filename preview. Review Filename changes to apply names.');
+        try {
+            if($request->boolean('pair_mode')) {
+                $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
+                $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false),$request->boolean('color_correction_confirmed'));
+                return $this->finishChoice($plan,$actor,$data['catalog_key'],[$data['front_file_id'],$data['back_file_id']]);
+            }
+            $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','catalog_key'=>'required|string|size:64',
+                'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
+            $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'','color_correction_confirmed'=>$request->boolean('color_correction_confirmed')]],(bool)($data['reuse']??false));
+            $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
+            if(($entry['status']??'review')==='review')return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','This mapping does not match the folder, SKU, color or print side. Check it and update the preview.');
+            return $this->finishChoice($plan,$actor,$data['catalog_key'],[$data['file_id']]);
+        } catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            if(!in_array($e->getStatusCode(),[409,422],true))throw $e;
+            return redirect()->route('admin.artwork-names',['plan'=>$request->input('plan')])->with('error',$e->getMessage());
         }
-        $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','catalog_key'=>'required|string|size:64',
-            'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
-        $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'','color_correction_confirmed'=>$request->boolean('color_correction_confirmed')]],(bool)($data['reuse']??false));
-        $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
-        if(($entry['status']??'review')==='review')return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','This mapping does not match the folder, SKU, color or print side. Check it and update the preview.');
-        return redirect()->route('admin.artwork-names',['plan'=>$plan['token']]);
+    }
+    private function finishChoice(array $plan,int $actor,string $catalogKey,array $ids)
+    {
+        if(config('services.google_drive.reviewed_selections_enabled',true)) {
+            app(ArtworkNamingService::class)->saveReviewedChoice($plan,$actor,$catalogKey,$ids);
+            try { app(\App\Services\ArtworkRematchService::class)->rematch(); }
+            catch(\Throwable $e) { report($e);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','Your artwork choice was saved, but order matches could not refresh. Run Rematch Artwork.'); }
+        }
+        return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Artwork choice saved and unbatched matches refreshed. Print approval is still required. Apply any filename changes separately.');
     }
     public function begin(Request $request)
     {

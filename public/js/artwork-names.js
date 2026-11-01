@@ -119,9 +119,16 @@ function namingCatalogFilter() {
         if (!row.hidden) count++;
     });
     const empty = document.querySelector('[data-catalog-empty]'); if (empty) empty.hidden = count > 0;
+    const message = document.querySelector('[data-catalog-empty-message]'); if (message) message.textContent = terms.length ? 'No Shopify products match this search. Search by product name or SKU.' : 'No products in this status. View all Shopify products.';
+    const clear = document.querySelector('[data-catalog-clear]'); if (clear) clear.textContent = terms.length ? 'Clear search' : 'Show all products';
 }
 document.querySelector('[data-catalog-search]')?.addEventListener('input', namingCatalogFilter);
 document.querySelector('[data-catalog-status]')?.addEventListener('change', namingCatalogFilter);
+document.querySelector('[data-catalog-clear]')?.addEventListener('click', () => {
+    const search = document.querySelector('[data-catalog-search]'); const status = document.querySelector('[data-catalog-status]');
+    if (search?.value) search.value = ''; else if (status) status.value = 'all';
+    namingCatalogFilter(); search?.focus();
+});
 function openNamingConfirmation() {
     const count = namingSelected().filter(input => input.checked).length;
     if (!count || namingRunning) return;

@@ -14,6 +14,7 @@ class ArtworkRematchService
     public function rematch(): array
     {
         self::ensureSchemaReady();
+        $this->matcher->refreshReviewedSelections();
         $index = $this->drive->artworkIndex();
         $counts = ['matched'=>0,'missing'=>0,'ambiguous'=>0,'skipped'=>0];
         DB::transaction(function () use ($index, &$counts) {

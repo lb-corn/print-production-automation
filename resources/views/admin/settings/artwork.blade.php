@@ -1,3 +1,4 @@
+@if($loadError??null)<p class="admin-notice" role="alert">{{$loadError}}</p>@endif
 <section class="naming-simple-header">
 <div><strong>Shopify artwork matching</strong><span>All Bags collection · Active Shopify products only.</span></div>
 <form id="artwork-scan-form" method="post" action="{{route('admin.artwork-names.scan')}}">
@@ -69,7 +70,7 @@ $preselected=0;
 <td><div class="artwork-product-cell">@if(str_starts_with($row['image']??'','https://'))<img src="{{$row['image']}}" alt="" loading="lazy">@endif<div><strong>{{$row['product']}}</strong><small>{{$row['variant']}} · {{$row['sku']}}</small></div></div></td>
 <td>{{$row['status']==='matched'?'Found':($row['status']==='ambiguous'?'Review duplicates':'Missing artwork')}}</td><td>@if($preview)<button class="chip" type="button" data-match-product="{{$row['catalog_key']}}">{{$row['status']==='matched'?'View / change':'Match artwork'}}</button>@endif</td></tr>
 @endforeach
-</tbody></table><p data-catalog-empty hidden>No products in this view. Choose All products to see the full catalog.</p></div>
+</tbody></table><div class="artwork-worklist-empty" data-catalog-empty hidden><span data-catalog-empty-message>No products in this view.</span><button type="button" class="chip" data-catalog-clear>Clear search</button></div></div>
 </section>
 @if($preview&&count($catalog))
 <dialog class="artwork-match-dialog" data-artwork-match-dialog aria-labelledby="artwork-match-heading">
@@ -81,7 +82,7 @@ $preselected=0;
 @foreach($catalogStatus as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}" data-scope-ready="{{$row['folder_url']?'1':'0'}}" data-folder-id="{{$row['folder_url']?rawurldecode(basename($row['folder_url'])):''}}" data-sku-conflict="{{$row['sku_conflict']?'1':'0'}}" data-folder="{{$row['expected_folder']}}" data-folder-url="{{$row['folder_url']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>@endforeach
 </select>
 <div class="artwork-match-product"><img data-naming-product-image alt="Shopify product" hidden><div><strong data-match-title></strong><small data-match-folder></small><a data-match-folder-link target="_blank" rel="noopener noreferrer" hidden>Open Drive folder ↗</a></div></div>
-<p class="admin-notice" data-match-sku-warning hidden>This SKU is shared by different Shopify designs. Compare the images; SKU alone cannot identify the artwork. Correct the duplicate SKU in Shopify before standardizing these files.</p>
+<p class="admin-notice" data-match-sku-warning hidden>This SKU is shared by different designs. Choose by image. Your selection is saved for this product and variant only.</p>
 <div class="artwork-pair-slots" data-match-pair hidden>
 <button type="button" class="chip" data-match-side-target="front" aria-pressed="true"><b>1 · Front</b><span data-match-front-name>Choose front artwork</span></button>
 <button type="button" class="chip" data-match-side-target="back" aria-pressed="false"><b>2 · Back</b><span data-match-back-name>Choose back artwork</span></button>
@@ -111,7 +112,7 @@ $preselected=0;
 <input type="hidden" name="color" data-naming-color>
 <label class="artwork-color-confirm" data-match-color-confirm hidden><input type="checkbox" name="color_correction_confirmed" value="1" data-match-color-checkbox disabled> I checked the artwork: its actual color matches Shopify; the filename color label is wrong.</label>
 <div class="artwork-match-footer"><label><input type="checkbox" name="reuse" value="1" checked> Remember for matching versions</label><button type="submit" class="primary" data-match-confirm disabled>Confirm this artwork</button></div>
-<small class="muted">Confirm only when the images show the same design. This saves a filename preview; it does not approve printing.</small>
+<small class="muted">Confirm only when the images show the same design. This saves your choice and refreshes unbatched matches. Print approval is still required.</small>
 </div></form></dialog>
 @endif
 <details class="naming-advanced"><summary>Filename changes · {{$ready}} ready to rename</summary>
