@@ -63,3 +63,30 @@ function setup(confirmResult, failStep = false) {
  console.log('PASS: case-insensitive dropdown search handles spaces/hyphens, clears safely and preserves series/color restrictions');
  console.log('PASS: compact thumbnails filter variants, preserve BACK, expose missing sides and reject unsafe image URLs');
 }
+
+// Exercise the enhanced dropdown itself, including keyboard selection and dismissal.
+{
+ class Node {
+  constructor(){this.children=[];this.attributes={};this.handlers={};this.hidden=false;this.value='';this.classList={toggle(){}};}
+  setAttribute(k,v){this.attributes[k]=v;} getAttribute(k){return this.attributes[k];} removeAttribute(k){delete this.attributes[k];}
+  addEventListener(k,fn){(this.handlers[k]??=[]).push(fn);} dispatchEvent(e){for(const fn of this.handlers[e.type]||[])fn(e);}
+  append(...nodes){this.children.push(...nodes);for(const node of nodes)node.parent=this;}
+  replaceChildren(){this.children=[];} before(node){this.wrapper=node;} focus(){this.focused=true;} scrollIntoView(){}
+  contains(node){return node===this||this.children.some(child=>child.contains(node));}
+ }
+ const select=new Node();select.options=[{value:'',textContent:'Choose design'},{value:'miami',textContent:'Miami 27',hidden:false,disabled:false},{value:'grunge',textContent:'Redline Grunge',hidden:false,disabled:false}];
+ Object.defineProperty(select,'selectedOptions',{get(){return [select.options.find(option=>option.value===select.value)];}});
+ const doc=new Node();doc.createElement=()=>new Node();
+ const code=fs.readFileSync('public/js/artwork-names.js','utf8');const begin=code.indexOf('function namingSearchableSelect(');const end=code.indexOf('namingSearchableSelect(sourceChoice);',begin);
+ const context={document:doc,Event:class{constructor(type){this.type=type;}},namingChoiceFilter:(node,query)=>{for(const option of node.options)option.hidden=!!query&&!option.textContent.toLowerCase().includes(query.toLowerCase());node.namingRefresh();},select};
+ vm.runInNewContext(code.slice(begin,end)+'namingSearchableSelect(select);',context);
+ const [trigger,panel]=select.wrapper.children;const [search,list]=panel.children;
+ assert(select.hidden&&panel.hidden);trigger.dispatchEvent({type:'click'});assert(!panel.hidden&&search.focused);assert.equal(trigger.getAttribute('aria-expanded'),'true');
+ search.value='grunge';search.dispatchEvent({type:'input'});assert.equal(list.children.length,1);assert.equal(list.children[0].textContent,'Redline Grunge');
+ search.dispatchEvent({type:'keydown',key:'ArrowDown',preventDefault(){}});assert(search.getAttribute('aria-activedescendant'));
+ search.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});assert.equal(select.value,'grunge');assert(panel.hidden);assert.equal(trigger.textContent,'Redline Grunge');
+ trigger.dispatchEvent({type:'click'});assert.equal(search.value,'');search.dispatchEvent({type:'keydown',key:'Escape',preventDefault(){}});assert(panel.hidden);
+ trigger.dispatchEvent({type:'click'});doc.dispatchEvent({type:'click',target:new Node()});assert(panel.hidden);
+ trigger.dispatchEvent({type:'click'});search.value='absent';search.dispatchEvent({type:'input'});assert.equal(list.children[0].textContent,'No matches found');
+ console.log('PASS: integrated dropdown search opens inside menu, filters, selects with keyboard, resets and closes safely');
+}

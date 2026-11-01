@@ -57,6 +57,7 @@ function namingChoiceFilter(select, query, product = false) {
     });
     const empty = document.querySelector(product ? '[data-naming-product-empty]' : '[data-naming-source-empty]');
     if (empty) empty.hidden = count > 0;
+    select.namingRefresh?.();
 }
 document.querySelector('[data-naming-source-search]')?.addEventListener('input', event => namingChoiceFilter(sourceChoice, event.target.value));
 document.querySelector('[data-naming-product-search]')?.addEventListener('input', event => namingChoiceFilter(catalogChoice, event.target.value, true));
@@ -164,3 +165,64 @@ document.querySelector('[data-naming-scan]')?.closest('form')?.addEventListener(
 });
 window.addEventListener('pageshow', event => { if (event.persisted && namingRunning) window.location.reload(); });
 namingCount(); namingFilter();
+
+// Progressive enhancement: the native select remains the submitted source of truth.
+function namingSearchableSelect(select, product = false) {
+    if (!select || !document.createElement) return;
+    const wrapper = document.createElement('span'); wrapper.className = 'naming-picker';
+    const trigger = document.createElement('button'); trigger.type = 'button'; trigger.className = 'naming-picker-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false');
+    const panel = document.createElement('span'); panel.className = 'naming-picker-panel'; panel.hidden = true;
+    const search = document.createElement('input'); search.type = 'search'; search.autocomplete = 'off';
+    search.placeholder = product ? 'Search products…' : 'Search designs…';
+    search.setAttribute('aria-label', product ? 'Search matching products' : 'Search designs');
+    search.setAttribute(product ? 'data-naming-product-search' : 'data-naming-source-search', '');
+    search.setAttribute('role', 'combobox'); search.setAttribute('aria-autocomplete', 'list'); search.setAttribute('aria-expanded', 'false');
+    const list = document.createElement('span'); list.className = 'naming-picker-list'; list.id = product ? 'naming-product-options' : 'naming-design-options';
+    list.setAttribute('role', 'listbox'); list.setAttribute('aria-label', search.getAttribute('aria-label'));
+    search.setAttribute('aria-controls', list.id); trigger.setAttribute('aria-controls', list.id);
+    let active = -1, options = [];
+    function close(focus = false) {
+        panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); search.setAttribute('aria-expanded', 'false');
+        search.removeAttribute('aria-activedescendant'); if (focus) trigger.focus();
+    }
+    function highlight(index) {
+        active = index;
+        [...list.children].forEach((node, i) => node.classList.toggle('active', i === active));
+        const node = list.children[active];
+        if (node && options.length) { search.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({block:'nearest'}); }
+    }
+    function choose(option) { select.value = option.value; select.dispatchEvent(new Event('change', {bubbles:true})); close(true); }
+    function render() {
+        trigger.textContent = (select.selectedOptions[0] || select.options[0])?.textContent || 'Choose';
+        list.replaceChildren(); active = -1; search.removeAttribute('aria-activedescendant');
+        options = [...select.options].filter(option => option.value && !option.hidden && !option.disabled);
+        options.forEach((option, index) => {
+            const item = document.createElement('span'); item.id = list.id + '-' + index; item.setAttribute('role','option');
+            item.setAttribute('aria-selected', String(option.value === select.value)); item.textContent = option.textContent;
+            item.addEventListener('click', () => choose(option)); list.append(item);
+        });
+        if (!options.length) { const empty = document.createElement('span'); empty.className = 'naming-picker-empty'; empty.textContent = 'No matches found'; list.append(empty); }
+    }
+    function open() {
+        search.value = ''; namingChoiceFilter(select, '', product); panel.hidden = false;
+        trigger.setAttribute('aria-expanded','true'); search.setAttribute('aria-expanded','true'); search.focus();
+    }
+    trigger.addEventListener('click', () => panel.hidden ? open() : close());
+    search.addEventListener('input', () => namingChoiceFilter(select, search.value, product));
+    search.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); close(true); }
+        if (['ArrowDown','ArrowUp'].includes(event.key)) {
+            event.preventDefault(); if (options.length) highlight((active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+        }
+        if (event.key === 'Enter') { event.preventDefault(); if (active >= 0 && options[active]) choose(options[active]); }
+    });
+    wrapper.addEventListener('focusout', event => { if (!wrapper.contains(event.relatedTarget)) close(); });
+    document.addEventListener('click', event => { if (!wrapper.contains(event.target)) close(); });
+    select.addEventListener('change', render);
+    select.addEventListener('invalid', event => { event.preventDefault(); open(); });
+    select.before(wrapper); wrapper.append(trigger, panel); panel.append(search, list);
+    select.hidden = true; select.namingRefresh = render; render();
+}
+namingSearchableSelect(sourceChoice);
+namingSearchableSelect(catalogChoice, true);

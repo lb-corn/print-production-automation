@@ -67,7 +67,7 @@ $preselected=0;
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
 <div class="naming-review-thumbnails"><a data-naming-original href="#" target="_blank" rel="noopener noreferrer" hidden><img data-naming-source-image alt="Drive artwork" hidden><span>Drive artwork ↗</span></a><div><img data-naming-product-image alt="Catalog product" hidden><span data-naming-detected>Choose a design below</span></div></div>
 <div class="naming-review-fields">
-<label>Design to check<input type="search" data-naming-source-search autocomplete="off" placeholder="Search designs…" aria-label="Search designs"><select name="file_id" required data-naming-source><option value="">Choose an unclear design</option>
+<label>Design to check<select name="file_id" required data-naming-source><option value="">Choose an unclear design</option>
 
 @foreach($reviewGroups as $group)
 
@@ -80,7 +80,7 @@ $preselected=0;
 
 @endforeach
 </select></label>
-<label>Matching product<input type="search" data-naming-product-search autocomplete="off" placeholder="Search products…" aria-label="Search matching products"><select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
+<label>Matching product<select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
 @foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}">{{$row['product']}} · {{$row['variant']}}</option>
 @endforeach</select><small data-naming-product-empty hidden>No matching products. Try another search.</small></label>
 </div>
