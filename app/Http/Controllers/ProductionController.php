@@ -35,11 +35,13 @@ class ProductionController extends Controller
     public function syncBacklog()
     {
         try {
+            \App\Services\ArtworkRematchService::ensureSchemaReady();
             $r = app(BacklogSyncService::class)->sync();
             return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
         } catch (\Throwable $e) {
+            if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
             report($e);
-            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
+            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
         }
     }
 
@@ -47,11 +49,13 @@ class ProductionController extends Controller
     {
         $request->validate(['confirm_rematch'=>'required|accepted']);
         try {
+            \App\Services\ArtworkRematchService::ensureSchemaReady();
             $counts = app(\App\Services\ArtworkRematchService::class)->rematch();
             return redirect()->route('production')->with('ok', sprintf(
                 'Artwork rematched: %d matched · %d missing · %d ambiguous · %d skipped. Review artwork before approval.',
                 $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
         } catch (\Throwable $e) {
+            if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
             report($e);
             return redirect()->route('production')->with('error', 'Artwork rematch failed. No changes were saved. Check the integration logs and try again.');
         }
@@ -85,6 +89,8 @@ class ProductionController extends Controller
                 // Explain legacy selections without constructing an integration client or saving data.
                 $expectations = (new \App\Services\ArtworkMatcherService())->match($item->toArray(), [])['artwork_review'];
                 unset($expectations['policy']);
+                $expectations['lookup_status'] = 'not_checked';
+                $expectations['issues'] = ['Run Rematch Artwork to check current Drive files.'];
                 $item->artwork_review = $expectations;
             }
             $item->display_matches = $item->production_batch || $validArtwork ? ($item->matches ?? [])

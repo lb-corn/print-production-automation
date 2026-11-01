@@ -380,3 +380,21 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .verification-cards .artwork-missing-frame{overflow:auto;min-width:0;box-shadow:none}
 .verification-cards .artwork-missing code{overflow-wrap:anywhere}
 @media(max-width:700px){.verification-cards .compare{--artwork-frame-height:220px}}
+
+.artwork-rematch-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;margin:0 0 14px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.artwork-rematch-toolbar>div{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-width:0}
+.artwork-rematch-toolbar strong{font-size:12px}.artwork-rematch-toolbar span{font-size:11px;color:var(--muted)}
+.artwork-rematch-toolbar button{flex:none;white-space:nowrap;padding:7px 11px}
+.verification-cards .artwork-missing-frame{padding:14px 16px;display:block}
+.artwork-missing-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px}
+.artwork-missing .artwork-folder-link{margin:0;font-size:11px;white-space:nowrap}
+.artwork-missing .artwork-folder{font-size:11px;font-weight:500;margin:7px 0 0;line-height:1.4;color:var(--muted)}
+.artwork-folder>span{font-weight:700;margin-right:4px}
+.artwork-missing .artwork-reason{font-size:11px;font-weight:400;line-height:1.4;margin:6px 0 9px;color:var(--muted)}
+.artwork-filename-list{display:grid;gap:5px}.artwork-filename-row{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 8px;border:1px solid var(--line);background:#f7fafb;border-radius:6px}
+.artwork-filename-row code{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.artwork-filename-row button,.artwork-match-details button{border:0;background:transparent;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;padding:3px}
+.artwork-missing-actions{display:flex;align-items:center;gap:9px;margin-top:9px}.artwork-missing-actions form{margin:0}
+.artwork-missing-actions .chip{padding:6px 9px;font-size:11px}.artwork-missing-actions small{font-size:10px}
+.artwork-match-details{margin-top:8px;font-size:10px;color:var(--muted)}.artwork-match-details>summary{cursor:pointer}.artwork-match-details p{font-size:10px;font-weight:400;line-height:1.45;margin:6px 0}
+@media(max-width:600px){.artwork-rematch-toolbar>div{display:block}.artwork-rematch-toolbar span{display:block;line-height:1.4;margin-top:3px}.artwork-rematch-toolbar{gap:8px;padding:9px 11px}}

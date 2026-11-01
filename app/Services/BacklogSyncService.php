@@ -11,6 +11,7 @@ class BacklogSyncService
 
     public function sync(): array
     {
+        ArtworkRematchService::ensureSchemaReady();
         $backlog = $this->shopify->getProductionBacklog();
         $index = $this->drive->artworkIndex();
         $added = $updated = $unchanged = $matched = $missing = $ambiguous = $skipped = 0;

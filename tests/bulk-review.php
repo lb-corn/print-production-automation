@@ -3,6 +3,7 @@
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+set_exception_handler(function (Throwable $error): void { fwrite(STDERR, 'FAIL: '.$error->getMessage().PHP_EOL); exit(1); });
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $file) (require $file)->up();
@@ -14,7 +15,7 @@ $controller = $app->make(App\Http\Controllers\ProductionController::class);
 $svc = $app->make(App\Services\ProductionService::class);
 $create = fn($id, $extra=[]) => App\Models\ProductionItem::create(array_merge([
     'line_item_id'=>$id, 'product'=>'Test artwork', 'design_type'=>'single',
-    'series_code'=>'PSE', 'match_status'=>'REVIEW', 'artwork_review'=>['policy'=>'strict-v1'], 'matches'=>[['id'=>'drive-'.$id, 'side'=>'single']],
+    'series_code'=>'PSE', 'match_status'=>'REVIEW', 'artwork_review'=>['policy'=>App\Services\ArtworkMatcherService::POLICY], 'matches'=>[['id'=>'drive-'.$id, 'side'=>'single']],
 ], $extra));
 $a=$create('a'); $b=$create('b'); $custom=$create('custom',['is_custom'=>true]); $missing=$create('missing',['matches'=>[]]);
 $submit = function($ids, $decision) use ($controller, $user) {

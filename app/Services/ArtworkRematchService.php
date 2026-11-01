@@ -13,6 +13,7 @@ class ArtworkRematchService
     /** Fetch before taking database locks; a failed Drive request leaves all selections untouched. */
     public function rematch(): array
     {
+        self::ensureSchemaReady();
         $index = $this->drive->artworkIndex();
         $counts = ['matched'=>0,'missing'=>0,'ambiguous'=>0,'skipped'=>0];
         DB::transaction(function () use ($index, &$counts) {
@@ -27,6 +28,13 @@ class ArtworkRematchService
             }
         });
         return $counts;
+    }
+
+    public static function ensureSchemaReady(): void
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('production_items', 'artwork_review')) {
+            throw new \App\Exceptions\ArtworkSchemaNotReady();
+        }
     }
 
     /** Caller must hold the item lock (or be creating a new item). */

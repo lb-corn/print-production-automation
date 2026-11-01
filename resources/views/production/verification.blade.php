@@ -1,10 +1,10 @@
 <x-layouts.app heading="Production Verification" subheading="Compare Shopify order artwork against factory Drive artwork">
 @if(auth()->user()?->role !== 'demo')
-<form method="post" action="{{route('production.rematch')}}" data-rematch-form class="panel">
+<form method="post" action="{{route('production.rematch')}}" data-rematch-form class="artwork-rematch-toolbar">
 
 @csrf
 <input type="hidden" name="confirm_rematch" value="1">
-<p>Fetch current Drive artwork for unbatched stock items. Changed artwork loses approval. Existing print batches stay locked.</p>
+<div><strong>Artwork matching</strong><span>Refresh unbatched items · changed artwork needs approval · batches stay locked</span></div>
 <button type="submit" class="chip">Rematch Artwork</button>
 </form>
 

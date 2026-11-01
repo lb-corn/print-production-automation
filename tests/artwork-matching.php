@@ -3,6 +3,7 @@
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+set_exception_handler(function (Throwable $error): void { fwrite(STDERR, 'FAIL: '.$error->getMessage().PHP_EOL); exit(1); });
 config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'stderr']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $migration) (require $migration)->up();
@@ -49,7 +50,7 @@ $drive->tree['group-b']=[];
 $check($matcher->match($row)['matches']===[],'Missing series folder never searches another location');
 $drive->tree['group-b']=[$folder('srf','SRF')];
 $drive->tree['srf']=[$file('front','SRF-DUC-RED-FRONT.png')];
-$double=[...$row,'sku'=>'2027-DUC-SRF-0001'];
+$double=[...$row,'sku'=>'2027-DUC-SRF-0001','variant'=>'Surefire / Red'];
 $check(!$matcher->match($double)['matches'],'Incomplete double-sided artwork selects no partial set');
 $drive->tree['srf'][]=$file('back','SRF-DUC-RED-BACK.png');
 $check(count($matcher->match($double)['matches'])===2,'Double-sided artwork requires exact front and back');
@@ -118,7 +119,7 @@ $middleware=$route->gatherMiddleware();
 $check(in_array('web',$middleware) && in_array('auth',$middleware) && in_array(App\Http\Middleware\ReadOnlyDemo::class,$middleware) && in_array(App\Http\Middleware\PortalWriteLock::class,$middleware),'Rematch uses CSRF, authentication, demo guard and write serialization');
 view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $html=$controller->verification()->render();
-$check(str_contains($html,'Copy Filename') && str_contains($html,'Open Google Drive Folder') && str_contains($html,'data-rematch-form'),'Operator UI renders suggestions, clipboard control, folder link and confirmed rematch');
+$check(str_contains($html,'data-copy-filename') && str_contains($html,'artwork-folder-link') && str_contains($html,'data-rematch-form'),'Operator UI renders suggestions, clipboard control, folder link and confirmed rematch');
 $legacy=$make('legacy');$legacy->update(['artwork_review'=>null]);
 $check(!ArtworkMatcherService::validSelection($legacy),'Legacy selections cannot be approved without strict rematch');
 echo "$checks artwork security/regression checks passed.\n";
@@ -128,7 +129,7 @@ $legacy->update(['match_status'=>'REVIEW','matches'=>[['id'=>'old-mockup','name'
 $drive->fail=true;
 $html=$controller->verification()->render();
 $check(!str_contains($html,'old-mockup') && !str_contains($html,'PSN-ELT-DUCK CAMO RED MOCKUP.jpg'),'Legacy invalid preview is hidden from the right-hand box');
-$check(str_contains($html,'PSE-DUC-RED.jpg') && str_contains($html,'Missing production artwork'),'Legacy missing state computes the proposed filename without Drive or database writes');
+$check(str_contains($html,'PSE-DUC-RED.jpg') && str_contains($html,'Check production artwork'),'Legacy missing state computes the proposed filename without Drive or database writes');
 $check($legacy->fresh()->artwork_review===null && $legacy->fresh()->matches[0]['id']==='old-mockup','Rendering missing instructions does not modify saved selections');
 $drive->fail=false;
 // Prove rollback even when a later item fails after an earlier selection was saved.
@@ -149,7 +150,7 @@ $html=$controller->verification()->render();
 $dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $card=$xpath->query('//details[@data-item-id="'.$validUi->id.'"]')->item(0);
 $cardHtml=$dom->saveHTML($card);
-$check(str_contains($cardHtml,'valid-ui-file') && !str_contains($cardHtml,'Missing production artwork') && !str_contains($cardHtml,'Suggested filename'),'Correct production artwork displays without missing instructions or naming errors');
+$check(str_contains($cardHtml,'valid-ui-file') && !str_contains($cardHtml,'Production file not found') && !str_contains($cardHtml,'Suggested filename'),'Correct production artwork displays without missing instructions or naming errors');
 $missingBox=$xpath->query('//details[@data-item-id="'.$legacy->id.'"]//div[contains(@class,"drive-grid")]//div[contains(@class,"artwork-review")]');
 $check($missingBox->length===1,'Missing filename instructions replace the right-hand image inside its comparison box');
 echo "$checks total artwork checks passed.\n";
@@ -160,8 +161,8 @@ $earthMatch=$matcher->match($earth);
 $check(array_column($earthMatch['matches'],'id')===['earth-jpg'] && $earthMatch['color']===null,'Series-only Clover variant correctly matches colorless Earth JPG');
 $check($earthMatch['artwork_review']['suggested_filenames']===['CLV-EAR.jpg'],'Earth naming suggestion uses requested JPG format without inventing a color');
 $drive->tree['clover']=[$file('colored-earth','CLV-EAR-RED.jpg')];
-$check(!$matcher->match($earth)['matches'],'Colorless variant never picks an arbitrary colored file');
-$check(!$matcher->match([...$earth,'variant'=>'Clover / Purple'])['matches'],'Unrecognized variant color does not silently become colorless');
+$check($matcher->match($earth)['match_status']==='REVIEW','Unique colored artwork for unspecified Shopify color still requires operator review');
+$check(!$matcher->match([...$earth,'variant'=>'Clover / Ultraviolet'])['matches'],'Unrecognized variant color does not silently become colorless');
 $saved=[...$file('saved-earth','CLV-EAR.jpg'),'path'=>'GROUP B (Carpet)/Clover/CLV-EAR.jpg'];
 $preview=$matcher->savedPreviews($earth,[$saved]);
 $check(array_column($preview,'id')===['saved-earth'],'Correct saved Earth preview survives without strict approval metadata');
@@ -170,8 +171,81 @@ $earthItem=ProductionItem::create(['line_item_id'=>'earth',...$earth,...$earthMa
 $html=$controller->verification()->render();
 $dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $earthCard=$dom->saveHTML($xpath->query('//details[@data-item-id="'.$earthItem->id.'"]')->item(0));
-$check(str_contains($earthCard,'saved-earth') && !str_contains($earthCard,'Missing production artwork') && !str_contains($earthCard,'Suggested filename'),'Existing correct colorless JPG displays with no missing-artwork errors');
+$check(str_contains($earthCard,'saved-earth') && !str_contains($earthCard,'Production file not found') && !str_contains($earthCard,'Suggested filename'),'Existing correct colorless JPG displays with no missing-artwork errors');
 $check(!ArtworkMatcherService::validSelection($earthItem->fresh()) && !$svc->approved($earthItem->fresh('decision')),'Display-only preview never authorizes printing or approval');
 $css=file_get_contents(__DIR__.'/../public/css/app.css');
 $check(str_contains($css,'.verification-cards .art img,.verification-cards .placeholder,.verification-cards .artwork-missing-frame{height:var(--artwork-frame-height)}'),'Shopify, Drive and missing panels use one shared frame height');
+echo "$checks total artwork checks passed.\n";
+// Regressions from real production filenames and the reported failures.
+$cases = [
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['PSE-DUC-RED.jpg'],'REVIEW'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['2027-PSN-ELT-DUCK CAMO-RED.jpg'],'REVIEW'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Black','PSE',['PSN-ELT-DUCK CAMO-BLACK.jpg'],'REVIEW'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Brown','PSE',['PSN-ELT-DUCK CAMO-RED.jpg'],'MISSING'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['2027-PSN-ELT-DUCK CAMO-RED-MOCKUP.jpg'],'MISSING'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['2026-PSN-ELT-DUCK CAMO-RED.jpg'],'MISSING'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['PSE-DUCK-RED.jpg'],'MISSING'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['PSE-DUCK CAMOFLAGE-RED.jpg'],'MISSING'],
+ ['2027-DUC-PSE-0001','Duck Camo','Pro Sniper Elite / Red','PSE',['PSE-DUC-RED.jpg','2027-PSN-ELT-DUCK CAMO-RED.jpg'],'AMBIGUOUS'],
+ ['2027-EAR-CLV-0001','Earth','Clover','Clover',['CLV-EARTH-BLACK.jpg'],'REVIEW'],
+ ['2027-EAR-CLV-0001','Earth','Clover','Clover',['CLV-EARTH-BLACK.jpg','CLV-EARTH-WHITE.jpg'],'AMBIGUOUS'],
+ ['2027-EAR-CLV-0001','Earth','Clover / Red','Clover',['CLV-EARTH-BLACK.jpg'],'MISSING'],
+ ['2027-BUB-CLV-0001','Bubble Fusion','Clovers','Clover',['CLV-BUBBLES.jpg'],'MISSING'],
+ ['2027-BUB-PSE-0001','Bubble Fusion','Pro Sniper Elite','PSE',['Bubbles.jpg'],'MISSING'],
+ ['2027-BUB-CLV-0001','Bubble Fusion','Clovers','Clover',['CLV-BUBBLES-EXTRA.jpg'],'MISSING'],
+ ['2027-BUB-CLV-0001','Other design','Clovers','Clover',['CLV-BUBBLES.jpg'],'MISSING'],
+ ['2027-BUB-SRF-0001','Bubble Fusion','Surefire','Surefire',['SRF-BUB-FRONT.jpg','SRF-BUB-BACK.jpg'],'REVIEW'],
+ ['2027-BUB-CLT-0001','Bubble Fusion','Celtics','Celtics',['CLT-BUBBLE FUSION-FRONT.jpg','CLT-BUBBLE FUSION-BACK.jpg'],'REVIEW'],
+ ['2027-BUB-SRF-0001','Bubble Fusion','Surefire','Surefire',['SRF-BUB-BLACK-FRONT.jpg','SRF-BUB-WHITE-BACK.jpg'],'AMBIGUOUS'],
+ ['2027-GTA-PSE-0001','GTA','Pro Sniper Elite / Charcoal','PSE',['2027-PSN-ELT-GTA-CHARCOAL.jpg'],'REVIEW'],
+ ['2027-VEG-PSE-0001','Vegas','Pro Sniper Elite','PSE',['2027-PSN-ELT-VEGAS-WHITE.jpg'],'REVIEW'],
+ ['2027-FRI-PSE-0001','Lucky Friends','Pro Sniper Elite / White','PSE',['PSN-ELT-LUCKY FRIENDS-WHITE.jpg'],'REVIEW'],
+ ['2027-BAC-PSE-0001','Big Ass Clover','Pro Sniper Elite / Black Leather','PSE',['PSN-ELT-BAC-BLACK LEATHER.jpg'],'REVIEW'],
+ ['2027-BAC-PSE-0001','Big Ass Clover','Pro Sniper Elite / Black Leather','PSE',['PSN-ELT-BAC-BLACK.jpg'],'MISSING'],
+ ['2027-BAC-PSE-0001','Big Ass Clover','Pro Sniper Elite / Black','PSE',['PSN-ELT-BAC-BLACK LEATHER.jpg'],'MISSING'],
+ ['2027-GOW-PSE-0001','Golden Worlds','Pro Sniper Elite / Black','PSE',['PSN-ELT-GOLD WORLD-BLACK.jpg'],'MISSING'],
+ ['2027-GOW-PSE-0001','Golden Worlds','Pro Sniper Elite / Black','PSE',['PSN-ELT-GOLDEN FINGER-BLACK.jpg'],'MISSING'],
+ ['2027-CAM-PSE-0001','Clover Camo','Pro Sniper Elite / Green','PSE',['PSN-ELT-REVERSE CLOVER CAMO-GREEN.jpg'],'MISSING'],
+ ['2027-REV-PSE-0001','Reverse Clover','Pro Sniper Elite / Navy','PSE',['2027-PSN-ELT-REVERSE CLOVER CAMO-NAVY.jpg'],'MISSING'],
+];
+foreach ($cases as [$sku,$title,$variant,$folderName,$names,$expected]) {
+    $drive->tree=['group-b'=>[$folder('case-folder',$folderName)],'case-folder'=>array_map(fn($name,$id)=>$file('case-'.$id,$name),$names,array_keys($names))];
+    $result=$matcher->match(['sku'=>$sku,'product'=>'Lucky Bags 2027 '.$title,'variant'=>$variant]);
+    $check($result['match_status']===$expected && ($expected==='REVIEW' ? count($result['matches'])>0 : !$result['matches']),$sku.' / '.$variant.' / '.implode(' + ',$names).' => '.$expected);
+    if ($expected==='REVIEW') $check(!$result['artwork_review']['issues'],'Correct established filenames produce no correction errors');
+}
+// Fail before any integration call if deployment has not applied the additive migration.
+Illuminate\Support\Facades\Schema::table('production_items',fn($table)=>$table->dropColumn('artwork_review'));
+$visited=$drive->visited;
+try { $rematch->rematch(); throw new RuntimeException('Missing schema ignored'); }
+catch(App\Exceptions\ArtworkSchemaNotReady $e) { $check($drive->visited===$visited && str_contains($e->getMessage(),'migration'),'Missing migration fails early with a specific actionable reason, without fetching Drive'); }
+$request=Illuminate\Http\Request::create('/production/rematch','POST',['confirm_rematch'=>'1']);
+$response=$controller->rematchArtwork($request);
+$check($response->isRedirect() && str_contains(session('error'),'artwork_review migration'),'Rematch UI explains missing setup instead of returning a generic integration error');
+(require __DIR__.'/../database/migrations/2026_11_01_000005_add_artwork_review.php')->up();
+echo "$checks total artwork checks passed.\n";
+// Legacy spelling retains a whole, explicit series alias; PSN alone can never match PSE.
+$drive->tree=['group-b'=>[$folder('pse','PSE')],'pse'=>[$file('finger','PNS-ELT-GOLDEN FINGER-WHITE.jpg')]];
+$finger=['sku'=>'2027-GOF-PSE-0001','product'=>'Lucky Bags 2027 Golden Finger','variant'=>'Pro Sniper Elite / White'];
+$check(!$matcher->match($finger)['matches'],'Nonstandard PNS-ELT spelling requires correction rather than a hardcoded alias');
+$drive->tree['pse']=[$file('wrong-series','PSN-GOLDEN FINGER-WHITE.jpg')];
+$check(!$matcher->match($finger)['matches'],'PSN alone never substitutes for PSE even in the PSE folder');
+$ui=$controller->verification()->render();
+$check(str_contains($ui,'artwork-rematch-toolbar') && !str_contains($ui,'Fetch current Drive artwork for unbatched stock items'),'Global rematch uses the compact toolbar');
+$check(str_contains($ui,'Naming guidance &amp; details') && str_contains($ui,'artwork-filename-row'),'Missing-artwork UI uses compact filename rows and expandable diagnostics');
+echo "$checks total artwork checks passed.\n";
+// A future design follows the same grammar; no image-specific configuration or alias is needed.
+$future=['sku'=>'2028-ZEB42-PSE-0001','product'=>'Lucky Bags 2028 Zebra Night Sky','variant'=>'Pro Sniper Elite / Red'];
+foreach (['PSE-ZEB42-RED.jpg','2028-PSN-ELT-ZEBRA NIGHT SKY-RED.jpg'] as $name) {
+    $drive->tree=['group-b'=>[$folder('pse','PSE')],'pse'=>[$file('future',$name)]];
+    $check($matcher->match($future)['match_status']==='REVIEW','New design matches generic standard: '.$name);
+}
+$drive->tree=['group-b'=>[$folder('clover','Clover')],'clover'=>[$file('shortened','CLV-BUBBLES.jpg')]];
+$bubble=['sku'=>'2027-BUB-CLV-0001','product'=>'Lucky Bags 2027 Bubble Fusion','variant'=>'Clovers'];
+$nonstandard=$matcher->match($bubble);
+$check($nonstandard['match_status']==='MISSING' && $nonstandard['artwork_review']['suggested_filenames']===['CLV-BUB.jpg'],'Nonstandard Bubble abbreviation gets a canonical SKU filename suggestion without a special-case alias');
+foreach (['CLV-BUB.jpg','CLV-BUBBLE FUSION.jpg'] as $name) {
+    $drive->tree['clover']=[$file('bubble',$name)];
+    $check($matcher->match($bubble)['match_status']==='REVIEW','Bubble Fusion follows the same standard rule: '.$name);
+}
 echo "$checks total artwork checks passed.\n";
