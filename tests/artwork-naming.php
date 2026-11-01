@@ -444,3 +444,29 @@ $check($matcher->match($wrongReviewed,$drive->index)['match_status']==='MISSING'
 config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+// A reviewed legacy pair may have descriptive wording but no recognized color token.
+$midnightRow=[...$row,'catalog_key'=>hash('sha256','midnight-pair'),'sku'=>'2027-SOG-SRF-0001','product'=>'Lucky Bags 2027 Surefire OG','variant'=>'Surefire / Black'];
+$midnightFolder=['kind'=>'series_folder','id'=>'srf','name'=>'Surefire','path'=>'(GROUP A) Non Carpet / Surefire'];
+$midnightPair=[];
+foreach(['front','back'] as $side) {
+    $name='SRF-0G 2027-MIDNIGHT-'.strtoupper($side).'.jpg';
+    $midnightPair[]=[...$source('midnight-'.$side,$name),'parent_id'=>'srf','path'=>$midnightFolder['path'].' / '.$name];
+}
+$shopify->rows=[$midnightRow];$drive->index=[$midnightFolder,...$midnightPair];
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();
+$midnightPlan=$service->scan($admin->id);
+$check(count(array_filter($midnightPlan['entries'],fn($e)=>$e['status']==='review'))===2 && $matcher->match($midnightRow,$drive->index)['match_status']==='MISSING','MIDNIGHT is not automatically guessed to mean BLACK');
+$midnightPlan=$service->revisePair($midnightPlan['token'],$admin->id,$midnightRow['catalog_key'],'midnight-front','midnight-back',false);
+$check(array_column($midnightPlan['entries'],'status')===['standard','standard'] && array_column(array_column($midnightPlan['entries'],'proposal'),'target')===array_column($midnightPair,'name'),'Reviewed MIDNIGHT FRONT/BACK pair retains actual names instead of requiring BLACK renames');
+$writesBefore=$writer->writes;$service->saveReviewedChoice($midnightPlan,$admin->id,$midnightRow['catalog_key'],['midnight-front','midnight-back']);
+$midnightReload=$service->scan($admin->id);$midnightMatch=$matcher->match($midnightRow,$drive->index);
+$check(array_column($midnightReload['entries'],'status')===['standard','standard'] && $midnightMatch['match_status']==='REVIEW' && count($midnightMatch['matches'])===2 && $midnightMatch['artwork_review']['selection_source']==='admin' && $writer->writes===$writesBefore,'Saved pair survives scan and production rematch with zero rename writes and no print approval');
+try{$service->begin($midnightReload['token'],$admin->id,['midnight-front','midnight-back'],false);throw new LogicException('Reviewed standard pair submitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'Already accepted pair cannot be submitted for another rename');}
+$changedPair=$drive->index;$changedPair[1]['version']='2';
+$check($matcher->match($midnightRow,$changedPair)['match_status']==='MISSING','Changing the reviewed artwork still invalidates the saved pair');
+$redPair=$midnightPair;$redPair[0]['name']='SRF-SUREFIRE OG-RED-FRONT.jpg';$redPair[0]['path']=$midnightFolder['path'].' / '.$redPair[0]['name'];
+$redProposal=$service->build([$midnightFolder,$redPair[0]],[$midnightRow],['midnight-front'=>['catalog_key'=>$midnightRow['catalog_key'],'side'=>'front','color'=>'BLACK']],[])[0];
+$check($redProposal['status']==='ready' && $redProposal['proposal']['target']!==$redPair[0]['name'],'An explicit wrong color token is not silently accepted by the absent-color exception');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
