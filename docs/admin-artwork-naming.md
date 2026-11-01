@@ -84,7 +84,7 @@ For double-sided Shopify variants, the visual chooser has separate **Front** and
 
 ## Returning an accidental queued batch
 
-The batch detail page offers **Return to Artwork Review** only for an untouched QUEUED batch. Confirming returns all items in that batch, clears selections and approvals, and records user/time/item IDs in the preserved batch payload. The batch becomes CANCELLED history. Cancelled batches are excluded from active item locks and factory polling; a stale factory CLAIMED request is rejected. Rematch and approve each returned item before explicitly creating another batch.
+The batch detail page and queued Artwork Verification cards offer **Return to Artwork Review** only for an untouched QUEUED batch. Cards show the entire-batch item count; this action returns every item in the batch, not only the card clicked. Confirming returns all items in that batch, clears selections and approvals, and records user/time/item IDs in the preserved batch payload. The batch becomes CANCELLED history. Cancelled batches are excluded from active item locks and factory polling; a stale factory CLAIMED request is rejected. Rematch and approve each returned item before explicitly creating another batch.
 
 Claimed, downloading, prepared, handed-off, completed and failed batches cannot be returned. The shared portal/factory write lock and transaction row locks settle claim/return races; a batch already claimed by the agent stays protected. This action makes no Drive/Shopify calls and never requests print handoff. No migration is required for the CANCELLED status or return audit metadata. No live queue is changed by deployment.
 

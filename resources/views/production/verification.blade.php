@@ -119,7 +119,11 @@
 @elseif($item->decision && !$item->approval_current)<span class="warn">⚠ ARTWORK CHANGED — RE-VERIFY</span>
 @else NOT VERIFIED
 @endif</div>
-@if(auth()->user()?->role !== 'demo' && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<div class="individual-actions">
+@if(auth()->user()?->role !== 'demo' && ($item->production_batch['can_return']??false))
+<form method="post" action="{{route('batch.return-to-review',$item->production_batch['id'])}}" data-return-batch>
+@csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button><small class="muted">Entire batch · {{$item->production_batch['order_count']}} items</small>
+</form>
+@elseif(auth()->user()?->role !== 'demo' && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<div class="individual-actions">
 <form method="post" action="/production/{{$item->id}}/verify">
 @csrf<input type="hidden" name="decision" value="WRONG">
 <button class="reject">✕ Reject artwork</button>

@@ -40,6 +40,15 @@ try{$controller->returnBatchToReview($request,$new);throw new LogicException('De
 $request=Illuminate\Http\Request::create('/batches/return','POST');$request->setUserResolver(fn()=>$user);
 try{$controller->returnBatchToReview($request,$new);throw new LogicException('Missing confirmation accepted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['return_confirmed']),'Return requires explicit confirmation server-side');}
 view()->share('errors',new Illuminate\Support\ViewErrorBag());auth()->setUser($user);$show=$controller->showBatch($new)->render();$check(str_contains($show,'Return to Artwork Review') && str_contains($show,'data-return-batch'),'Untouched queued batch page offers the return action');
-$new->update(['status'=>'CLAIMED','claimed_at'=>now()]);$show=$controller->showBatch($new->fresh())->render();$check(!str_contains($show,'data-return-batch'),'Claimed batch page has no return control');
+$new->update(['status'=>'CLAIMED','claimed_at'=>now()]);$show=$controller->showBatch($new->fresh())->render();$dom=new DOMDocument();@$dom->loadHTML($show,LIBXML_NONET);$check((new DOMXPath($dom))->query('//form[@data-return-batch]')->length===0,'Claimed batch page has no return control');
 $check(str_contains($controller->showBatch($batch->fresh())->render(),'This batch is cancelled and cannot be printed'),'Cancelled snapshot is clearly labeled as non-printable history');
+echo "$checks batch return checks passed.\n";
+
+// The queued artwork card exposes the same guarded action as the batch detail page.
+$cardItem=$create('card-return');$cardBatch=PrintBatch::create(['batch_id'=>'card-queued-batch','status'=>'QUEUED','order_count'=>1,'artwork_file_count'=>1,'payload'=>['orders'=>[['line_item_id'=>$cardItem->line_item_id]]],'created_by'=>$user->id]);
+$index=$svc->batchIndex(true);$check($index[$cardItem->line_item_id]['can_return']===true && $index[$cardItem->line_item_id]['order_count']===1,'Queued artwork cards receive current batch eligibility and full-batch counts');
+auth()->setUser($user);$verification=$controller->verification()->render();$dom=new DOMDocument();@$dom->loadHTML($verification,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$check($xpath->query('//details[@data-item-id="'.$cardItem->id.'"]//form[@data-return-batch]')->length===1 && str_contains($verification,'Entire batch'),'Queued Artwork Verification card provides the return button with an entire-batch explanation');
+$cardBatch->update(['claimed_at'=>now()]);$check(!$svc->batchIndex(true)[$cardItem->line_item_id]['can_return'],'A claimed timestamp hides return even if a stale status still says QUEUED');
+$verification=$controller->verification()->render();$dom=new DOMDocument();@$dom->loadHTML($verification,LIBXML_NONET);$xpath=new DOMXPath($dom);$check($xpath->query('//details[@data-item-id="'.$cardItem->id.'"]//form[@data-return-batch]')->length===0,'Claimed artwork card does not offer a queue return');
 echo "$checks batch return checks passed.\n";

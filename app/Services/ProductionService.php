@@ -19,12 +19,12 @@ class ProductionService{
  function batchIndex(bool $refresh = false): array {
   if ($refresh || $this->batchIndexCache === null) {
    $this->batchIndexCache = [];
-   foreach (PrintBatch::where('status','!=','CANCELLED')->latest('id')->get() as $batch) {
+   foreach (PrintBatch::withExists('confirmations')->where('status','!=','CANCELLED')->latest('id')->get() as $batch) {
     foreach ($batch->payload['orders'] ?? [] as $order) {
      $key = $order['line_item_id'] ?? null;
      if (!$key) continue;
      if (!isset($this->batchIndexCache[$key]) || $batch->status === 'PRINTED') {
-      $this->batchIndexCache[$key] = ['id'=>$batch->id, 'batch_id'=>$batch->batch_id, 'status'=>$batch->status];
+      $this->batchIndexCache[$key] = ['id'=>$batch->id, 'batch_id'=>$batch->batch_id, 'status'=>$batch->status,'order_count'=>$batch->order_count,'can_return'=>$batch->status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations_exists];
      }
     }
    }

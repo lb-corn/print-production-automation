@@ -294,8 +294,9 @@ window.addEventListener('pageshow', () => {
 });
 
 // Returning a queue entry never sends a print action.
-document.querySelectorAll('[data-return-batch]').forEach(form => form.addEventListener('submit', event => {
+const returnBatchForms = [...document.querySelectorAll('[data-return-batch]')];
+returnBatchForms.forEach(form => form.addEventListener('submit', event => {
     const button = form.querySelector('button');
     if (button.disabled || !window.confirm('Return every item in this unclaimed batch to Artwork Review? Its artwork selections and approvals will be cleared.')) { event.preventDefault(); return; }
-    button.disabled = true; button.textContent = 'Returning…';
+    returnBatchForms.filter(other => other.action === form.action).forEach(other => { const control = other.querySelector('button'); control.disabled = true; control.textContent = 'Returning…'; });
 }));

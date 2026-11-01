@@ -43,3 +43,10 @@ for (const confirmResult of [false,true]) {
  if(confirmResult){const second=event();form.submit(second);assert(second.defaultPrevented);}
 }
 console.log('PASS: batch return requires confirmation and blocks repeated submissions');
+
+{
+ let confirmations=0;const forms=['same','same','other'].map(action=>({action,button:{disabled:false,textContent:'Return'},querySelector(){return this.button;},addEventListener(name,fn){this[name]=fn;}}));
+ const source=fs.readFileSync('public/js/app.js','utf8');vm.runInNewContext(source.slice(source.indexOf('// Returning a queue entry')),{document:{querySelectorAll:()=>forms},window:{confirm:()=>{confirmations++;return true;}}});
+ forms[0].submit(event());assert(forms[0].button.disabled&&forms[1].button.disabled&&!forms[2].button.disabled);const repeat=event();forms[1].submit(repeat);assert(repeat.defaultPrevented);assert.equal(confirmations,1);
+ console.log('PASS: queued cards for the same batch disable together while unrelated batch controls remain available');
+}
