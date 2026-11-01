@@ -503,3 +503,5 @@ select[data-naming-source][hidden],select[data-naming-catalog][hidden]{display:n
 .artwork-ambiguous-list{display:grid;gap:4px;margin:7px 0;max-height:95px;overflow:auto}.artwork-ambiguous-list a{font-size:10px;overflow-wrap:anywhere;color:var(--accent);padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:#f7fafb}
 
 .flash-warning{padding:10px 14px;border:1px solid #ead4a6;border-radius:8px;background:#fff9ed;color:#795619;font-size:12px;line-height:1.5}
+
+.app-messages [tabindex="-1"]{scroll-margin-top:18px}.app-messages [tabindex="-1"]:focus{outline:2px solid var(--accent);outline-offset:3px}

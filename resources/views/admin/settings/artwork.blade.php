@@ -143,7 +143,8 @@ $preselected=0;
 </tbody></table><p class="naming-filter-empty" data-naming-empty hidden>No files in this view. <button type="button" data-naming-clear>Show all files</button></p></div>
 
 @if($preview)
-<div class="naming-simple-action"><button type="button" class="chip" data-naming-select hidden>Select all ready</button><span data-naming-selected>{{$ready>500?500:$ready}} ready files selected</span><button class="primary" type="button" data-naming-open @disabled(!$ready||!config('services.google_drive.rename_enabled'))>Rename ready files</button></div>
+@if(!config('services.google_drive.rename_enabled'))<p class="admin-notice">Renaming is disabled on this server. Ask the administrator to enable GOOGLE_DRIVE_RENAME_ENABLED and refresh the Laravel configuration cache. Checking and matching artwork remain available.</p>@endif
+<div class="naming-simple-action"><button type="button" class="chip" data-naming-select hidden>Select all ready</button><span data-naming-selected>{{$ready>500?500:$ready}} ready files selected</span><button class="primary" type="button" data-naming-open data-naming-enabled="{{config('services.google_drive.rename_enabled')?'1':'0'}}" @disabled(!$ready||!config('services.google_drive.rename_enabled'))>Rename ready files</button></div>
 <dialog class="naming-confirm-dialog" data-naming-dialog>
 <h3>Rename <span data-naming-confirm-count></span> ready files?</h3><p>Only filenames change. File extensions, contents and print batches stay protected.</p>
 <label>Admin password<input name="password" type="password" required disabled autocomplete="current-password"></label>
