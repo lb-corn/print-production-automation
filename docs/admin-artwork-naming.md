@@ -6,7 +6,7 @@ The Admin account menu includes **Admin Settings**, with vertical sections for *
 
 The highlighted scope panel shows only the two configured manufacturing branches: `(GROUP A) Non Carpet` and `GROUP B (Carpet)`. The reader enters only recognized direct series/version folders, and indexes only files directly in those folders. It never enters MOCKUPS, PREVIEWS, ARCHIVE or any other nested folder. The preview shows links to the exact version folders checked. Source parent, file identity, version and destination are rechecked before writes. Files referenced by any batch status, including failed or printed batches, are protected.
 
-Only incompatible filenames are proposed for renaming. Any name already accepted by the production matcher is treated as standard and preserved exactly: short code names, established long names, aliases, capitalization, separators and existing validated ID-suffixed names. Neither local nor production adds a new ID simply to fit a preferred spelling.
+Only incompatible filenames are proposed for renaming. Any name already accepted by the production matcher is treated as standard and preserved exactly: short code names, established long names, aliases, capitalization, separators and existing validated ID-suffixed names. An explicit reviewed choice also preserves a correctly structured series/design/color/side name when its design wording differs from Shopify. Remembered design labels are reused by production matching, not just by the rename preview. Neither local nor production adds a new ID simply to fit a preferred spelling.
 
 New corrections use portable names, for example:
 
@@ -19,6 +19,12 @@ LB-SNP-CAN-BRL-BACK.jpeg
 No year or ID suffix is added. Actual extensions and file contents are preserved. If different catalog designs share a series/design code, a reviewed correction uses the exact full normalized product design name to disambiguate it across environments. Existing compatible full-title names remain unchanged. Destination collisions and duplicate artwork require review; they are never fixed by appending unique IDs. After a successful standard rename, both local and production can match the shared Drive filename without repeating that rename or copying a local database.
 
 Explicit operator choices for unresolved ambiguity remain private per-environment data. Filename standardization is not print approval. Repeat scans do not rename standard files; regular sync/rematch pulls their actual Drive filenames.
+
+Previously reviewed short names are not forcibly expanded because a SKU is shared. The exact-file choice resolves the ambiguity in that environment. When an incompatible file genuinely needs a new name, its full design name can make the correction portable. A remembered arbitrary alias still needs the reviewed mapping in any separate environment; the app cannot infer unrelated design names from a folder or image similarity.
+
+## Reset and persistent primary settings
+
+Admin Reset production data deletes only imported production items, their approval decisions, print batches and print confirmations. It preserves artwork exact-file choices, remembered design mappings, rename audits, users, credentials and service settings. These choices/rules are primary configuration in `storage/app/private/artwork-names`, not resettable order data. The deployment uploader excludes runtime storage and server activation does not delete this directory. Keep it persistent and backed up on each server; deployments do not transfer local reviewed choices to production. Reimported orders use the retained choices but require new print approval.
 
 ## Workflow
 

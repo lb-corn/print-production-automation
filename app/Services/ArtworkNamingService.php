@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='compatible-names-once-v4';
+    public const POLICY='compatible-reviewed-names-v5';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 
@@ -45,6 +45,7 @@ class ArtworkNamingService
             }
         }
         $plan['rules']=$this->store->rules();$plan['rules_digest']=$this->rulesDigest($plan['rules']);
+        $this->matcher->refreshReviewedSelections();
         $plan['entries']=$this->build($plan['index'],$plan['catalog'],$plan['mappings'],$this->lockedFiles(),$plan['rules']);
         $this->store->save($plan);return $plan;
     }

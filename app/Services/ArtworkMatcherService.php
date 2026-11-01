@@ -23,8 +23,9 @@ class ArtworkMatcherService
     public const POLICY = 'strict-v2';
 
     private ?array $reviewedSelections=null;
+    private ?array $reviewedDesigns=null;
     public function __construct(private ?GoogleDriveService $drive = null) {}
-    public function refreshReviewedSelections(): void { $this->reviewedSelections=null; }
+    public function refreshReviewedSelections(): void { $this->reviewedSelections=null;$this->reviewedDesigns=null; }
     public function selectionKey(array $row): string
     {
         $parts=$this->skuParts($row['sku']??'');
@@ -189,7 +190,12 @@ class ArtworkMatcherService
         $title = $this->designIdentity($row['product'] ?? '');
         if (in_array($title, array_merge(...array_values(self::FOLDERS)), true)) $title = '';
         if ($title !== '' && preg_match('/^(.*)-ACL-CORNHOLE-BAGS$/', $title, $parts)) $title = $parts[1];
-        return array_values(array_unique(array_filter([$code, $title], fn($value)=>$value !== '')));
+        $designs=[$code,$title];
+        if(config('services.google_drive.reviewed_selections_enabled',true)) {
+            $this->reviewedDesigns??=app(ArtworkRenameStore::class)->rules();
+            foreach($this->reviewedDesigns as $label=>$identity)if($identity===$title)$designs[]=$label;
+        }
+        return array_values(array_unique(array_filter($designs, fn($value)=>$value !== '')));
     }
 
     private function parse(string $name, string $series, string $type, array $designs, string $year,?string $expectedVariant=null): ?array
@@ -280,7 +286,11 @@ class ArtworkMatcherService
             $side=$parsed['side']; $color=$parsed['color'];
         }
         // App-compatible names are already standardized, regardless of preferred spelling.
-        $strict=$name!==null?$this->parse($name,$series,$type,isset($row['naming_design'])?[$row['naming_design']]:$this->designs($row,$this->norm($sku[2]),$sku[1]),$sku[1],$variantColor):null;
+        $acceptedDesigns=$this->designs($row,$this->norm($sku[2]),$sku[1]);
+        // An audited mapping supplies design identity, not a request to respell a valid
+        // production name. Still require the filename's actual series, color and side.
+        if($mapping!==null && ($attributes=$this->sourceAttributes($file,$folderName,array_filter([$variantColor]))))$acceptedDesigns[]=$attributes['design'];
+        $strict=$name!==null?$this->parse($name,$series,$type,$acceptedDesigns,$sku[1],$variantColor):null;
         $compatible=$strict && $strict['side']===$side && $strict['color']===$color;
         $target=$compatible?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
         if(strlen($target)>255)return null;
