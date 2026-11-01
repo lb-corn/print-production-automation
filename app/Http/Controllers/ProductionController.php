@@ -210,6 +210,14 @@ class ProductionController extends Controller
      * Operator requests the prepared batch to be handed
      * from the Factory Agent to Epson Edge Print.
      */
+    public function returnBatchToReview(Request $request, PrintBatch $batch)
+    {
+        abort_unless($request->user() && $request->user()->role!=='demo',403);
+        $request->validate(['return_confirmed'=>'required|accepted']);
+        $count=app(\App\Services\BatchReturnService::class)->returnToReview($batch,$request->user()->id);
+        return redirect()->route('production')->with('ok',$count.' items returned to artwork review. Rematch and approve again before creating another batch.');
+    }
+
     public function requestEdgePrint(Request $request, PrintBatch $batch)
     {
         return $this->confirmPrintAction($request, $batch, 'HANDOFF', 'PREPARED', 'HANDOFF_REQUESTED');

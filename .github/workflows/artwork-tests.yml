@@ -41,4 +41,5 @@ jobs:
           php tests/drive-index.php
           php tests/artwork-matching.php
           php tests/bulk-review.php
+          php tests/batch-return.php
           php tests/admin-controls.php

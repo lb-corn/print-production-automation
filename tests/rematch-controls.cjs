@@ -15,7 +15,7 @@ function setup(confirmResult) {
     const start = source.indexOf('const rematchForms =');
     assert(start >= 0);
     vm.runInNewContext(source.slice(start), {
-        document: {querySelectorAll: () => forms},
+        document: {querySelectorAll: selector => selector === '[data-rematch-form]' ? forms : []},
         window: {confirm: () => { confirmations++; return confirmResult; }, addEventListener: (name, handler) => { events[name] = handler; }},
     });
     return {forms, events, confirmations: () => confirmations};
@@ -32,3 +32,14 @@ console.log('PASS: confirmed rematch disables every rematch control and blocks d
 accepted.events.pageshow();assert(accepted.forms.every(form => !form.button.disabled && form.button.textContent === 'Rematch Artwork' && !form.attributes['aria-busy']));
 const retry = event();accepted.forms[1].submit(retry);assert(!retry.defaultPrevented);
 console.log('PASS: browser history restore resets controls and permits a new deliberate submission');
+
+// Return-to-review confirmation is isolated from rematching and blocks repeated submits.
+for (const confirmResult of [false,true]) {
+ const button={disabled:false,textContent:'Return to Artwork Review'};
+ const form={querySelector:()=>button,addEventListener(name,fn){this[name]=fn;}};
+ const source=fs.readFileSync('public/js/app.js','utf8');const start=source.indexOf('// Returning a queue entry');
+ vm.runInNewContext(source.slice(start),{document:{querySelectorAll:()=>[form]},window:{confirm:()=>confirmResult}});
+ const first=event();form.submit(first);assert.equal(first.defaultPrevented,!confirmResult);assert.equal(button.disabled,confirmResult);
+ if(confirmResult){const second=event();form.submit(second);assert(second.defaultPrevented);}
+}
+console.log('PASS: batch return requires confirmation and blocks repeated submissions');

@@ -75,3 +75,15 @@ Ready files are preselected, with one password-confirmed dialog to apply the rev
 An unclear source design can be confirmed once with the Remember option. Its descriptive label and confirmed catalog design are saved privately in design-mappings.json with an admin audit event. Future scans and sibling versions can reuse that confirmation only when their own series, color and side agree with the current catalog. Arbitrary numeric/image placeholders, missing sides/colors, conflicting catalog evidence and unavailable variants still require review. These are data mappings, not hardcoded image-specific rules. Equivalent catalog rows never merge genuinely different product identities. Mapping changes and naming-policy updates invalidate older previews before any write.
 
 Read-only analysis of the existing scan found that the 103 ready files were already automatically identified; the remaining labels include catalog synonyms and unavailable variants. The tool does not invent those equivalences. Reusable design confirmation reduces per-file work safely. No actual mapping or rename was applied during development.
+
+## Double-sided artwork and missing choices
+
+For double-sided Shopify variants, the visual chooser has separate **Front** and **Back** slots. Files with explicit FRONT/BACK fill the corresponding slot; for an unnamed side, first select the intended slot. Both distinct files must be chosen before **Confirm front + back**. The server validates both together before saving a preview, rejects swapped sides, protected files and conflicting colors, and never renames files or creates a batch during mapping. Single-sided products retain one choice.
+
+**Can’t find it?** lists same-folder files excluded by color or batch protection, with reasons and read-only Drive links. NAVY is not silently treated as BLUE. Inspect the actual image before correcting an incorrect filename label; preserve its real extension, then use **Refresh files from Drive**. Different Shopify products sharing the exact same SKU trigger a warning; fix the catalog SKU conflict rather than relying on that code to distinguish designs.
+
+## Returning an accidental queued batch
+
+The batch detail page offers **Return to Artwork Review** only for an untouched QUEUED batch. Confirming returns all items in that batch, clears selections and approvals, and records user/time/item IDs in the preserved batch payload. The batch becomes CANCELLED history. Cancelled batches are excluded from active item locks and factory polling; a stale factory CLAIMED request is rejected. Rematch and approve each returned item before explicitly creating another batch.
+
+Claimed, downloading, prepared, handed-off, completed and failed batches cannot be returned. The shared portal/factory write lock and transaction row locks settle claim/return races; a batch already claimed by the agent stays protected. This action makes no Drive/Shopify calls and never requests print handoff. No migration is required for the CANCELLED status or return audit metadata. No live queue is changed by deployment.

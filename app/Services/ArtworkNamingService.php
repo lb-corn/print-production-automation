@@ -42,6 +42,31 @@ class ArtworkNamingService
         $plan['entries']=$this->build($plan['index'],$plan['catalog'],$plan['mappings'],$this->lockedFiles(),$plan['rules']);
         $this->store->save($plan);return $plan;
     }
+    public function revisePair(string $token,int $actor,string $catalogKey,string $frontId,string $backId,bool $reuse=false): array
+    {
+        $plan=$this->store->load($token,$actor);$this->requirePolicy($plan);
+        abort_unless($frontId!==$backId,422,'Front and back must be different files.');
+        $row=collect($plan['catalog'])->firstWhere('catalog_key',$catalogKey);
+        abort_unless($row && $this->matcher->match($row,[])['design_type']==='double',422,'Choose a double-sided Shopify variant.');
+        $folders=array_values(array_filter($plan['index'],fn($entry)=>($entry['kind']??'')==='series_folder'));
+        abort_if($this->matcher->match($row,$folders)['match_status']==='AMBIGUOUS',422,'The series folder is ambiguous. Correct its location before choosing artwork.');
+        $entries=array_column($plan['entries'],null,'id');$mappings=[];$colors=[];
+        foreach(['front'=>$frontId,'back'=>$backId] as $side=>$id) {
+            abort_unless(isset($entries[$id]) && $entries[$id]['status']!=='locked',422,'Choose two unbatched files from this preview.');
+            $entry=$entries[$id];$folder=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1));
+            $attributes=$entry['source_attributes']??$this->matcher->sourceAttributes($entry['source'],$folder);
+            abort_if(in_array($attributes['side']??null,['front','back'],true) && $attributes['side']!==$side,422,'FRONT/BACK in the filename must agree with the selected slot.');
+            abort_if(($attributes['side']??null)==='single',422,'A SINGLE artwork file cannot be used for a double-sided pair.');
+            $expected=$this->matcher->catalogColor($row);$named=$attributes['color']??null;
+            abort_if($expected && $named && $expected!==$named,422,'The artwork color differs from the Shopify variant.');
+            if($named)$colors[]=$named;
+            $mapping=['catalog_key'=>$catalogKey,'side'=>$side,'color'=>$expected??$named??''];
+            abort_unless($this->matcher->namingCandidate($row,$entry['source'],$folder,$mapping),422,'The pair must use eligible production artwork from this series folder.');
+            $mappings[$id]=$mapping;
+        }
+        abort_if(count(array_unique($colors))>1,422,'Front and back have conflicting filename colors.');
+        return $this->revise($token,$actor,$mappings,$reuse);
+    }
     public function begin(string $token,int $actor,array $ids,bool $refresh): array
     {
         abort_unless(config('services.google_drive.rename_enabled',false),403,'Enable Drive renaming on the server before applying a plan.');
@@ -196,7 +221,7 @@ class ArtworkNamingService
             if($key==='drive_file_ids' && is_array($value))foreach($value as $id)if(is_string($id))$ids[$id]=true;
             if(is_array($value))foreach($value as $childKey=>$child)$walk($child,$childKey);
         };
-        foreach(PrintBatch::all() as $batch)$walk($batch->payload);
+        foreach(PrintBatch::where('status','!=','CANCELLED')->get() as $batch)$walk($batch->payload);
         $processed=app(ProductionService::class)->batchIndex(true);
         foreach(ProductionItem::whereIn('line_item_id',array_keys($processed))->get() as $item) foreach($item->matches??[] as $file) if(!empty($file['id']))$ids[$file['id']]=true;
         return $ids;

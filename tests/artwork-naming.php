@@ -280,3 +280,34 @@ $redDouble=[...$blueDouble,'catalog_key'=>hash('sha256','red-double'),'variant'=
 try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$redDouble['catalog_key'],'side'=>'front','color'=>'RED']],false);throw new LogicException('Wrong color mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts the explicit filename color');}
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
+
+// Explain exclusions without weakening color checks or protected batch rules.
+$shopify->rows=[$gta,[...$gta,'catalog_key'=>hash('sha256','collision'),'product'=>'Lucky Bags 2027 Different Design']];$drive->index=[$luc,$gtaFile];$explanation=$service->scan($admin->id);$explanation['entries'][0]['status']='locked';$store->save($explanation);
+$request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$explanation['token']]);$request->setUserResolver(fn()=>$admin);$page=$controller->index($request,$store);$data=$page->getData();
+$check($data['catalogStatus'][0]['sku_conflict'] && isset($data['reviewGroups']['gta']) && $data['reviewGroups']['gta']['entry']['status']==='locked','Duplicate Shopify SKU conflicts and protected files are available for explanation, without authorization to rename');
+$html=$page->render();$check(str_contains($html,'data-artwork-excluded') && str_contains($html,'data-protected="1"') && str_contains($html,'form="artwork-scan-form"'),'Cannot-find help exposes excluded file reasons and an explicit Drive refresh action');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Double-sided confirmation stores both files in one preview, with no live mutation.
+$shopify->rows=[$bubbleDouble];$drive->index=[$doubleFolder,$source('pair-front','SNP-BUBBLES-FRONT.jpg','snp'),$source('pair-back','SNP-BUBBLES-BACK.jpg','snp')];$pairPlan=$service->scan($admin->id);$writesBefore=$writer->writes;$batchCount=PrintBatch::count();
+$pair=$service->revisePair($pairPlan['token'],$admin->id,$bubbleDouble['catalog_key'],'pair-front','pair-back',false);
+$check(count($pair['mappings'])===2 && count(array_filter($pair['entries'],fn($e)=>$e['status']==='ready'))===2,'One confirmation prepares FRONT and BACK together');
+$check($pair['mappings']['pair-front']['side']==='front' && $pair['mappings']['pair-back']['side']==='back' && $writer->writes===$writesBefore && PrintBatch::count()===$batchCount,'Pair preview retains separate sides without renaming, batching or print handoff');
+foreach([['pair-front','pair-front'],['pair-back','pair-front'],['pair-front','missing-back']] as [$front,$back]) {
+ try{$service->revisePair($pairPlan['token'],$admin->id,$bubbleDouble['catalog_key'],$front,$back,false);throw new LogicException('Invalid pair accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Incomplete, duplicate or swapped FRONT/BACK pair is rejected');}
+}
+$protectedPair=$store->load($pairPlan['token'],$admin->id);$protectedPair['entries'][1]['status']='locked';$store->save($protectedPair);
+try{$service->revisePair($pairPlan['token'],$admin->id,$bubbleDouble['catalog_key'],'pair-front','pair-back',false);throw new LogicException('Protected pair accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'A batch-protected side cannot join a new mapping pair');}
+$drive->index=[$doubleFolder,$source('mixed-front','SNP-BUBBLES-BLUE-FRONT.jpg','snp'),$source('mixed-back','SNP-BUBBLES-RED-BACK.jpg','snp')];$mixed=$service->scan($admin->id);
+try{$service->revisePair($mixed['token'],$admin->id,$bubbleDouble['catalog_key'],'mixed-front','mixed-back',false);throw new LogicException('Mixed colors accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $store->load($mixed['token'],$admin->id)['mappings']===[],'Conflicting pair colors are rejected before saving either mapping');}
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+$shopify->rows=[$bubbleDouble];$drive->index=[$doubleFolder,$source('endpoint-front','SNP-BUBBLES-FRONT.jpg','snp'),$source('endpoint-back','SNP-BUBBLES-BACK.jpg','snp')];$endpointPlan=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$endpointPlan['token'],'catalog_key'=>$bubbleDouble['catalog_key'],'pair_mode'=>'1','front_file_id'=>'endpoint-front','back_file_id'=>'endpoint-back']);$request->setUserResolver(fn()=>$admin);$response=$controller->revise($request);
+$check($response->getStatusCode()===302 && count($store->load($endpointPlan['token'],$admin->id)['mappings'])===2,'Double-sided form endpoint accepts the two slots without a legacy single-file field');
+$cancelledOnly=PrintBatch::create(['batch_id'=>'cancelled-lock-test','status'=>'CANCELLED','order_count'=>1,'artwork_file_count'=>1,'payload'=>['orders'=>[['line_item_id'=>'cancelled-lock-item','artworks'=>[['drive_file_id'=>'cancelled-only-file']]]]]]);
+$check(!isset($service->lockedFiles()['cancelled-only-file']),'Cancelled queue snapshots no longer lock artwork while other batch statuses stay protected');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";

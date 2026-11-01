@@ -40,6 +40,12 @@
         </div>
     </div>
 
+    @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()?->role!=='demo')
+    <section class="batch-return-bar"><div><strong>Wrong artwork in this batch?</strong><small>Return all {{$batch->order_count}} items for fresh artwork review before the Factory PC claims them.</small></div>
+    <form method="post" action="{{route('batch.return-to-review',$batch)}}" data-return-batch>@csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button></form></section>
+    @elseif($status==='CANCELLED')
+    <p class="admin-notice">Returned to artwork review. This batch is cancelled and cannot be printed. <a href="{{route('production')}}">Open Artwork Verification →</a></p>
+    @endif
     <section class="panel">
         <div class="panel-head">
             <div>

@@ -132,6 +132,7 @@ jobs:
           php tests/drive-index.php
           php tests/artwork-matching.php
           php tests/bulk-review.php
+          php tests/batch-return.php
           php tests/admin-controls.php
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh

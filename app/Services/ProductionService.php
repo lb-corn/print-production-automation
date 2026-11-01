@@ -19,7 +19,7 @@ class ProductionService{
  function batchIndex(bool $refresh = false): array {
   if ($refresh || $this->batchIndexCache === null) {
    $this->batchIndexCache = [];
-   foreach (PrintBatch::latest('id')->get() as $batch) {
+   foreach (PrintBatch::where('status','!=','CANCELLED')->latest('id')->get() as $batch) {
     foreach ($batch->payload['orders'] ?? [] as $order) {
      $key = $order['line_item_id'] ?? null;
      if (!$key) continue;

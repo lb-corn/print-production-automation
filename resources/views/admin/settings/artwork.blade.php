@@ -1,6 +1,6 @@
 <section class="naming-simple-header">
 <div><strong>Shopify artwork matching</strong><span>All Bags collection · Active Shopify products only.</span></div>
-<form method="post" action="{{route('admin.artwork-names.scan')}}">
+<form id="artwork-scan-form" method="post" action="{{route('admin.artwork-names.scan')}}">
 @csrf<button class="primary" type="submit" data-naming-scan>Check files</button></form>
 </section>
 
@@ -77,19 +77,32 @@ $preselected=0;
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
 <div class="artwork-dialog-heading"><strong id="artwork-match-heading">Match artwork</strong><button type="button" class="chip" data-match-close>Close</button></div>
 <select name="catalog_key" required data-naming-catalog hidden aria-label="Selected Shopify variant"><option value="">Choose product</option>
-@foreach($catalogStatus as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}" data-scope-ready="{{$row['folder_url']?'1':'0'}}" data-folder-id="{{$row['folder_url']?rawurldecode(basename($row['folder_url'])):''}}" data-folder="{{$row['expected_folder']}}" data-folder-url="{{$row['folder_url']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>@endforeach
+@foreach($catalogStatus as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}" data-scope-ready="{{$row['folder_url']?'1':'0'}}" data-folder-id="{{$row['folder_url']?rawurldecode(basename($row['folder_url'])):''}}" data-sku-conflict="{{$row['sku_conflict']?'1':'0'}}" data-folder="{{$row['expected_folder']}}" data-folder-url="{{$row['folder_url']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>@endforeach
 </select>
 <div class="artwork-match-product"><img data-naming-product-image alt="Shopify product" hidden><div><strong data-match-title></strong><small data-match-folder></small><a data-match-folder-link target="_blank" rel="noopener noreferrer" hidden>Open Drive folder ↗</a></div></div>
+<p class="admin-notice" data-match-sku-warning hidden>This SKU is shared by different Shopify designs. Compare the images; SKU alone cannot identify the artwork. Correct the duplicate SKU in Shopify before standardizing these files.</p>
+<div class="artwork-pair-slots" data-match-pair hidden>
+<button type="button" class="chip" data-match-side-target="front" aria-pressed="true"><b>1 · Front</b><span data-match-front-name>Choose front artwork</span></button>
+<button type="button" class="chip" data-match-side-target="back" aria-pressed="false"><b>2 · Back</b><span data-match-back-name>Choose back artwork</span></button>
+</div>
+<p class="muted" data-match-pair-error role="alert" hidden></p>
+<input type="hidden" name="pair_mode" value="1" data-match-pair-mode disabled><input type="hidden" name="front_file_id" data-match-front-input disabled><input type="hidden" name="back_file_id" data-match-back-input disabled>
 <div class="artwork-candidate-heading"><label>Choose the same design from Drive<input type="search" data-naming-source-search placeholder="Search filenames in this series…" autocomplete="off"></label><small data-match-candidate-count></small></div>
 <select name="file_id" required data-naming-source hidden aria-label="Selected Drive artwork"><option value="">Choose artwork</option>
 @foreach($reviewGroups as $group)
 @php($entry=$group['entry'])
 @php($source=$entry['source_attributes'])
-<option value="{{$entry['id']}}" data-parent-id="{{$entry['source']['parent_id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" data-linked="{{$entry['proposal']['product']??''}}">{{$entry['source']['name']}}</option>
+<option value="{{$entry['id']}}" data-parent-id="{{$entry['source']['parent_id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" data-protected="{{$entry['status']==='locked'?'1':'0'}}" data-linked="{{$entry['proposal']['product']??''}}">{{$entry['source']['name']}}</option>
 @endforeach
 </select>
 <div class="artwork-candidate-grid" data-artwork-candidates role="group" aria-label="Drive artwork choices"></div>
 <p class="muted" data-artwork-candidate-empty hidden>No eligible artwork found here. Upload the production file to the folder above, then Check files.</p>
+<details class="artwork-find-help"><summary>Can’t find it? <span data-match-excluded-count></span></summary>
+<p>Check the selected series and color above. For a different variant, close this window and choose that Shopify variant.</p>
+<div data-artwork-excluded class="artwork-candidate-grid"></div>
+<p>Excluded files cannot be selected. If a filename label is incorrect, inspect the full image in Drive, correct its name while preserving its extension, then refresh. If artwork is absent, upload it directly into the expected series folder.</p>
+<button type="submit" class="chip" form="artwork-scan-form">Refresh files from Drive</button>
+</details>
 <div class="artwork-selected-file" data-match-selection hidden><img data-naming-source-image alt="Selected Drive artwork" hidden><div><strong data-match-selection-name></strong><a data-naming-original target="_blank" rel="noopener noreferrer" hidden>Open full image ↗</a></div></div>
 <div data-naming-side-needed hidden><label>This filename has no FRONT/BACK. Choose its side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label></div>
 <input type="hidden" name="color" data-naming-color>

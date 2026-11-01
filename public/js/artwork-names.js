@@ -51,7 +51,7 @@ function namingChoiceFilter(select, query, product = false) {
     let count = 0;
     [...select.options].forEach(option => {
         const label = (option.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const eligible = product || !catalog?.value || !catalog?.dataset.series || (catalog.dataset.scopeReady !== '0' && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.dataset.series === catalog.dataset.series && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color));
+        const eligible = product || !catalog?.value || !catalog?.dataset.series || (catalog.dataset.scopeReady !== '0' && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.dataset.series === catalog.dataset.series && option.dataset.protected !== '1' && (catalog.dataset.type !== 'double' || option.dataset.side !== 'single') && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color));
         option.hidden = !!option.value && (!eligible || !terms.every(term => label.includes(term)));
         // Searching hides rows; only scope/variant incompatibility disables submission.
         option.disabled = !!option.value && !eligible;
@@ -259,28 +259,59 @@ if (!document.querySelector('[data-artwork-match-dialog]')) {
 
 // One worklist, with a focused visual choice for the selected Shopify variant.
 const artworkMatchDialog = document.querySelector('[data-artwork-match-dialog]');
+let artworkPair = {front:'', back:''};
+let artworkPairTarget = 'front';
+function namingIsPair() { return catalogChoice?.selectedOptions[0]?.dataset.type === 'double' && !!document.querySelector('[data-match-pair]'); }
 function namingMatchSelection() {
     const option = sourceChoice?.selectedOptions[0];
     const selection = document.querySelector('[data-match-selection]'); if (selection) selection.hidden = !option?.value;
     const name = document.querySelector('[data-match-selection-name]'); if (name) name.textContent = option?.value ? option.textContent : '';
     const confirm = document.querySelector('[data-match-confirm]');
-    if (confirm) confirm.disabled = !sourceChoice?.value || !catalogChoice?.value || !document.querySelector('[data-naming-side]')?.value;
-    document.querySelectorAll('[data-artwork-file]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.artworkFile === sourceChoice?.value)));
+    if (confirm) {
+        confirm.disabled = namingIsPair() ? !(artworkPair.front && artworkPair.back && artworkPair.front !== artworkPair.back) : (!sourceChoice?.value || !catalogChoice?.value || !document.querySelector('[data-naming-side]')?.value);
+        confirm.textContent = namingIsPair() ? 'Confirm front + back' : 'Confirm this artwork';
+    }
+    if (namingIsPair()) {
+        const needed = document.querySelector('[data-naming-side-needed]'); if (needed) needed.hidden = true;
+        for (const side of ['front','back']) {
+            const file = [...sourceChoice.options].find(option => option.value === artworkPair[side]);
+            document.querySelector('[data-match-' + side + '-name]').textContent = file?.textContent || 'Choose ' + side + ' artwork';
+            document.querySelector('[data-match-' + side + '-input]').value = artworkPair[side];
+        }
+        document.querySelectorAll('[data-match-side-target]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.matchSideTarget === artworkPairTarget)));
+    }
+    document.querySelectorAll('[data-artwork-file]').forEach(button => button.setAttribute('aria-pressed', String(namingIsPair() ? Object.values(artworkPair).includes(button.dataset.artworkFile) : button.dataset.artworkFile === sourceChoice?.value)));
 }
 function namingArtworkGallery() {
     const grid = document.querySelector('[data-artwork-candidates]'); if (!grid) return;
     grid.replaceChildren();
     const options = [...sourceChoice.options].filter(option => option.value && !option.hidden && !option.disabled);
+    namingArtworkExclusions();
     options.forEach(option => {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'artwork-file-choice';
-        button.dataset.artworkFile = option.value; button.setAttribute('aria-pressed', String(option.value === sourceChoice.value));
+        button.dataset.artworkFile = option.value; button.setAttribute('aria-pressed', String(namingIsPair() ? Object.values(artworkPair).includes(option.value) : option.value === sourceChoice.value));
         const image = document.createElement('img'); image.alt = ''; image.loading = 'lazy';
         if (option.dataset.thumbnail?.startsWith('https://')) image.src = option.dataset.thumbnail;
         image.onerror = () => { image.hidden = true; };
         const text = document.createElement('span'); text.textContent = option.textContent;
         const detail = document.createElement('small'); detail.textContent = [option.dataset.side || 'Side not named', option.dataset.color || 'No color label', option.dataset.linked ? 'Linked: ' + option.dataset.linked : 'Not linked'].join(' · ');
         const caption = document.createElement('span'); caption.append(text, detail); button.append(image, caption);
-        button.addEventListener('click', () => { sourceChoice.value = option.value; sourceChoice.dispatchEvent(new Event('change', {bubbles:true})); namingMatchSelection(); });
+        button.addEventListener('click', () => {
+            if (namingIsPair()) {
+                const side = ['front','back'].includes(option.dataset.side) ? option.dataset.side : artworkPairTarget;
+                const other = side === 'front' ? 'back' : 'front';
+                if (artworkPair[other] === option.value) return;
+                const otherFile = [...sourceChoice.options].find(file => file.value === artworkPair[other]);
+                const error = document.querySelector('[data-match-pair-error]');
+                if (option.dataset.color && otherFile?.dataset.color && option.dataset.color !== otherFile.dataset.color) {
+                    if (error) { error.hidden = false; error.textContent = 'Front and back have different filename colors. Choose matching artwork.'; }
+                    return;
+                }
+                if (error) error.hidden = true;
+                artworkPair[side] = option.value;
+                if (!artworkPair[other]) artworkPairTarget = other;
+            }
+            sourceChoice.value = option.value; sourceChoice.dispatchEvent(new Event('change', {bubbles:true})); namingMatchSelection(); });
         grid.append(button);
     });
     const empty = document.querySelector('[data-artwork-candidate-empty]'); if (empty) { empty.hidden = options.length > 0; empty.textContent = catalogChoice?.selectedOptions[0]?.dataset.scopeReady === '0' ? 'The series folder is missing or ambiguous. Fix the folder location, then Check files.' : 'No eligible artwork found here. Upload the production file to the folder above, then Check files.'; }
@@ -294,6 +325,7 @@ if (artworkMatchDialog && sourceChoice) {
         const search = document.querySelector('[data-naming-source-search]'); if (search) search.value = '';
         catalogChoice.dispatchEvent(new Event('change', {bubbles:true}));
         document.querySelector('[data-match-title]').textContent = option.textContent;
+        const warning = document.querySelector('[data-match-sku-warning]'); if (warning) warning.hidden = option.dataset.skuConflict !== '1';
         document.querySelector('[data-match-folder]').textContent = option.dataset.folder || '';
         const link = document.querySelector('[data-match-folder-link]'); link.hidden = !option.dataset.folderUrl; link.href = option.dataset.folderUrl || '#';
         namingMatchSelection(); artworkMatchDialog.showModal(); search?.focus();
@@ -302,9 +334,44 @@ if (artworkMatchDialog && sourceChoice) {
     sourceChoice.addEventListener('change', namingMatchSelection);
     document.querySelector('[data-naming-side]')?.addEventListener('change', namingMatchSelection);
     document.querySelector('[data-artwork-match-form]')?.addEventListener('submit', event => {
+        const form = document.querySelector('[data-artwork-match-form]');
+        if (form.dataset.submitting === '1') { event.preventDefault(); return; }
         namingMatchSelection(); const button = document.querySelector('[data-match-confirm]');
         if (button.disabled) { event.preventDefault(); return; }
+        form.dataset.submitting = '1';
         button.disabled = true; button.textContent = 'Saving preview…';
     });
 }
 namingCatalogFilter();
+
+function namingArtworkExclusions() {
+    const grid = document.querySelector('[data-artwork-excluded]'); if (!grid) return;
+    const catalog = catalogChoice.selectedOptions[0]; grid.replaceChildren();
+    const files = [...sourceChoice.options].filter(option => catalog.dataset.scopeReady !== '0' && option.value && option.dataset.series === catalog.dataset.series && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.disabled);
+    files.forEach(option => {
+        const link = document.createElement('a'); link.className = 'artwork-excluded-file'; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        if (option.dataset.url?.startsWith('https://drive.google.com/')) link.href = option.dataset.url;
+        const image = document.createElement('img'); image.alt = ''; image.loading = 'lazy';
+        if (option.dataset.thumbnail?.startsWith('https://')) image.src = option.dataset.thumbnail;
+        image.onerror = () => { image.hidden = true; };
+        const text = document.createElement('span'); text.textContent = option.textContent;
+        const reason = document.createElement('small'); reason.textContent = option.dataset.protected === '1' ? 'Protected: used by a print batch; cannot rename' : (catalog.dataset.type === 'double' && option.dataset.side === 'single') ? 'Filename says SINGLE; this variant needs FRONT and BACK' : 'Filename color: ' + (option.dataset.color || 'not named') + ' · Shopify color: ' + (catalog.dataset.color || 'not named');
+        text.append(reason); link.append(image, text); grid.append(link);
+    });
+    const count = document.querySelector('[data-match-excluded-count]'); if (count) count.textContent = files.length ? files.length + ' excluded in this folder' : '';
+}
+
+function namingSetupPair() {
+    const pair = document.querySelector('[data-match-pair]'); if (!pair) return;
+    const double = catalogChoice?.selectedOptions[0]?.dataset.type === 'double';
+    artworkPair = {front:'',back:''}; artworkPairTarget = 'front'; pair.hidden = !double;
+    const error = document.querySelector('[data-match-pair-error]'); if (error) error.hidden = true;
+    for (const selector of ['[data-match-pair-mode]','[data-match-front-input]','[data-match-back-input]']) {
+        const input = document.querySelector(selector); if (input) { input.disabled = !double; if (selector !== '[data-match-pair-mode]') input.value = ''; }
+    }
+    sourceChoice.disabled = double;
+    const side = document.querySelector('[data-naming-side]'); if (side) side.disabled = double;
+    namingMatchSelection();
+}
+catalogChoice?.addEventListener('change', namingSetupPair);
+document.querySelectorAll('[data-match-side-target]').forEach(button => button.addEventListener('click', () => { artworkPairTarget = button.dataset.matchSideTarget; namingMatchSelection(); }));

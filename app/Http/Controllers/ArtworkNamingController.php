@@ -25,7 +25,9 @@ class ArtworkNamingController extends Controller
                 $ambiguous=false;$complete=true;
                 foreach($required as $side){if(($sides[$side]??0)>1)$ambiguous=true;if(!($sides[$side]??0))$complete=false;}
                 $context=(new ArtworkMatcherService())->match($row,array_values(array_filter($plan['index'],fn($entry)=>($entry['kind']??'')==='series_folder')));
-                $catalogStatus[]=[...$row,'expected_folder'=>$context['artwork_review']['expected_folder'],'folder_url'=>$context['artwork_review']['folder_url'],'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
+                $identity=(new ArtworkMatcherService())->designIdentity($row['product']);
+                $skuConflict=false;foreach($catalog as $other)if($other['sku']===$row['sku'] && (new ArtworkMatcherService())->designIdentity($other['product'])!==$identity)$skuConflict=true;
+                $catalogStatus[]=[...$row,'sku_conflict'=>$skuConflict,'expected_folder'=>$context['artwork_review']['expected_folder'],'folder_url'=>$context['artwork_review']['folder_url'],'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
             }
         }
         $scope=[];
@@ -38,7 +40,7 @@ class ArtworkNamingController extends Controller
         // Candidates include already-standard artwork; no file is selected automatically.
         $reviewGroups=[];
         if($currentPlan)foreach($plan['entries'] as $entry) {
-            if($entry['status']==='locked' || !in_array(strtolower(pathinfo($entry['source']['name'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true))continue;
+            if(!in_array(strtolower(pathinfo($entry['source']['name'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true))continue;
             $folderName=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1));
             $attributes=$entry['source_attributes']??(new ArtworkMatcherService())->sourceAttributes($entry['source'],$folderName);
             if(!$attributes)continue;
@@ -56,6 +58,11 @@ class ArtworkNamingController extends Controller
     public function revise(Request $request)
     {
         $actor=$this->actor($request);
+        if($request->boolean('pair_mode')) {
+            $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean']);
+            $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false));
+            return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Front and back saved to the filename preview. Review Filename changes to apply names.');
+        }
         $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','catalog_key'=>'required|string|size:64',
             'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean']);
         $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'']],(bool)($data['reuse']??false));
