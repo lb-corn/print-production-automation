@@ -25,7 +25,7 @@ Rematching retains its three-attempts-per-minute protection, scoped to the signe
 
 ## Admin bulk filenames
 
-The admin-only **Artwork filenames** tool adds catalog-backed reviewed bulk renaming, stable Drive-ID suffixes, explicit FRONT/BACK/SINGLE names, extension preservation, highlighted folder scope, protected batches and a private before/after audit. See [Admin artwork naming](admin-artwork-naming.md) for setup, tests, partial-failure behavior and deployment requirements. Normal read-only matching is preserved. Missing-file suggestions use the same LB/series/design/color/side convention; only real existing files receive a stable ID suffix.
+The admin-only **Artwork filenames** tool adds catalog-backed reviewed bulk renaming, portable names without new ID suffixes, explicit FRONT/BACK/SINGLE names, extension preservation, highlighted folder scope, protected batches and a private before/after audit. See [Admin artwork naming](admin-artwork-naming.md) for setup, tests, partial-failure behavior and deployment requirements. Normal read-only matching is preserved. Missing-file suggestions use the same LB/series/design/color/side convention; compatible existing names, including previously generated ID-suffixed names, remain unchanged. New corrections do not add IDs.
 
 ## Order sync and item-level print eligibility
 
