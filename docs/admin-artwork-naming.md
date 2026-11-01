@@ -22,6 +22,8 @@ Explicit operator choices for unresolved ambiguity remain private per-environmen
 
 Previously reviewed short names are not forcibly expanded because a SKU is shared. The exact-file choice resolves the ambiguity in that environment. When an incompatible file genuinely needs a new name, its full design name can make the correction portable. A remembered arbitrary alias still needs the reviewed mapping in any separate environment; the app cannot infer unrelated design names from a folder or image similarity.
 
+A confirmed exact-file choice can also supply a color absent from the filename. For example, a reviewed `SRF-0G 2027-MIDNIGHT-FRONT.jpg` / `BACK.jpg` pair may be linked to a Black variant without renaming. This does not create a global MIDNIGHT-to-BLACK alias: unreviewed files remain unmatched, explicit conflicting colors still require correction, and changed file fingerprints invalidate the choice. The existing names become standard only in the context of the reviewed variant and required sides; printing still requires approval.
+
 ## Reset and persistent primary settings
 
 Admin Reset production data deletes only imported production items, their approval decisions, print batches and print confirmations. It preserves artwork exact-file choices, remembered design mappings, rename audits, users, credentials and service settings. These choices/rules are primary configuration in `storage/app/private/artwork-names`, not resettable order data. The deployment uploader excludes runtime storage and server activation does not delete this directory. Keep it persistent and backed up on each server; deployments do not transfer local reviewed choices to production. Reimported orders use the retained choices but require new print approval.

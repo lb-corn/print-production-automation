@@ -291,7 +291,10 @@ class ArtworkMatcherService
         // production name. Still require the filename's actual series, color and side.
         if($mapping!==null && ($attributes=$this->sourceAttributes($file,$folderName,array_filter([$variantColor]))))$acceptedDesigns[]=$attributes['design'];
         $strict=$name!==null?$this->parse($name,$series,$type,$acceptedDesigns,$sku[1],$variantColor):null;
-        $compatible=$strict && $strict['side']===$side && $strict['color']===$color;
+        // A file-specific reviewed choice can supply an absent color label. It
+        // cannot reinterpret an explicit different color or infer another side.
+        $compatible=$strict && $strict['side']===$side
+            && ($strict['color']===$color || ($mapping!==null && $strict['color']===null));
         $target=$compatible?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
         if(strlen($target)>255)return null;
         return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
