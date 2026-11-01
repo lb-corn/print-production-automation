@@ -14,7 +14,7 @@ $controller = $app->make(App\Http\Controllers\ProductionController::class);
 $svc = $app->make(App\Services\ProductionService::class);
 $create = fn($id, $extra=[]) => App\Models\ProductionItem::create(array_merge([
     'line_item_id'=>$id, 'product'=>'Test artwork', 'design_type'=>'single',
-    'series_code'=>'PSE', 'matches'=>[['id'=>'drive-'.$id, 'side'=>'single']],
+    'series_code'=>'PSE', 'match_status'=>'REVIEW', 'artwork_review'=>['policy'=>'strict-v1'], 'matches'=>[['id'=>'drive-'.$id, 'side'=>'single']],
 ], $extra));
 $a=$create('a'); $b=$create('b'); $custom=$create('custom',['is_custom'=>true]); $missing=$create('missing',['matches'=>[]]);
 $submit = function($ids, $decision) use ($controller, $user) {
@@ -64,7 +64,7 @@ $shopify->rows=[['line_item_id'=>'a','product'=>'Changed after print','quantity'
 $sync=new App\Services\BacklogSyncService($shopify,$drive,$matcher);
 $result=$sync->sync();
 $check($result['processed_skipped']===1 && $a->fresh()->quantity===1 && $a->fresh()->product==='Test artwork', 'Resync skips completed items without changing locked order details');
-$check($drive->calls===0 && $matcher->calls===0, 'Resync does not download or rematch artwork for known items');
+$check($drive->calls===1 && $matcher->calls===1, 'Resync refreshes Drive and rematches eligible known items');
 $shopify->rows[]=['line_item_id'=>'new','product'=>'New order','quantity'=>1];
 $sync->sync(); $again=$sync->sync();
 $check(App\Models\ProductionItem::where('line_item_id','new')->count()===1 && $again['added']===0, 'Repeated sync imports new items once');

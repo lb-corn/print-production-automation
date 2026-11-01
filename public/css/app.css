@@ -373,3 +373,10 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 @media(max-width:700px){.app-messages{gap:8px;margin-bottom:16px}}
 
 .demo-access-note{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;margin-bottom:18px;border:1px solid #cbdfea;border-radius:9px;background:#eef6fc;color:#315b78;font-size:12px;line-height:1.6}.demo-access-note strong{white-space:nowrap}.demo-access-note span{color:#526e81}
+
+/* Share an exact frame height for Shopify images, Drive images and missing-artwork instructions. */
+.verification-cards .compare{--artwork-frame-height:clamp(190px,20vw,280px)}
+.verification-cards .art img,.verification-cards .placeholder,.verification-cards .artwork-missing-frame{height:var(--artwork-frame-height)}
+.verification-cards .artwork-missing-frame{overflow:auto;min-width:0;box-shadow:none}
+.verification-cards .artwork-missing code{overflow-wrap:anywhere}
+@media(max-width:700px){.verification-cards .compare{--artwork-frame-height:220px}}

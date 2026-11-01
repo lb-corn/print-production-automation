@@ -36,10 +36,24 @@ class ProductionController extends Controller
     {
         try {
             $r = app(BacklogSyncService::class)->sync();
-            return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['processed_skipped']));
+            return redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
         } catch (\Throwable $e) {
             report($e);
             return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed: '.$e->getMessage());
+        }
+    }
+
+    public function rematchArtwork(Request $request)
+    {
+        $request->validate(['confirm_rematch'=>'required|accepted']);
+        try {
+            $counts = app(\App\Services\ArtworkRematchService::class)->rematch();
+            return redirect()->route('production')->with('ok', sprintf(
+                'Artwork rematched: %d matched · %d missing · %d ambiguous · %d skipped. Review artwork before approval.',
+                $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
+        } catch (\Throwable $e) {
+            report($e);
+            return redirect()->route('production')->with('error', 'Artwork rematch failed. No changes were saved. Check the integration logs and try again.');
         }
     }
 
@@ -66,6 +80,16 @@ class ProductionController extends Controller
                 : ($this->svc->approved($item) ? 'approved' : ($item->decision?->decision === 'WRONG' && $this->svc->current($item) ? 'rejected' : 'pending'));
             $item->workflow_state = $state;
             $reviewSummary[$state]++;
+            $validArtwork = \App\Services\ArtworkMatcherService::validSelection($item);
+            if (!$item->artwork_review && !$item->production_batch && !$item->is_custom) {
+                // Explain legacy selections without constructing an integration client or saving data.
+                $expectations = (new \App\Services\ArtworkMatcherService())->match($item->toArray(), [])['artwork_review'];
+                unset($expectations['policy']);
+                $item->artwork_review = $expectations;
+            }
+            $item->display_matches = $item->production_batch || $validArtwork ? ($item->matches ?? [])
+                : (new \App\Services\ArtworkMatcherService())->savedPreviews($item->toArray(), $item->matches ?? []);
+            $item->valid_artwork = $validArtwork;
             $item->ready_for_print = $this->svc->ready($item);
             $item->approval_current = $this->svc->current($item);
         }

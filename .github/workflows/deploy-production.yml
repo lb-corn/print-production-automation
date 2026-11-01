@@ -125,6 +125,8 @@ jobs:
           php artisan view:clear
       - name: Run application regression checks
         run: |
+          php tests/drive-index.php
+          php tests/artwork-matching.php
           php tests/bulk-review.php
           php tests/admin-controls.php
       - name: Validate post-deployment shell script

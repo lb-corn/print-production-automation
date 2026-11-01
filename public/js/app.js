@@ -247,3 +247,20 @@ if (deleteDialog && typeof deleteDialog.showModal === 'function') {
         deleteTrigger?.focus();
     });
 }
+
+// Clipboard content is plain filename text; never interpreted as HTML.
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-copy-filename]');
+    if (!button) return;
+    try {
+        await navigator.clipboard.writeText(button.dataset.copyFilename);
+        button.textContent = 'Copied';
+    } catch (_) {
+        button.textContent = 'Copy unavailable — select the filename';
+    }
+});
+document.querySelectorAll('[data-rematch-form]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!window.confirm('Rematch all unbatched stock artwork from Google Drive? Changed artwork loses approval. Print batches remain locked.')) event.preventDefault();
+    });
+});
