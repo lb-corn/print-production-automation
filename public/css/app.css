@@ -460,3 +460,5 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 .naming-picker-empty{display:block;padding:9px;color:#718898;font-size:12px}
 
 select[data-naming-source][hidden],select[data-naming-catalog][hidden]{display:none}
+
+.naming-picker-list>button[role="option"]{width:100%;border:0;background:transparent;color:inherit;text-align:left;font-family:inherit;box-shadow:none}.naming-picker-list>button[role="option"]:hover,.naming-picker-list>button.active,.naming-picker-list>button[aria-selected="true"]{background:#e9f6f5;color:#007d83}[data-naming-side-needed][hidden]{display:none}

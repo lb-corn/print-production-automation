@@ -84,9 +84,8 @@ $preselected=0;
 @foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}" data-image="{{str_starts_with($row['image']??'','https://')?($row['image']??''):''}}">{{$row['product']}} · {{$row['variant']}}</option>
 @endforeach</select><small data-naming-product-empty hidden>No matching products. Try another search.</small></label>
 </div>
-<details class="naming-review-advanced"><summary>Change detected side or color</summary><div class="naming-review-fields"><label>Print side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
-<label>Color<input name="color" maxlength="40" data-naming-color autocomplete="off" placeholder="Blank if not named"></label>
-</div></details>
+<div data-naming-side-needed hidden><label>Filename is missing FRONT/BACK. Which side is this?<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
+</div><input type="hidden" name="color" maxlength="40" data-naming-color>
 <div class="naming-review-actions"><label><input type="checkbox" name="reuse" value="1" checked> Apply to matching versions and future files</label><button type="submit" class="chip">Use this design</button></div>
 <p class="muted">Preview only · no files renamed.</p>
 </form>

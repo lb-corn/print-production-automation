@@ -48,11 +48,11 @@ function setup(confirmResult, failStep = false) {
  const wrongSeries={value:'pse',dataset:{series:'PSE',color:'BLUE'}};
  catalog.options=[blue,white,wrongSeries];catalog.selectedOptions=[blue];
  const sourceSearch=element(), productSearch=element();blue.textContent='Redline Grunge Blue';white.textContent='Redline Grunge White';wrongSeries.textContent='Redline Grunge Blue';source.options=[{value:'miami',textContent:'MIAMI-27 Luciano',dataset:{}},{value:'grunge',textContent:'RED-AND-BLACK-GRUNGE Snipers',dataset:{}}];
- const nodes={'[data-naming-source-search]':sourceSearch,'[data-naming-product-search]':productSearch,'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'.naming-review-advanced':advanced,'[data-naming-original]':link};
+ const nodes={'[data-naming-source-search]':sourceSearch,'[data-naming-product-search]':productSearch,'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'[data-naming-side-needed]':advanced,'[data-naming-original]':link};
  vm.runInNewContext(fs.readFileSync('public/js/artwork-names.js','utf8'),{document:{querySelector:s=>nodes[s]||null,querySelectorAll:()=>[]},window:{addEventListener(){}}});
  source.change();assert.equal(side.value,'back');assert.equal(color.value,'BLUE');assert.equal(catalog.value,'');assert(!blue.disabled&&white.disabled&&wrongSeries.disabled);assert.equal(drive.src,source.selectedOptions[0].dataset.thumbnail);
  catalog.change();assert.equal(product.src,blue.dataset.image);assert.equal(side.value,'back');assert(label.textContent.includes('BLUE · back'));
- source.selectedOptions[0].dataset.side='';source.change();assert.equal(advanced.open,true);
+ source.selectedOptions[0].dataset.side='';source.change();assert.equal(advanced.hidden,true);catalog.change();assert.equal(side.value,'');assert.equal(advanced.hidden,false);
  blue.dataset.image='javascript:alert(1)';catalog.change();assert.equal(product.src,undefined);
  productSearch.input({target:{value:'GRUNGE blue'}});assert(!blue.hidden && white.hidden && wrongSeries.hidden);
  productSearch.input({target:{value:'not present'}});assert(blue.hidden);
@@ -84,7 +84,8 @@ function setup(confirmResult, failStep = false) {
  assert(select.hidden&&panel.hidden);trigger.dispatchEvent({type:'click'});assert(!panel.hidden&&search.focused);assert.equal(trigger.getAttribute('aria-expanded'),'true');
  search.value='grunge';search.dispatchEvent({type:'input'});assert.equal(list.children.length,1);assert.equal(list.children[0].textContent,'Redline Grunge');
  search.dispatchEvent({type:'keydown',key:'ArrowDown',preventDefault(){}});assert(search.getAttribute('aria-activedescendant'));
- search.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});assert.equal(select.value,'grunge');assert(panel.hidden);assert.equal(trigger.textContent,'Redline Grunge');
+ let prevented=false;list.children[0].dispatchEvent({type:'pointerdown',preventDefault(){prevented=true;}});assert(prevented);list.children[0].dispatchEvent({type:'click',preventDefault(){}});assert.equal(select.value,'grunge');assert(panel.hidden);assert.equal(trigger.textContent,'Redline Grunge');
+ trigger.dispatchEvent({type:'click'});search.dispatchEvent({type:'keydown',key:'ArrowDown',preventDefault(){}});search.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});assert.equal(select.value,'miami');assert(panel.hidden);
  trigger.dispatchEvent({type:'click'});assert.equal(search.value,'');search.dispatchEvent({type:'keydown',key:'Escape',preventDefault(){}});assert(panel.hidden);
  trigger.dispatchEvent({type:'click'});doc.dispatchEvent({type:'click',target:new Node()});assert(panel.hidden);
  trigger.dispatchEvent({type:'click'});search.value='absent';search.dispatchEvent({type:'input'});assert.equal(list.children[0].textContent,'No matches found');

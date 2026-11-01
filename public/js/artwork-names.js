@@ -85,8 +85,8 @@ sourceChoice?.addEventListener('change', () => {
     const side = document.querySelector('[data-naming-side]'); if (side) side.value = source?.dataset.side || '';
     const link = document.querySelector('[data-naming-original]'); if (link) { link.hidden = !source?.dataset.url; link.href = source?.dataset.url || '#'; }
     namingDetected();
-    const sideDetails = document.querySelector('.naming-review-advanced');
-    if (sideDetails) sideDetails.open = !!source?.value && !source?.dataset.side;
+    const needed = document.querySelector('[data-naming-side-needed]');
+    if (needed) needed.hidden = true;
 });
 catalogChoice?.addEventListener('change', () => {
     const option = catalogChoice.selectedOptions[0];
@@ -94,6 +94,8 @@ catalogChoice?.addEventListener('change', () => {
     document.querySelector('[data-naming-color]').value = option?.dataset.color || sourceChoice?.selectedOptions[0]?.dataset.color || '';
     const sourceSide = sourceChoice?.selectedOptions[0]?.dataset.side;
     document.querySelector('[data-naming-side]').value = option?.dataset.type === 'double' ? (['front','back'].includes(sourceSide) ? sourceSide : '') : 'single';
+    const needed = document.querySelector('[data-naming-side-needed]');
+    if (needed) needed.hidden = !!document.querySelector('[data-naming-side]').value;
     namingDetected();
 });
 function openNamingConfirmation() {
@@ -198,9 +200,11 @@ function namingSearchableSelect(select, product = false) {
         list.replaceChildren(); active = -1; search.removeAttribute('aria-activedescendant');
         options = [...select.options].filter(option => option.value && !option.hidden && !option.disabled);
         options.forEach((option, index) => {
-            const item = document.createElement('span'); item.id = list.id + '-' + index; item.setAttribute('role','option');
+            const item = document.createElement('button'); item.type = 'button'; item.tabIndex = -1; item.id = list.id + '-' + index; item.setAttribute('role','option');
             item.setAttribute('aria-selected', String(option.value === select.value)); item.textContent = option.textContent;
-            item.addEventListener('click', () => choose(option)); list.append(item);
+            // Keep focus in search: a blur must not close the panel before click fires.
+            item.addEventListener('pointerdown', event => event.preventDefault());
+            item.addEventListener('click', event => { event.preventDefault(); choose(option); }); list.append(item);
         });
         if (!options.length) { const empty = document.createElement('span'); empty.className = 'naming-picker-empty'; empty.textContent = 'No matches found'; list.append(empty); }
     }
