@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-function setup(confirmResult, failStep = false) {
+function setup(confirmResult, failStep = false, rejectBegin = false) {
     const calls = []; const redirects = []; const dialog = {open: confirmResult, showModal(){this.open=true;}, close(){this.open=false;}, addEventListener(){}}; const progress = {textContent: ''}; const password = {value: 'transient password'};
     const controls = [{disabled: false}];
     const input = {checked: true, disabled: false, addEventListener(){}, closest: () => ({hidden: false})};
@@ -18,6 +18,7 @@ function setup(confirmResult, failStep = false) {
     }, window: {addEventListener(){}, location: {assign: url => redirects.push(url)}},
         fetch: async (url, options) => {
             calls.push({url,body: options.body});
+            if (rejectBegin && url === '/begin') return {ok:false,status:403,json:async()=>({message:'Enable Drive renaming on the server before applying a plan.'})};
             if (failStep && url === '/step') throw new Error('Network interrupted');
             return {ok: true, json: async () => ({status: calls.length < 3 ? 'applying' : 'complete', renamed: calls.length-1, remaining: Math.max(0,3-calls.length), url: '/audit'})};
         }};
@@ -32,6 +33,8 @@ function setup(confirmResult, failStep = false) {
     assert(run.controls.every(control=>control.disabled));assert.equal(run.password.value,'');
     assert.equal(run.calls[1].body.get('password'),undefined);assert.equal(run.calls[1].body.get('_token'),'csrf');
     console.log('PASS: one confirmation processes bounded chunks, blocks duplicate submissions and clears the password');
+    const rejected=setup(true,false,true);await rejected.form.submit({preventDefault(){}});assert.equal(rejected.calls.length,1);assert(rejected.controls.every(control=>!control.disabled));assert.match(rejected.progress.textContent,/No files were renamed/);assert(!rejected.progress.textContent.includes('may already'));
+    console.log('PASS: rejected preflight restores dialog controls and reports zero renamed files');
     const failed=setup(true,true);await failed.form.submit({preventDefault(){}});
     assert.equal(failed.calls.length,2);assert.equal(failed.redirects.length,0);assert.match(failed.progress.textContent,/Some files may already be renamed/);assert.equal(failed.password.value,'');
     await failed.form.submit({preventDefault(){}});assert.equal(failed.calls.length,2);

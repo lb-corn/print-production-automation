@@ -300,3 +300,10 @@ returnBatchForms.forEach(form => form.addEventListener('submit', event => {
     if (button.disabled || !window.confirm('Return only this selected item to Artwork Review? Other queued items and their approvals stay unchanged.')) { event.preventDefault(); return; }
     returnBatchForms.filter(other => other.action === form.action || (form.dataset?.batchId && other.dataset?.batchId === form.dataset.batchId)).forEach(other => { const control = other.querySelector('button'); control.disabled = true; control.textContent = 'Returning…'; });
 }));
+
+// Bring action errors/setup notices into view after a redirect, even from a scrolled page.
+const actionNotice = document.querySelector?.('.app-messages [role="alert"], .app-messages .flash-warning');
+if (actionNotice) {
+    actionNotice.setAttribute('tabindex', '-1');
+    requestAnimationFrame(() => { actionNotice.scrollIntoView({block:'start',behavior:'smooth'}); actionNotice.focus({preventScroll:true}); });
+}

@@ -50,3 +50,10 @@ console.log('PASS: batch return requires confirmation and blocks repeated submis
  forms[0].submit(event());assert(forms[0].button.disabled&&forms[1].button.disabled&&!forms[2].button.disabled);const repeat=event();forms[1].submit(repeat);assert(repeat.defaultPrevented);assert.equal(confirmations,1);
  console.log('PASS: queued cards for the same batch disable together while unrelated batch controls remain available');
 }
+
+{
+ let focused=false,scrolled=false;const notice={setAttribute(name,value){this[name]=value;},scrollIntoView(){scrolled=true;},focus(){focused=true;}};
+ const source=fs.readFileSync('public/js/app.js','utf8');const start=source.indexOf('// Bring action errors/setup notices');
+ vm.runInNewContext(source.slice(start),{document:{querySelector:()=>notice},requestAnimationFrame:fn=>fn()});assert(focused&&scrolled);assert.equal(notice.tabindex,'-1');
+ console.log('PASS: action errors and server-setup notices scroll into view and receive accessible focus');
+}

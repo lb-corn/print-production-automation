@@ -10,7 +10,7 @@ function namingCount() {
     const label = document.querySelector('[data-naming-selected]');
     if (label) label.textContent = `${count} ready files selected`;
     const open = document.querySelector('[data-naming-open]');
-    if (open && !namingRunning) { open.disabled = !count; open.textContent = `Rename ${count} ready files`; }
+    if (open && !namingRunning) { open.disabled = !count || open.dataset?.namingEnabled === '0'; open.textContent = `Rename ${count} ready files`; }
     const select = document.querySelector('[data-naming-select]');
     if (select) select.hidden = count >= Math.min(500, namingSelected().length);
 }
@@ -131,7 +131,7 @@ document.querySelector('[data-catalog-clear]')?.addEventListener('click', () => 
 });
 function openNamingConfirmation() {
     const count = namingSelected().filter(input => input.checked).length;
-    if (!count || namingRunning) return;
+    if (!count || namingRunning || document.querySelector('[data-naming-open]')?.dataset.namingEnabled === '0') return;
     const label = document.querySelector('[data-naming-confirm-count]'); if (label) label.textContent = count;
     const password = namingForm.querySelector('[name="password"]'); password.disabled = false; password.value = '';
     namingDialog?.showModal();
@@ -165,6 +165,7 @@ namingForm?.addEventListener('submit', async event => {
             const message = result.errors ? Object.values(result.errors).flat()[0] : result.message;
             const error = new Error(message || 'Request failed. Check the audit before retrying.');
             error.passwordError = !!result.errors?.password;
+            error.preflightRejected = response.status >= 400 && response.status < 500;
             throw error;
         }
         return result;
@@ -182,10 +183,10 @@ namingForm?.addEventListener('submit', async event => {
         window.location.assign(result.url);
     } catch (error) {
         namingForm.querySelector('[name="password"]').value = '';
-        if (!started && error.passwordError) {
+        if (!started && (error.passwordError || error.preflightRejected)) {
             namingRunning = false;
             namingForm.querySelectorAll('button,input').forEach(input => { input.disabled = false; });
-            progress.textContent = error.message;
+            progress.textContent = `${error.message} No files were renamed.`;
         } else {
             progress.textContent = `${error.message} Some files may already be renamed. Reload to inspect the audit, then check files again.`;
         }
