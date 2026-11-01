@@ -9,14 +9,14 @@ The highlighted scope panel shows only the two configured manufacturing branches
 Bulk-generated names use:
 
 ```text
-LB-2027-PSE-DUC-RED-SINGLE-ID-8F23A19C4D72.jpg
-LB-2027-SNP-CAN-BRL-FRONT-ID-81D7BA9C4F20.jpeg
-LB-2027-SNP-CAN-BRL-BACK-ID-A0F24C8D3E91.jpeg
+LB-PSE-DUC-RED-SINGLE-ID-8F23A19C4D72.jpg
+LB-SNP-CAN-BRL-FRONT-ID-81D7BA9C4F20.jpeg
+LB-SNP-CAN-BRL-BACK-ID-A0F24C8D3E91.jpeg
 ```
 
 The 12-character ID suffix is derived from the full, stable Drive file ID. It stays the same on repeat scans. Every proposal preserves the real extension, including its original case; changing a name never converts an image format. Actual file IDs, file bytes and parent folders are preserved. The code also detects a destination collision rather than relying on the hash alone.
 
-Missing-file suggestions follow the same readable LB/year/series/design/color/side convention but omit the ID suffix until a real Drive file exists. Production verification, the ready queue and future batches display actual filenames. Existing locked batch snapshots retain their recorded names.
+Missing-file suggestions follow the same readable LB/series/design/color/side convention but omit the ID suffix until a real Drive file exists. Production verification, the ready queue and future batches display actual filenames. Existing locked batch snapshots retain their recorded names.
 
 An ID suffix prevents filename clashes, not semantic ambiguity. Multiple images for the same design, variant or side remain ambiguous in the production matcher and need review. The preview flags these candidates. Naming does not approve an image and does not create a print batch or handoff request.
 
@@ -26,7 +26,7 @@ An ID suffix prevents filename clashes, not semantic ambiguity. Multiple images 
 2. Click **Check filenames**. This fetches fresh eligible Drive metadata and paginates the read-only Shopify stock-product catalog, including active/draft products that have no orders. Archived/custom/non-manufacturing products are excluded.
 3. Inspect the current and proposed names. Exact SKU-code or full-title evidence can suggest a name, using an approved folder as series context for a reviewed rename. Arbitrary abbreviations, unidentified designs/colors and missing print sides are never guessed.
 4. For an unclear file, select the correct catalog variant, side and actual color in **Map an unclear file**. This updates the preview only. It is data entered by an admin, not hardcoded per-image matching logic. A mockup or wrong folder cannot be rescued by a mapping.
-5. Select ready files (up to 500 per run), confirm the images/colors/sides, enter the current admin password and type `RENAME`. Optionally keep **Refresh unbatched artwork matches** checked. This refresh cannot approve artwork or modify any batch.
+5. Select ready files (up to 500 per run), confirm the images/colors/sides, open the confirmation dialog and enter the current admin password. Optionally keep **Refresh unbatched artwork matches** checked. This refresh cannot approve artwork or modify any batch.
 6. The browser processes five files per request, shows progress and opens the completed audit. No additional confirmation is needed per chunk. New scans leave already-standard files unchanged; newly added files are evaluated with the current catalog.
 
 No scheduler or unattended watcher is created. The same button can be used whenever new files are added. An artwork file not represented in the catalog, or whose name cannot be connected to a catalog design, needs a confirmed mapping after the catalog exists.
@@ -64,3 +64,14 @@ PR and deployment validation run these tests. Review and validate the PR before 
 ## Shared Admin Settings
 
 Artwork filenames and Reset portal data are sections of `/admin/settings`, with vertical navigation on desktop and a compact horizontal layout on smaller screens. The account menu contains a single Admin Settings entry for these tools. Artwork is the default section; reset remains a distinct Danger Zone with its existing password, phrase and factory-agent checks. GET navigation never resets data or applies names. Existing `/admin/artwork-names` and `/admin/reset` bookmarks redirect to their settings sections; POST action URLs remain compatible. Future tools can be added to the explicit section allowlist and navigation without adding more account-menu entries.
+
+
+## Simpler automation workflow
+
+Generated names and missing-file suggestions do not contain a year. Legacy year prefixes and the actual year field in catalog SKUs are ignored for naming; catalog SKUs themselves remain unchanged as evidence. Exact canonical series aliases in SKUs (including PSN-ELT/PSE) and equivalent catalog rows are resolved without an arbitrary artwork choice. Different designs sharing a code remain ambiguous.
+
+Ready files are preselected, with one password-confirmed dialog to apply the reviewed selection; no typed rename phrase or permanently displayed password block is required. The filename filter is outside the password form to prevent email autofill from hiding every row. Technical evidence and folder/version details are collapsed. The settings tabs are flat and have no subtitles or shadows.
+
+An unclear source design can be confirmed once with the Remember option. Its descriptive label and confirmed catalog design are saved privately in design-mappings.json with an admin audit event. Future scans and sibling versions can reuse that confirmation only when their own series, color and side agree with the current catalog. Arbitrary numeric/image placeholders, missing sides/colors, conflicting catalog evidence and unavailable variants still require review. These are data mappings, not hardcoded image-specific rules. Equivalent catalog rows never merge genuinely different product identities. Mapping changes and naming-policy updates invalidate older previews before any write.
+
+Read-only analysis of the existing scan found that the 103 ready files were already automatically identified; the remaining labels include catalog synonyms and unavailable variants. The tool does not invent those equivalences. Reusable design confirmation reduces per-file work safely. No actual mapping or rename was applied during development.

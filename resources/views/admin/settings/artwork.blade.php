@@ -1,213 +1,141 @@
-<section class="panel naming-intro">
-<div>
-<strong>Standardize Google Drive artwork</strong>
-<p>Checks approved series folders and the product catalog, including products with no orders. Files keep their ID, extension and contents. No folders are moved or deleted.</p>
-</div>
+<section class="naming-simple-header">
+<div><strong>Standardize artwork names</strong><span>Images and file extensions stay unchanged.</span></div>
 <form method="post" action="{{route('admin.artwork-names.scan')}}">
-
-@csrf<button class="primary" type="submit" data-naming-scan>Check filenames</button>
-</form>
+@csrf<button class="primary" type="submit" data-naming-scan>Check files</button></form>
 </section>
-<section class="naming-scope" aria-label="Artwork scan scope">
-<div class="naming-scope-title"><strong>Scan scope · these folders only</strong><a href="https://drive.google.com/drive/folders/{{rawurlencode(config('services.google_drive.artwork_root_id'))}}" target="_blank" rel="noopener noreferrer">Artwork root ↗</a></div>
-<div class="naming-scope-groups">
+<section class="naming-scope naming-scope-compact" aria-label="Artwork scan scope">
+<strong>Scan scope · these folders only</strong><div class="naming-scope-roots">
+@foreach($scope as $root=>$folders)<span>✓ {{$root}}</span>
+@endforeach</div>
+<details><summary>Version folders · no MOCKUPS or nested folders</summary><div class="naming-scope-folders">
 
 @foreach($scope as $root=>$folders)
-<div><b>✓ {{$root}}</b><div class="naming-scope-folders">
 
 @if($plan)
 
-@forelse($folders as $folder)
-<a href="https://drive.google.com/drive/folders/{{rawurlencode($folder['id'])}}" target="_blank" rel="noopener noreferrer">{{$folder['name']}} ↗</a>
-
-@empty<span>No eligible version folders found</span>
-
-@endforelse
+@foreach($folders as $folder)<a href="https://drive.google.com/drive/folders/{{rawurlencode($folder['id'])}}" target="_blank" rel="noopener noreferrer">{{$folder['name']}} ↗</a>
+@endforeach
 
 @else
-
-@if(str_contains($root,'GROUP A'))<span>Snipers</span><span>Celtics</span><span>Pro Snipers</span><span>Surefire</span>
-
-@else<span>Luciano</span><span>Elite S</span><span>Clover</span><span>Supreme</span><span>SFE</span><span>PSE</span>
+<span>{{str_contains($root,'GROUP A')?'Snipers · Celtics · Pro Snipers · Surefire':'Luciano · Elite S · Clover · Supreme · SFE · PSE'}}</span>
 
 @endif
-
-@endif
-</div></div>
 
 @endforeach
-</div>
-<p>Direct files in these version folders only. <strong>Excluded:</strong> MOCKUPS, PREVIEWS, ARCHIVE and all other nested folders.</p>
+</div></details>
 </section>
-<p class="muted">The existing service account needs Editor access to the approved folders to apply renames. Scanning does not require changing permissions.</p>
-<p class="muted">Format: <code>LB-2027-SNP-DESIGN-FRONT-ID-8F23A19C4D72.jpg</code> · example only; the actual extension is always preserved. Color is included where applicable; a stable Drive-ID suffix prevents filename clashes. Distinct names can still represent ambiguous artwork. Folder context cannot identify an unknown design. Map uncertain files before reviewing a new preview.</p>
-
-
-@if(!config('services.google_drive.rename_enabled'))<p class="error">Drive rename is disabled on this server. Scanning and preview are available.</p>
-
-@endif
-
 
 @if($plan)
 
+@php
+$counts=array_count_values(array_column($plan['entries'],'status'));
+$outdated=($plan['naming_policy']??null)!==\App\Services\ArtworkNamingService::POLICY;
+$preview=$plan['status']==='preview'&&!$outdated;
+$ready=$counts['ready']??0;
+$needsReview=($counts['review']??0)+($counts['conflict']??0);
+$protected=($counts['locked']??0)+($counts['standard']??0);
+$preselected=0;
+@endphp
 
-@php($counts=array_count_values(array_column($plan['entries'],'status')))
-<div class="naming-counts">
+@if($outdated)
+<p class="admin-notice">Naming rules were updated. Click <b>Check files</b> for a fresh preview without years. Nothing in this old preview will be renamed.</p>
 
-@foreach(['ready'=>'Ready','standard'=>'Already standard','review'=>'Needs mapping','conflict'=>'Conflicts','locked'=>'Batched · protected','renamed'=>'Renamed'] as $status=>$label)<span>
-<b>{{$counts[$status]??0}}</b> {{$label}}</span>
-
-@endforeach</div>
-
+@else
+<div class="naming-simple-summary">
+<div><b>{{$ready}}</b><span>Ready automatically</span></div><div><b>{{$needsReview}}</b><span>Need a check · {{count($reviewGroups)}} designs</span></div><div><b>{{$protected}}</b><span>Protected / already standard</span></div>
+</div>
 
 @if($plan['status']!=='preview')
-<section class="panel">
-<strong>{{ucfirst($plan['status'])}} · {{$plan['renamed']??0}} renamed</strong>
-<p>{{$plan['warning']??'Review the audit below. Explicit artwork approval is still required before printing.'}}</p>
+<div class="admin-notice"><b>{{ucfirst($plan['status'])}} · {{$plan['renamed']??0}} renamed</b><p>{{$plan['warning']??'Names updated. Artwork still needs operator approval before printing.'}}</p>
 
+@if($plan['match_counts']??null)<p>{{$plan['match_counts']['matched']}} matched · {{$plan['match_counts']['missing']}} missing · {{$plan['match_counts']['ambiguous']}} need review · {{$plan['match_counts']['skipped']}} protected.</p>
+@endif
 
-@if($plan['match_counts']??null)<p>Matches refreshed: {{$plan['match_counts']['matched']}} matched · {{$plan['match_counts']['missing']}} missing · {{$plan['match_counts']['ambiguous']}} ambiguous · {{$plan['match_counts']['skipped']}} skipped.</p>
+@if($plan['status']==='applying')<p>If this run was interrupted, check the audit and scan again. Do not blindly retry a rename.</p>
+@endif
+</div>
 
 @endif
 
-
-@if($plan['status']==='applying')<p>A run may have been interrupted. Check the audit and scan again to reconcile the current names; do not retry an uncertain rename blindly.</p>
-
-@endif
-</section>
-
-
-@endif
-
-
-@if($plan['status']==='preview')
-<details class="panel naming-mapping">
-<summary>Map an unclear file to a catalog variant</summary>
+@if($preview&&$needsReview)
+<details class="naming-simple-review" data-naming-review>
+<summary>Review {{count($reviewGroups)}} unclear designs <span>Confirm once; reuse safe matches across versions</span></summary>
 <form method="post" action="{{route('admin.artwork-names.review')}}">
-
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
-<label>Drive file<select name="file_id" required>
-<option value="">Choose a file</option>
+<div class="naming-review-fields">
+<label>Design to check<select name="file_id" required data-naming-source><option value="">Choose an unclear design</option>
 
-@foreach($plan['entries'] as $entry)
+@foreach($reviewGroups as $group)
 
-@if(in_array($entry['status'],['review','ready','conflict']))<option value="{{$entry['id']}}">{{$entry['source']['name']}} — {{$entry['folder']}}</option>
+@php($entry=$group['entry'])
 
-@endif
+@php($folderName=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1)))
 
-@endforeach</select>
-</label>
-<label>Correct catalog variant<select name="catalog_key" required data-naming-catalog>
-<option value="">Choose product / SKU</option>
+@php($source=$entry['source_attributes']??(new \App\Services\ArtworkMatcherService())->sourceAttributes($entry['source'],$folderName))
+<option value="{{$entry['id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view">{{$entry['source_design']??$entry['source']['name']}} · {{$group['count']}} files · {{$folderName}}</option>
 
-@foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}">{{$row['sku']}} · {{$row['product']}} · {{$row['variant']}}</option>
-
-@endforeach</select>
-</label>
-<label>Print side<select name="side" data-naming-side required>
-<option value="single">Single</option>
-<option value="front">Front</option>
-<option value="back">Back</option>
-</select>
-</label>
-<label>Artwork color<input name="color" maxlength="40" data-naming-color placeholder="Blank only if no color label applies">
-</label>
-<p class="muted">Confirm the actual image design, color and side. Mapping creates a new preview; it never renames immediately. A mapping cannot rescue a mockup or an invalid folder.</p>
-<button type="submit" class="chip">Update preview</button>
+@endforeach
+</select></label>
+<label>Correct product / variant<select name="catalog_key" required data-naming-catalog><option value="">Choose the matching product</option>
+@foreach($catalog as $row)<option value="{{$row['catalog_key']}}" data-series="{{$row['series']??''}}" data-color="{{$row['color']??''}}" data-type="{{$row['type']??''}}">{{$row['product']}} · {{$row['variant']}} · {{$row['sku']}}</option>
+@endforeach</select></label>
+<label>Print side<select name="side" data-naming-side required><option value="">Choose side</option><option value="single">Single</option><option value="front">Front</option><option value="back">Back</option></select></label>
+<label>Color<input name="color" maxlength="40" data-naming-color autocomplete="off" placeholder="Blank if not named"></label>
+</div>
+<div class="naming-review-actions"><a data-naming-original href="#" target="_blank" rel="noopener noreferrer" hidden>Inspect source image ↗</a><label><input type="checkbox" name="reuse" value="1" checked> Remember this design for matching versions and future files</label><button type="submit" class="chip">Use this design</button></div>
+<p class="muted">This updates the preview only. Colors and FRONT/BACK must agree; unclear files remain for review.</p>
 </form>
 </details>
 
-
 @endif
+<div class="naming-table-tools naming-simple-tools">
+<div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Need a check {{$needsReview}}</button><button type="button" class="chip" data-naming-mode="all">All files</button></div>
+<input type="search" name="artwork_filename_filter" id="artwork-filename-filter" data-naming-search autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="Filter filenames" aria-label="Filter filenames">
+</div>
 <form id="artwork-naming-apply" method="post" action="{{route('admin.artwork-names.begin')}}" data-step-url="{{route('admin.artwork-names.step')}}">
 
-
-@csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
-<div class="naming-table-tools">
-<input type="search" data-naming-search placeholder="Find filename, SKU or folder" aria-label="Filter filename preview">
-
-@if($plan['status']==='preview')<button type="button" class="chip" data-naming-select>Select ready files</button>
-<span class="muted" data-naming-selected>0 selected</span>
-
-@endif</div>
-<div class="naming-table-wrap">
-<table>
-<thead>
-<tr>
-<th>Select / status</th>
-<th>Original Drive file</th>
-<th>Proposed name</th>
-<th>Catalog evidence</th>
-</tr>
-</thead>
-<tbody>
-
+@csrf<input type="hidden" name="plan" value="{{$plan['token']}}"><input type="hidden" name="confirmation" value="RENAME"><input type="hidden" name="reviewed" value="1"><input type="hidden" name="username" autocomplete="username" value="{{auth()->user()?->email}}">
+<div class="naming-table-wrap"><table><thead><tr><th>Status</th><th>Current file</th><th>New name</th></tr></thead><tbody>
 
 @foreach($plan['entries'] as $entry)
-<tr data-naming-row>
-<td>
-
-@if($plan['status']==='preview'&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" aria-label="Rename {{$entry['source']['name']}}">
-
-@endif<span class="badge">{{ucfirst($entry['status'])}}</span>
-</td>
-<td>
-<b>{{$entry['source']['name']}}</b>
-<small>{{$entry['folder']}}</small>
-<a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">Inspect original ↗</a>
-</td>
-<td>
-<code>{{$entry['proposal']['target']??'Mapping required'}}</code>
-@if($entry['artwork_duplicate']??false)<small>Duplicate artwork candidate: names will be distinct, but artwork review will still be required.</small>
+<tr data-naming-row data-naming-status="{{$entry['status']}}" 
+@if($entry['status']!=='ready') hidden 
+@endif><td>
+@if($preview&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked($preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
+@endif<span class="badge">{{ucfirst($entry['status'])}}</span></td>
+<td><a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">{{$entry['source']['name']}} ↗</a><small>{{$entry['folder']}}</small></td>
+<td><code>{{$entry['proposal']['target']??'Confirm design first'}}</code>
+@if($entry['reason']??null)<small>{{$entry['reason']}}</small>
+@endif 
+@if($entry['artwork_duplicate']??false)<small>Duplicate artwork still needs review.</small>
 @endif
-
-@if($entry['status']==='conflict')<small>Duplicate destination or design candidate. Resolve the duplicate in Drive; no file is chosen automatically.</small>
-
-@endif</td>
-<td>{{$entry['proposal']['sku']??'—'}}<small>{{$entry['proposal']['product']??''}} · {{$entry['proposal']['variant']??''}} · {{$entry['proposal']['side']??''}}</small>
-</td>
-</tr>
-
+<details class="naming-row-detail"><summary>Details</summary><small>{{$entry['proposal']['sku']??''}} · {{$entry['proposal']['product']??''}} · {{$entry['proposal']['variant']??''}} · {{$entry['proposal']['side']??''}}<br>{{$entry['basis']??''}}</small></details></td></tr>
 
 @endforeach
-</tbody>
-</table>
-</div>
+</tbody></table><p class="naming-filter-empty" data-naming-empty hidden>No files in this view. <button type="button" data-naming-clear>Show all files</button></p></div>
 
-
-@if($plan['status']==='preview')
-<section class="panel naming-confirmation">
-<strong>Review before renaming · up to 500 files per run</strong>
-<label>
-<input type="checkbox" name="reviewed" value="1" required> I checked the selected artwork, proposed names, colors and sides.</label>
-<label>
-<input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches after renaming. Changed artwork loses approval; batches remain locked.</label>
-<div>
-<label>Admin password<input name="password" type="password" required autocomplete="current-password">
-</label>
-<label>Type RENAME<input name="confirmation" required pattern="RENAME" autocomplete="off">
-</label>
-<button class="primary" type="submit" @disabled(!config('services.google_drive.rename_enabled'))>Rename selected files</button>
-</div>
-<p data-naming-progress role="status" aria-live="polite">No changes until you confirm. Partial failures are recorded; no automatic retry or print action runs.</p>
-</section>
-
+@if($preview)
+<div class="naming-simple-action"><button type="button" class="chip" data-naming-select hidden>Select all ready</button><span data-naming-selected>{{$ready>500?500:$ready}} ready files selected</span><button class="primary" type="button" data-naming-open @disabled(!$ready||!config('services.google_drive.rename_enabled'))>Rename ready files</button></div>
+<dialog class="naming-confirm-dialog" data-naming-dialog>
+<h3>Rename <span data-naming-confirm-count></span> ready files?</h3><p>Only filenames change. File extensions, contents and print batches stay protected.</p>
+<label>Admin password<input name="password" type="password" required disabled autocomplete="current-password"></label>
+<label class="naming-dialog-check"><input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches afterwards</label>
+<div><button type="button" class="chip" data-naming-cancel>Cancel</button><button class="primary" type="submit">Confirm rename</button></div>
+<p data-naming-progress role="status" aria-live="polite"></p>
+</dialog>
 
 @endif
 </form>
 
-
-@if($plan['events'])<details class="panel">
-<summary>Rename audit · {{count($plan['events'])}} events</summary>
-
-@foreach($plan['events'] as $event)<p>
-<code>{{$event['old_name']}}</code> → <code>{{$event['new_name']}}</code> · {{$event['status']}} · {{$event['at']}}</p>
-
+@if($plan['events'])<details class="naming-advanced"><summary>Rename audit · {{count($plan['events'])}} events</summary>
+@foreach($plan['events'] as $event)<p><code>{{$event['old_name']}}</code> → <code>{{$event['new_name']}}</code> · {{$event['status']}} · {{$event['at']}}</p>
 @endforeach</details>
+@endif
 
 @endif
 
-
 @endif
-<script src="{{asset('js/artwork-names.js')}}?v={{filemtime(public_path('js/artwork-names.js'))}}" defer>
-</script>
+<details class="naming-advanced"><summary>Naming rules and setup</summary><p>Example: <code>LB-PSE-DUC-RED-SINGLE-ID-8F23A19C4D72.jpg</code>. No year is added. Actual extensions are preserved. Existing files get stable ID suffixes; missing-file suggestions get one after upload.</p><p>Rename permission requires Editor access for the existing service account. Files in batches, mockups and nested folders are excluded. Uncertain network outcomes stop without automatic retries.</p>
+@if(!config('services.google_drive.rename_enabled'))<p>Applying renames is disabled by server configuration.</p>
+@endif</details>
+<script src="{{asset('js/artwork-names.js')}}?v={{filemtime(public_path('js/artwork-names.js'))}}" defer></script>

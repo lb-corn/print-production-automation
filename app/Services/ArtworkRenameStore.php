@@ -22,11 +22,27 @@ class ArtworkRenameStore
         abort_if(!$allowExpired && ($plan['expires_at']??0)<time(),422,'This preview expired. Scan again.');
         return $plan;
     }
-    public function save(array $plan): void
+    public function rules(): array
+    {
+        $path=$this->directory.DIRECTORY_SEPARATOR.'design-mappings.json';
+        if(!is_file($path))return [];
+        $data=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
+        return $data['rules'] ?? [];
+    }
+    public function remember(string $source,string $product,int $actor): void
+    {
+        $path=$this->directory.DIRECTORY_SEPARATOR.'design-mappings.json';
+        $data=is_file($path)?json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR):['rules'=>[],'events'=>[]];
+        $data['events'][]=['source'=>$source,'product'=>$product,'actor'=>$actor,'at'=>gmdate('c'),'previous'=>$data['rules'][$source]??null];
+        $data['rules'][$source]=$product;
+        $this->write($path,$data);
+    }
+    public function save(array $plan): void { $this->write($this->path($plan['token']),$plan); }
+    private function write(string $path,array $data): void
     {
         if(!is_dir($this->directory) && !mkdir($this->directory,0700,true) && !is_dir($this->directory))throw new RuntimeException('Private naming audit storage unavailable.');
-        $path=$this->path($plan['token']);$temp=$path.'.'.bin2hex(random_bytes(6)).'.tmp';
-        if(file_put_contents($temp,json_encode($plan,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT),LOCK_EX)===false)throw new RuntimeException('Cannot save naming audit.');
+        $temp=$path.'.'.bin2hex(random_bytes(6)).'.tmp';
+        if(file_put_contents($temp,json_encode($data,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT),LOCK_EX)===false)throw new RuntimeException('Cannot save naming audit.');
         if(!rename($temp,$path))throw new RuntimeException('Cannot finalize naming audit.');
     }
     private function path(string $token): string

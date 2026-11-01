@@ -22,7 +22,7 @@ $store=new ArtworkRenameStore($directory);$service=new ArtworkNamingService($dri
 $admin=User::create(['name'=>'Admin','email'=>'naming@example.test','password'=>'NamingTestPassword123','role'=>'admin']);
 $operator=User::create(['name'=>'Operator','email'=>'operator@example.test','password'=>'unused','role'=>'operator']);
 $plan=$service->scan($admin->id);$entry=$plan['entries'][0];$target=$entry['proposal']['target'];
-$check($entry['status']==='ready' && str_starts_with($target,'LB-2027-PSE-DUC-RED-SINGLE-ID-') && str_ends_with($target,'.jpg'),'Catalog products with no orders generate extended canonical names with a stable ID');
+$check($entry['status']==='ready' && str_starts_with($target,'LB-PSE-DUC-RED-SINGLE-ID-') && str_ends_with($target,'.jpg'),'Catalog products with no orders generate extended canonical names with a stable ID');
 $check($service->scan($admin->id)['entries'][0]['proposal']['target']===$target,'Repeated scans generate the same name for the same Drive file');
 $check($matcher->match($row,[$folder,[...$drive->index[1],'name'=>$target]])['match_status']==='REVIEW','New unique-ID filename is accepted by the production matcher');
 $check(!$matcher->match($row,[$folder,[...$drive->index[1],'id'=>'different-file','name'=>$target]])['matches'],'A unique-ID filename cannot impersonate a different Drive file');
@@ -91,7 +91,7 @@ $controller=new App\Http\Controllers\ArtworkNamingController();$request=Illumina
 try{$controller->index($request,$store);throw new LogicException('Operator admitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Operators cannot invoke the admin naming controller');}
 Illuminate\Support\Facades\Auth::login($admin);view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $request=Illuminate\Http\Request::create('/admin/artwork-names','GET',['plan'=>$stale['token']]);$request->setUserResolver(fn()=>$admin);
-$html=$controller->index($request,$store)->render();$check(str_contains($html,'Check filenames') && str_contains($html,'Rename selected files') && str_contains($html,'Type RENAME'),'Admin page renders scan, review, explicit confirmation and filename preview');
+$html=$controller->index($request,$store)->render();$check(str_contains($html,'Check files') && str_contains($html,'Rename ready files') && str_contains($html,'Confirm rename'),'Admin page renders scan, review, explicit confirmation and filename preview');
 $request=Illuminate\Http\Request::create('/admin/artwork-names/begin','POST',['plan'=>$stale['token'],'ids'=>['stale']]);$request->setUserResolver(fn()=>$admin);
 try{$controller->begin($request);throw new LogicException('Unconfirmed apply admitted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['password'],$e->errors()['confirmation'],$e->errors()['reviewed']),'Apply requires admin password, typed RENAME and explicit review');}
 // Test full catalog pagination without Shopify credentials or order history.
@@ -122,7 +122,7 @@ try{$store->load($expired['token'],$admin->id);throw new Exception('Expired plan
 foreach(['png','jpeg','TIFF','psd'] as $extension){$f=$source('extension-'.$extension,'PSE-DUC-RED.'.$extension);$e=$service->build([$folder,$f],[$row],[],[])[0];$check(str_ends_with($e['proposal']['target'],'.'.$extension),'Original extension is preserved exactly: '.$extension);}
 // Missing-file suggestions use the same readable convention, without inventing a Drive ID.
 $suggestion=$matcher->match($row,[$folder])['artwork_review']['suggested_filenames'][0];
-$check($suggestion==='LB-2027-PSE-DUC-RED-SINGLE.jpg' && $matcher->match($row,[$folder,$source('uploaded',$suggestion)])['match_status']==='REVIEW','Standard suggestions work before a file exists; the ID suffix is assigned once Drive has a real file');
+$check($suggestion==='LB-PSE-DUC-RED-SINGLE.jpg' && $matcher->match($row,[$folder,$source('uploaded',$suggestion)])['match_status']==='REVIEW','Standard suggestions work before a file exists; the ID suffix is assigned once Drive has a real file');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin artwork naming checks passed.\n";
 // A bulk confirmation runs in bounded chunks and a later failure never conceals partial success.
@@ -141,7 +141,7 @@ $refreshItem=ProductionItem::create(['line_item_id'=>'refresh-after-rename',...$
 app(ProductionService::class)->verify($refreshItem,'CORRECT',$admin->id);
 $refreshPlan=$service->scan($admin->id);$service->begin($refreshPlan['token'],$admin->id,['refresh'],true);$batchesBefore=PrintBatch::all()->toJson();
 $refreshed=$service->step($refreshPlan['token'],$admin->id);
-$check($refreshed['status']==='complete' && $refreshed['match_counts']['matched']===1 && str_starts_with($refreshItem->fresh()->matches[0]['name'],'LB-2027-'),'Optional refresh populates the actual renamed filename on unbatched production items');
+$check($refreshed['status']==='complete' && $refreshed['match_counts']['matched']===1 && str_starts_with($refreshItem->fresh()->matches[0]['name'],'LB-'),'Optional refresh populates the actual renamed filename on unbatched production items');
 $check(!$refreshItem->fresh('decision')->decision && PrintBatch::all()->toJson()===$batchesBefore,'Automatic metadata refresh neither restores approval nor changes any print batch');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin artwork naming checks passed.\n";
@@ -152,7 +152,7 @@ $settingsHtml=$settings->index($request)->render();
 $check(substr_count($settingsHtml,'<main>')===1 && str_contains($settingsHtml,'Admin Settings') && str_contains($settingsHtml,'DANGER ZONE') && str_contains($settingsHtml,'RESET PORTAL') && !str_contains($settingsHtml,'id="artwork-naming-apply"'),'Reset is a separate section inside one settings page, retaining its destructive-action confirmations');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
 $settingsHtml=$settings->index($request)->render();
-$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Check filenames') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
+$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Check files') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
 $menu=view('partials.account-menu')->render();
 $check(str_contains($menu,'Admin Settings') && !str_contains($menu,'Artwork filenames') && !str_contains($menu,'Reset portal data'),'Account menu groups the two tools under a single Admin Settings link');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'../../credentials']);$request->setUserResolver(fn()=>$admin);
@@ -160,3 +160,54 @@ try{$settings->index($request);throw new Exception('Unknown section accepted');}
 $request=Illuminate\Http\Request::create('/admin/settings');$request->setUserResolver(fn()=>$operator);
 try{$settings->index($request);throw new Exception('Operator admitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'The shared settings page remains admin-only');}
 echo "$checks total admin artwork naming/settings checks passed.\n";
+// One explicit design confirmation safely resolves siblings and future files without per-image code.
+$bubbleRow=[...$row,'catalog_key'=>hash('sha256','bubble-pse'),'sku'=>'2027-BUB-PSE-0001','product'=>'Lucky Bags 2027 Bubble Fusion','variant'=>'Pro Sniper Elite'];
+$bubbleDouble=[...$bubbleRow,'catalog_key'=>hash('sha256','bubble-snp'),'sku'=>'2027-BUB-SNP-0001','variant'=>'Snipers'];
+$shopify->rows=[$bubbleRow,$bubbleDouble];$drive->index=[$folder,$doubleFolder,$source('bubble-single','PSE-BUBBLES.jpg'),$source('bubble-front','SNP-BUBBLES-FRONT.jpg','snp'),$source('bubble-back','SNP-BUBBLES-BACK.jpg','snp')];
+$groupPlan=$service->scan($admin->id);$check(count(array_filter($groupPlan['entries'],fn($e)=>$e['status']==='review'))===3,'Unconfirmed design synonyms remain review cases');
+$mapping=['bubble-single'=>['catalog_key'=>$bubbleRow['catalog_key'],'side'=>'single','color'=>'']];
+$perFile=$service->revise($groupPlan['token'],$admin->id,$mapping,false);$check($store->rules()===[],'A file-only confirmation does not silently create a reusable rule');
+$grouped=$service->revise($groupPlan['token'],$admin->id,$mapping,true);
+$check(count(array_filter($grouped['entries'],fn($e)=>$e['status']==='ready'))===3,'One reusable design confirmation resolves matching SINGLE, FRONT and BACK files across versions');
+$future=$service->scan($admin->id);$check(count(array_filter($future['entries'],fn($e)=>$e['status']==='ready'))===3,'Fresh scans reuse the saved design confirmation without remapping each file');
+$whiteOnly=[...$bubbleRow,'catalog_key'=>hash('sha256','white-only'),'variant'=>'Pro Sniper Elite / White'];
+$wrongColor=$service->build([$folder,$source('wrong-rule-color','PSE-BUBBLES-RED.jpg')],[$whiteOnly],[],[],$store->rules());
+$check($wrongColor[0]['status']==='review','Remembered designs never invent a missing color or choose the wrong catalog variant');
+$unknownSide=$service->build([$doubleFolder,$source('unknown-rule-side','SNP-BUBBLES.jpg','snp')],[$bubbleDouble],[],[],$store->rules());
+$check($unknownSide[0]['status']==='review','Remembered designs never infer a missing FRONT/BACK side');
+$conflictingProduct=[...$bubbleRow,'catalog_key'=>hash('sha256','different-bubbles'),'sku'=>'2027-XYZ-PSE-0001','product'=>'Lucky Bags 2027 Bubbles'];
+$ruleConflict=$service->build([$folder,$source('rule-conflict','PSE-BUBBLES.jpg')],[$conflictingProduct],[],[],$store->rules());
+$check($ruleConflict[0]['status']==='review','A remembered label conflicting with current exact catalog evidence requires review');
+// Years are not in generated names, and catalog year fields do not expand human work.
+$yearAlias=[...$row,'catalog_key'=>hash('sha256','old-sku-alias'),'sku'=>'2026-DUC-PSN-ELT-0001'];
+$yearIgnored=$service->build([$folder,$source('old-year','2027-PSN-ELT-DUCK CAMO-RED.jpg')],[$yearAlias],[],[]);
+$check($yearIgnored[0]['status']==='ready' && str_starts_with($yearIgnored[0]['proposal']['target'],'LB-PSE-DUC-RED-SINGLE-ID-') && !preg_match('/(?:^|-)20\d{2}(?:-|$)/',$yearIgnored[0]['proposal']['target']),'Legacy SKU aliases and year differences do not put a year in the new filename');
+$equivalent=$service->build([$folder,$source('equivalent','PSE-DUCK CAMO-RED.jpg')],[$row,$yearAlias],[],[]);
+$check($equivalent[0]['status']==='ready' && count($equivalent[0]['proposal']['catalog_keys'])===2,'Equivalent catalog rows with different years or series aliases produce one unambiguous destination');
+$clashing=[...$row,'catalog_key'=>hash('sha256','different-design'),'product'=>'Lucky Bags 2027 Different Design'];
+$notEquivalent=$service->build([$folder,$source('not-equivalent','PSE-DUC-RED.jpg')],[$row,$clashing],[],[]);
+$check($notEquivalent[0]['status']==='review','Different product designs sharing a SKU design code are never merged');
+$shopify->rows=[$row];$drive->index=[$folder,$source('rule-stale','PSE-DUC-RED.jpg')];$ruleStale=$service->scan($admin->id);$store->remember('ANOTHER-DESIGN','ANOTHER-PRODUCT',$admin->id);
+try{$service->begin($ruleStale['token'],$admin->id,['rule-stale'],false);throw new Exception('Changed rules accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Changed reusable mappings invalidate an older rename preview');}
+$oldPolicy=$store->create($admin->id,['status'=>'preview','entries'=>[],'naming_policy'=>'old-year-based-policy']);
+try{$service->begin($oldPolicy['token'],$admin->id,['anything'],false);throw new Exception('Old policy accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && str_contains($e->getMessage(),'Check files'),'Old year-based previews must be rebuilt before applying names');}
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+// Explicit future catalog variant labels need no hardcoded color list.
+$midnight=[...$row,'catalog_key'=>hash('sha256','midnight'),'variant'=>'Pro Sniper Elite / Midnight'];
+$midnightFile=$source('midnight','PSE-DUCK CAMO-MIDNIGHT.jpg');
+$midnightPlan=$service->build([$folder,$midnightFile],[$midnight],[],[]);
+$check($midnightPlan[0]['status']==='ready' && str_contains($midnightPlan[0]['proposal']['target'],'-MIDNIGHT-SINGLE-ID-'),'Exact new catalog color labels are automated without per-color code changes');
+$check($matcher->match($midnight,[$folder,[...$midnightFile,'name'=>$midnightPlan[0]['proposal']['target']]])['match_status']==='REVIEW','The same explicit variant label is recognized throughout production matching');
+$wrongMidnight=$service->build([$folder,$source('wrong-midnight','PSE-DUCK CAMO-RED.jpg')],[$midnight],[],[]);
+$check($wrongMidnight[0]['status']==='review','A new color label never permits a wrong-color file');
+// The simplified page avoids the browser's username/password autofill heuristic on its filter field.
+$shopify->rows=[$row];$drive->index=[$folder,$source('simple-ui','PSE-DUC-RED.jpg')];$simple=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$simple['token'],'section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
+$simpleHtml=$controller->index($request,$store)->render();$dom=new DOMDocument();@$dom->loadHTML($simpleHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$check($xpath->query('//input[@data-naming-search]/ancestor::form')->length===0,'Filename search is outside the password form so it cannot become the username field');
+$check($xpath->query('//dialog[@data-naming-dialog]//input[@type="password" and @disabled]')->length===1 && !str_contains($simpleHtml,'Type RENAME'),'Confirmation is one short dialog, without an always-visible password block or typing a phrase');
+$check($xpath->query('//input[@name="ids[]" and @checked]')->length===1,'Safe ready files are preselected automatically');
+$check(!str_contains($simpleHtml,'Check and standardize Drive names') && !str_contains($simpleHtml,'Destructive production reset'),'Settings navigation has no subtitles or explanatory filler');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";

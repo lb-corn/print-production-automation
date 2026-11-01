@@ -1,49 +1,108 @@
 const namingForm = document.querySelector('#artwork-naming-apply');
+const namingDialog = document.querySelector('[data-naming-dialog]');
+const namingSearch = document.querySelector('[data-naming-search]');
 const namingSelected = () => [...(namingForm?.querySelectorAll('input[name="ids[]"]') || [])];
+let namingRunning = false;
+let namingMode = 'ready';
+if (namingSearch) namingSearch.value = '';
 function namingCount() {
+    const count = namingSelected().filter(input => input.checked).length;
     const label = document.querySelector('[data-naming-selected]');
-    if (label) label.textContent = `${namingSelected().filter(input => input.checked).length} selected`;
+    if (label) label.textContent = `${count} ready files selected`;
+    const open = document.querySelector('[data-naming-open]');
+    if (open && !namingRunning) { open.disabled = !count; open.textContent = `Rename ${count} ready files`; }
+    const select = document.querySelector('[data-naming-select]');
+    if (select) select.hidden = count >= Math.min(500, namingSelected().length);
+}
+function namingFilter() {
+    const text = namingSearch?.value.toLowerCase() || '';
+    let visible = 0;
+    document.querySelectorAll('[data-naming-row]').forEach(row => {
+        const status = row.dataset.namingStatus;
+        const mode = namingMode === 'all' || (namingMode === 'review' ? ['review','conflict'].includes(status) : status === 'ready');
+        row.hidden = !(mode && row.textContent.toLowerCase().includes(text));
+        if (!row.hidden) visible++;
+    });
+    const empty = document.querySelector('[data-naming-empty]');
+    if (empty) empty.hidden = visible > 0;
 }
 namingSelected().forEach(input => input.addEventListener('change', namingCount));
 document.querySelector('[data-naming-select]')?.addEventListener('click', () => {
-    let count = 0;
-    namingSelected().forEach(input => { input.checked = !input.closest('tr').hidden && count++ < 500; });
+    namingSelected().forEach((input,index) => { input.checked = index < 500; });
     namingCount();
 });
-document.querySelector('[data-naming-search]')?.addEventListener('input', event => {
-    const text = event.target.value.toLowerCase();
-    document.querySelectorAll('[data-naming-row]').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(text); });
-    // Keep the exact reviewed selection visible; filtering clears hidden selections.
-    namingSelected().filter(input => input.closest('tr').hidden).forEach(input => { input.checked = false; });
-    namingCount();
+namingSearch?.addEventListener('input', () => { namingFilter(); });
+document.querySelectorAll('[data-naming-mode]').forEach(button => button.addEventListener('click', () => {
+    namingMode = button.dataset.namingMode;
+    document.querySelectorAll('[data-naming-mode]').forEach(other => other.classList.toggle('active', other === button));
+    namingFilter();
+}));
+document.querySelector('[data-naming-clear]')?.addEventListener('click', () => {
+    if (namingSearch) namingSearch.value = '';
+    namingMode = 'all'; namingFilter();
 });
-document.querySelector('[data-naming-catalog]')?.addEventListener('change', event => {
-    const option = event.target.selectedOptions[0];
-    document.querySelector('[data-naming-color]').value = option?.dataset.color || '';
-    document.querySelector('[data-naming-side]').value = option?.dataset.type === 'double' ? 'front' : 'single';
+const sourceChoice = document.querySelector('[data-naming-source]');
+const catalogChoice = document.querySelector('[data-naming-catalog]');
+sourceChoice?.addEventListener('change', () => {
+    const source = sourceChoice.selectedOptions[0];
+    if (catalogChoice) {
+        catalogChoice.value = '';
+        [...catalogChoice.options].forEach(option => { option.hidden = !!option.value && !!source?.dataset.series && option.dataset.series !== source.dataset.series; option.disabled = option.hidden; });
+    }
+    const color = document.querySelector('[data-naming-color]'); if (color) color.value = source?.dataset.color || '';
+    const side = document.querySelector('[data-naming-side]'); if (side) side.value = source?.dataset.side || '';
+    const link = document.querySelector('[data-naming-original]'); if (link) { link.hidden = !source?.dataset.url; link.href = source?.dataset.url || '#'; }
 });
-let namingRunning = false;
+catalogChoice?.addEventListener('change', () => {
+    const option = catalogChoice.selectedOptions[0];
+    document.querySelector('[data-naming-color]').value = option?.dataset.color || sourceChoice?.selectedOptions[0]?.dataset.color || '';
+    const sourceSide = sourceChoice?.selectedOptions[0]?.dataset.side;
+    document.querySelector('[data-naming-side]').value = option?.dataset.type === 'double' ? (['front','back'].includes(sourceSide) ? sourceSide : '') : 'single';
+});
+function openNamingConfirmation() {
+    const count = namingSelected().filter(input => input.checked).length;
+    if (!count || namingRunning) return;
+    const label = document.querySelector('[data-naming-confirm-count]'); if (label) label.textContent = count;
+    const password = namingForm.querySelector('[name="password"]'); password.disabled = false; password.value = '';
+    namingDialog?.showModal();
+}
+document.querySelector('[data-naming-open]')?.addEventListener('click', openNamingConfirmation);
+document.querySelector('[data-naming-cancel]')?.addEventListener('click', () => {
+    if (namingRunning) return;
+    const password = namingForm.querySelector('[name="password"]'); password.value = ''; password.disabled = true;
+    namingDialog?.close();
+});
+namingDialog?.addEventListener('cancel', event => {
+    if (namingRunning) { event.preventDefault(); return; }
+    const password = namingForm.querySelector('[name="password"]'); password.value = ''; password.disabled = true;
+});
 namingForm?.addEventListener('submit', async event => {
     event.preventDefault();
     if (namingRunning) return;
+    if (namingDialog && !namingDialog.open) { openNamingConfirmation(); return; }
+    if (!namingForm.reportValidity()) return;
     const selected = namingSelected().filter(input => input.checked);
     if (!selected.length) return;
-    if (!window.confirm(`Rename ${selected.length} selected Drive files exactly as previewed? Existing file contents and print batches remain unchanged.`)) return;
     const progress = document.querySelector('[data-naming-progress]');
     const data = new FormData(namingForm);
-    const token = data.get('plan');
-    const csrf = data.get('_token');
+    const token = data.get('plan'); const csrf = data.get('_token');
     namingRunning = true;
     namingForm.querySelectorAll('button,input').forEach(input => { input.disabled = true; });
     const post = async (url, body) => {
         const response = await fetch(url, {method: 'POST', headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}, body});
         const result = await response.json();
-        if (!response.ok) throw new Error(result.message || 'Request failed. Check the audit before retrying.');
+        if (!response.ok) {
+            const message = result.errors ? Object.values(result.errors).flat()[0] : result.message;
+            const error = new Error(message || 'Request failed. Check the audit before retrying.');
+            error.passwordError = !!result.errors?.password;
+            throw error;
+        }
         return result;
     };
+    let started = false;
     try {
-        progress.textContent = 'Validating current files, catalog and batch protection…';
-        let result = await post(namingForm.action, data);
+        progress.textContent = 'Checking current files and batch protection…';
+        let result = await post(namingForm.action, data); started = true;
         namingForm.querySelector('[name="password"]').value = '';
         while (result.status === 'applying') {
             const next = new FormData(); next.set('plan', token); next.set('_token', csrf);
@@ -52,16 +111,20 @@ namingForm?.addEventListener('submit', async event => {
         }
         window.location.assign(result.url);
     } catch (error) {
-        progress.textContent = `${error.message} Some files may already be renamed. Reload this plan to inspect its audit, then scan again.`;
         namingForm.querySelector('[name="password"]').value = '';
-        // Do not enable a blind retry when the remote outcome might be uncertain.
+        if (!started && error.passwordError) {
+            namingRunning = false;
+            namingForm.querySelectorAll('button,input').forEach(input => { input.disabled = false; });
+            progress.textContent = error.message;
+        } else {
+            progress.textContent = `${error.message} Some files may already be renamed. Reload to inspect the audit, then check files again.`;
+        }
     }
 });
-
-// A fresh check is read-only but may take time; avoid overlapping scans.
 document.querySelector('[data-naming-scan]')?.closest('form')?.addEventListener('submit', event => {
     const button = event.target.querySelector('[data-naming-scan]');
     if (button.disabled) { event.preventDefault(); return; }
-    button.disabled = true;
-    button.textContent = 'Checking…';
+    button.disabled = true; button.textContent = 'Checking…';
 });
+window.addEventListener('pageshow', event => { if (event.persisted && namingRunning) window.location.reload(); });
+namingCount(); namingFilter();

@@ -2,10 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 function setup(confirmResult, failStep = false) {
-    const calls = []; const redirects = []; const progress = {textContent: ''}; const password = {value: 'transient password'};
+    const calls = []; const redirects = []; const dialog = {open: confirmResult, showModal(){this.open=true;}, close(){this.open=false;}, addEventListener(){}}; const progress = {textContent: ''}; const password = {value: 'transient password'};
     const controls = [{disabled: false}];
     const input = {checked: true, disabled: false, addEventListener(){}, closest: () => ({hidden: false})};
-    const form = {action: '/begin', dataset: {stepUrl: '/step'},
+    const form = {reportValidity:()=>true, action: '/begin', dataset: {stepUrl: '/step'},
         querySelectorAll: selector => selector.includes('ids[]') ? [input] : controls,
         querySelector: () => password, addEventListener(name, handler) { this[name] = handler; }};
     class FormData {
@@ -13,9 +13,9 @@ function setup(confirmResult, failStep = false) {
         get(key) { return this.values.get(key); } set(key,value) { this.values.set(key,value); }
     }
     const context = {FormData, document: {
-        querySelector(selector) { return selector === '#artwork-naming-apply' ? form : selector === '[data-naming-progress]' ? progress : null; },
+        querySelector(selector) { return selector === '#artwork-naming-apply' ? form : selector === '[data-naming-progress]' ? progress : selector === '[data-naming-dialog]' ? dialog : null; },
         querySelectorAll: () => [],
-    }, window: {confirm: () => confirmResult, location: {assign: url => redirects.push(url)}},
+    }, window: {addEventListener(){}, location: {assign: url => redirects.push(url)}},
         fetch: async (url, options) => {
             calls.push({url,body: options.body});
             if (failStep && url === '/step') throw new Error('Network interrupted');
@@ -26,7 +26,7 @@ function setup(confirmResult, failStep = false) {
 }
 (async () => {
     const canceled=setup(false);await canceled.form.submit({preventDefault(){}});assert.equal(canceled.calls.length,0);
-    console.log('PASS: canceling admin confirmation sends no rename requests');
+    console.log('PASS: opening the confirmation dialog sends no rename requests');
     const run=setup(true);const active=run.form.submit({preventDefault(){}});await run.form.submit({preventDefault(){}});await active;
     assert.deepEqual(run.calls.map(call=>call.url),['/begin','/step','/step']);assert.deepEqual(run.redirects,['/audit']);
     assert(run.controls.every(control=>control.disabled));assert.equal(run.password.value,'');

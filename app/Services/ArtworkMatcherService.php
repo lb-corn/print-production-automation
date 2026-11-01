@@ -31,10 +31,13 @@ class ArtworkMatcherService
         return null;
     }
 
-    public function seriesFromSku(?string $sku): ?string
+    public function seriesFromSku(?string $sku): ?string { return $this->skuParts($sku)['series'] ?? null; }
+
+    private function skuParts(?string $sku): ?array
     {
-        foreach (array_keys(self::SERIES) as $series) {
-            if (preg_match('/^\d{4}-.+-'.preg_quote($series, '/').'-\d+$/', strtoupper(trim((string)$sku)))) return $series;
+        $sku=strtoupper(trim((string)$sku));
+        foreach(self::SERIES as $series=>$definition)foreach($definition[1] as $alias) {
+            if(preg_match('/^(\d{4})-(.+)-'.preg_quote($alias,'/').'-\d+$/',$sku,$parts))return ['year'=>$parts[1],'design'=>$this->norm($parts[2]),'series'=>$series];
         }
         return null;
     }
@@ -45,9 +48,8 @@ class ArtworkMatcherService
         $series = $this->seriesFromSku($sku);
         $type = $series ? self::SERIES[$series][0] : null;
         $design = null; $year = null;
-        if ($series && preg_match('/^(\d{4})-(.+)-'.preg_quote($series, '/').'-\d+$/', $sku, $parts)) {
-            $year = $parts[1]; $design = $this->norm($parts[2]);
-        }
+        $parts=$this->skuParts($sku);
+        if($parts){$year=$parts['year'];$design=$parts['design'];}
         [$variantKnown, $color] = $this->variant($row['variant'] ?? '', $series);
         $custom = stripos($row['product'] ?? '', 'custom') !== false;
         $review = ['policy'=>self::POLICY, 'expected_folder'=>$series ? 'Approved Group A / Group B / '.$series : 'Unknown series',
@@ -56,7 +58,7 @@ class ArtworkMatcherService
             'match_status'=>$custom ? 'CUSTOM' : 'MISSING','confidence'=>null,'matches'=>[]];
         if (!$custom && $series && $design && $variantKnown) {
             foreach ($type === 'double' ? ['FRONT','BACK'] : [null] as $side) {
-                $review['suggested_filenames'][] = $this->productionFilename($year,$series,$design,$color,$side ?? 'SINGLE','jpg');
+                $review['suggested_filenames'][] = $this->productionFilename($series,$design,$color,$side ?? 'SINGLE','jpg');
             }
         }
         if ($custom) return [...$result,'artwork_review'=>$review];
@@ -84,13 +86,13 @@ class ArtworkMatcherService
             if (preg_match('/(?:^|-)(?:MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/', $name)) continue;
             $name = $this->namingStem($name,$file['id']);
             if($name===null)continue;
-            $parsed = $this->parse($name, $series, $type, $designs, $year);
+            $parsed = $this->parse($name, $series, $type, $designs, $year, $color);
             if (!$parsed) continue; // Unrelated files are not errors for this order.
             if ($color !== null && $parsed['color'] !== $color) {
                 if (count($review['mismatches']) < 10) {
                     $review['mismatches'][] = ['filename'=>$file['name'],'attributes'=>['color / variant']];
                     // A rename cannot fix image content. Show the convention only, preserving the extension.
-                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->productionFilename($year,$series,$design,$color,$parsed['side'],pathinfo($file['name'],PATHINFO_EXTENSION),$file['id'])];
+                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->productionFilename($series,$design,$color,$parsed['side'],pathinfo($file['name'],PATHINFO_EXTENSION),$file['id'])];
                 }
                 continue;
             }
@@ -127,7 +129,8 @@ class ArtworkMatcherService
             if (count($parts) !== 2 || !in_array($this->norm($parts[0]), self::FOLDERS[$series] ?? [], true)) return [false, null];
             $name = $this->norm($parts[1]);
         }
-        return [$this->isColor($name), $this->isColor($name) ? $name : null];
+        $valid=$name!=='' && strlen($name)<=40 && !preg_match('/(?:^|-)(CUSTOM|FRONT|BACK|SINGLE)(?:-|$)/',$name);
+        return [$valid,$valid?$name:null];
     }
 
     private function isColor(string $value): bool
@@ -138,17 +141,15 @@ class ArtworkMatcherService
     private function designs(array $row, string $code, string $year): array
     {
         // Exact full product title is independent evidence; never expand a code by substring.
-        $title = $this->norm($row['product'] ?? '');
-        $title = preg_replace('/^LUCKY-BAGS-'.preg_quote($year, '/').'-/', '', $title);
+        $title = $this->designIdentity($row['product'] ?? '');
         if (in_array($title, array_merge(...array_values(self::FOLDERS)), true)) $title = '';
         if ($title !== '' && preg_match('/^(.*)-ACL-CORNHOLE-BAGS$/', $title, $parts)) $title = $parts[1];
         return array_values(array_unique(array_filter([$code, $title], fn($value)=>$value !== '')));
     }
 
-    private function parse(string $name, string $series, string $type, array $designs, string $year): ?array
+    private function parse(string $name, string $series, string $type, array $designs, string $year,?string $expectedVariant=null): ?array
     {
         if (preg_match('/^(\d{4})-(.+)$/', $name, $parts)) {
-            if ($parts[1] !== $year) return null;
             $name = $parts[2];
         }
         $side = 'single';
@@ -165,15 +166,15 @@ class ArtworkMatcherService
                 if ($body === $design) return ['side'=>$type === 'single' ? 'single' : $side,'color'=>null];
                 if (!str_starts_with($body, $design.'-')) continue;
                 $color = substr($body, strlen($design) + 1);
-                if ($this->isColor($color)) return ['side'=>$type === 'single' ? 'single' : $side,'color'=>$color];
+                if ($this->isColor($color) || $color===$expectedVariant) return ['side'=>$type === 'single' ? 'single' : $side,'color'=>$color];
             }
         }
         return null;
     }
 
-    private function productionFilename(string $year,string $series,string $design,?string $color,string $side,string $extension,?string $fileId=null): string
+    private function productionFilename(string $series,string $design,?string $color,string $side,string $extension,?string $fileId=null): string
     {
-        $stem=implode('-',array_filter(['LB',$year,$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
+        $stem=implode('-',array_filter(['LB',$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
         if($fileId!==null)$stem.='-ID-'.strtoupper(substr(hash('sha256',$fileId),0,12));
         return $stem.'.'.$extension;
     }
@@ -202,7 +203,9 @@ class ArtworkMatcherService
     {
         $series=$this->seriesFromSku($row['sku'] ?? null);
         if (!$series || !in_array($this->norm($folderName),self::FOLDERS[$series],true) || stripos($row['product'] ?? '', 'custom') !== false) return null;
-        if (!preg_match('/^(\d{4})-(.+)-'.preg_quote($series,'/').'-\d+$/',strtoupper(trim($row['sku'])),$sku)) return null;
+        $parts=$this->skuParts($row['sku']);
+        if(!$parts)return null;
+        $sku=[null,$parts['year'],$parts['design']];
         [$known,$variantColor]=$this->variant($row['variant'] ?? '',$series);
         if (!$known) return null;
         $extension=pathinfo($file['name'],PATHINFO_EXTENSION);
@@ -217,25 +220,56 @@ class ArtworkMatcherService
             if (!in_array($side,$type==='double'?['front','back']:['single'],true)) return null;
             $color=$this->norm($mapping['color'] ?? '');
             $color=$color===''?null:$color;
-            if (($color!==null && !$this->isColor($color)) || ($variantColor!==null && $color!==$variantColor)) return null;
+            if (($color!==null && !$this->isColor($color) && $color!==$variantColor) || ($variantColor!==null && $color!==$variantColor)) return null;
         } else {
             $designs=$this->designs($row,$this->norm($sku[2]),$sku[1]);
-            $parsed=$this->parse($name,$series,$type,$designs,$sku[1]);
+            $parsed=$this->parse($name,$series,$type,$designs,$sku[1],$variantColor);
             if (!$parsed) {
                 // A bare exact design may use its approved folder as series context when preparing a reviewed rename.
                 // An explicit different series is never silently overwritten.
                 foreach (self::SERIES as $definition) foreach ($definition[1] as $alias) if (str_starts_with($name,$alias.'-')) return null;
                 $bare=$name;
-                if (preg_match('/^(\d{4})-(.+)$/',$bare,$parts)) { if($parts[1]!==$sku[1])return null; $bare=$parts[2]; }
-                $parsed=$this->parse($series.'-'.$bare,$series,$type,$designs,$sku[1]);
+                if (preg_match('/^(\d{4})-(.+)$/',$bare,$parts)) $bare=$parts[2];
+                $parsed=$this->parse($series.'-'.$bare,$series,$type,$designs,$sku[1],$variantColor);
             }
             if (!$parsed || ($variantColor!==null && $parsed['color']!==$variantColor)) return null;
             $side=$parsed['side']; $color=$parsed['color'];
         }
-        $target=$this->productionFilename($sku[1],$series,$this->norm($sku[2]),$color,$side,$extension,$file['id']);
+        $target=$this->productionFilename($series,$this->norm($sku[2]),$color,$side,$extension,$file['id']);
         if(strlen($target)>255)return null;
         return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
-            'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target];
+            'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target,'design_identity'=>$this->designIdentity($row['product'] ?? '')];
+    }
+
+    public function catalogColor(array $row): ?string { return $this->variant($row['variant']??'',$this->seriesFromSku($row['sku']??null))[1]; }
+
+    public function designIdentity(string $title): string
+    {
+        $title=$this->norm($title);
+        $title=preg_replace('/^LUCKY-BAGS-(?:\d{4}-)?/','',$title);
+        return preg_replace('/-ACL-CORNHOLE-BAGS$/','',$title);
+    }
+
+    /** Descriptive grouping only, never proof of catalog identity or printable artwork. */
+    public function sourceAttributes(array $file,string $folderName,array $catalogColors=[]): ?array
+    {
+        $series=self::seriesForFolder($folderName);if(!$series)return null;
+        $name=$this->norm(pathinfo($file['name'],PATHINFO_FILENAME));
+        if(preg_match('/(?:^|-)(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/',$name))return null;
+        $name=$this->namingStem($name,$file['id']);if($name===null)return null;
+        $name=preg_replace('/^\d{4}-/','',$name);
+        $aliases=[];foreach(self::SERIES as $code=>$definition)foreach($definition[1] as $alias)$aliases[$alias]=$code;
+        uksort($aliases,fn($a,$b)=>strlen($b)<=>strlen($a));
+        foreach($aliases as $alias=>$code)if(str_starts_with($name,$alias.'-')){
+            if($code!==$series)return null;$name=substr($name,strlen($alias)+1);break;
+        }
+        $side=self::SERIES[$series][0]==='single'?'single':null;
+        if(preg_match('/-(FRONT|BACK|SINGLE)$/',$name,$parts)){$side=strtolower($parts[1]);$name=substr($name,0,-strlen($parts[0]));}
+        $color=null;$colors=array_values(array_unique([...self::COLORS,...self::COMPOUND_COLORS,...$catalogColors]));usort($colors,fn($a,$b)=>strlen($b)<=>strlen($a));
+        foreach($colors as $candidate)if(str_ends_with($name,'-'.$candidate)){$color=$candidate;$name=substr($name,0,-strlen($candidate)-1);break;}
+        $name=preg_replace('/-\d{4}$/','',$name);
+        if($name==='' || ctype_digit(str_replace('-','',$name)) || preg_match('/^(IMG|IMAGE|FILE|ARTWORK|DESIGN|UNTITLED|COPY)(?:-\d+)?$/',$name))return null;
+        return ['design'=>$name,'side'=>$side,'color'=>$color,'series'=>$series];
     }
 
     private function namingStem(string $name,string $id): ?string
