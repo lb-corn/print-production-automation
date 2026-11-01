@@ -36,12 +36,22 @@ class ArtworkRenameStore
     }
     public static function summary(array $plan): array
     {
-        $counts=array_count_values(array_column($plan['entries'],'status'));
+        $linked=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal'])));
+        $counts=array_count_values(array_column($linked,'status'));
+        $coverage=['matched'=>0,'missing'=>0,'ambiguous'=>0];
         $matcher=new ArtworkMatcherService();
-        $products=array_unique(array_map(fn($row)=>$matcher->designIdentity($row['product']),$plan['catalog']));
-        return ['images'=>count($plan['entries']),'products'=>count($products),'variants'=>count($plan['catalog']),
+        foreach($plan['catalog'] as $row) {
+            $profile=$matcher->match($row,[]);$required=$profile['design_type']==='double'?['front','back']:['single'];
+            $sides=[];foreach($linked as $entry)if(in_array($row['catalog_key'],$entry['proposal']['catalog_keys']??[$entry['proposal']['catalog_key']??null],true))$sides[]=$entry['proposal']['side'];
+            $sideCounts=array_count_values($sides);$complete=true;$ambiguous=false;
+            foreach($required as $side){if(!($sideCounts[$side]??0))$complete=false;if(($sideCounts[$side]??0)>1)$ambiguous=true;}
+            $coverage[$ambiguous?'ambiguous':($complete?'matched':'missing')]++;
+        }
+        $matcher=new ArtworkMatcherService();
+        $products=array_unique(array_map(fn($row)=>$row['product_id']??$matcher->designIdentity($row['product']),$plan['catalog']));
+        return ['images'=>count($linked),'products'=>count($products),'variants'=>count($plan['catalog']),
             'good'=>($counts['standard']??0)+($counts['renamed']??0),'ready'=>$counts['ready']??0,
-            'review'=>($counts['review']??0)+($counts['conflict']??0),'protected'=>$counts['locked']??0,'checked_at'=>$plan['created_at']];
+            'review'=>($counts['review']??0)+($counts['conflict']??0),'protected'=>$counts['locked']??0,'catalog_matched'=>$coverage['matched'],'catalog_missing'=>$coverage['missing'],'catalog_ambiguous'=>$coverage['ambiguous'],'checked_at'=>$plan['created_at']];
     }
     public function rules(): array
     {

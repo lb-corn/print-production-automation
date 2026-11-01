@@ -96,10 +96,32 @@ $request=Illuminate\Http\Request::create('/admin/artwork-names/begin','POST',['p
 try{$controller->begin($request);throw new LogicException('Unconfirmed apply admitted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['password'],$e->errors()['confirmation'],$e->errors()['reviewed']),'Apply requires admin password, typed RENAME and explicit review');}
 // Test full catalog pagination without Shopify credentials or order history.
 $catalogService=new class extends ShopifyService{
- public array $seen=[];public function __construct(){}
- public function graphql(string $query,array $variables=[]):array{$this->seen[]=$variables['after'];$next=count($this->seen)===1;return ['productVariants'=>['nodes'=>[['id'=>$next?'v1':'v2','sku'=>$next?'2027-DUC-PSE-0001':'2027-EAR-CLV-0001','title'=>'Clover','product'=>['title'=>'Lucky Bags 2027 Earth','productType'=>'ACL Pro Stamped 2027','status'=>'ACTIVE']]],'pageInfo'=>['hasNextPage'=>$next,'endCursor'=>$next?'second':null]]];}
+ public array $seen=[];public string $mode='normal';public function __construct(){}
+ public function graphql(string $query,array $variables=[]):array {
+  $this->seen[]=[$query,$variables];$end=['hasNextPage'=>false,'endCursor'=>null];
+  if(str_contains($query,'ArtworkCollections')) {
+   $nodes=$this->mode==='missing'?[]:[['id'=>'bags','title'=>'All Bags'],['id'=>'other','title'=>'Other Bags']];
+   if($this->mode==='ambiguous')$nodes[]=['id'=>'duplicate','title'=>'All Bags'];
+   return ['collections'=>['nodes'=>$nodes,'pageInfo'=>$end]];
+  }
+  if(str_contains($query,'ArtworkProductVariants'))return ['product'=>['id'=>'p1','status'=>'ACTIVE','variants'=>['nodes'=>[['id'=>'v2','sku'=>'2027-DUC-PSE-0001','title'=>'Pro Sniper Elite / Red']],'pageInfo'=>$end]]];
+  $variant=['nodes'=>[['id'=>'v1','sku'=>'2027-EAR-CLV-0001','title'=>'Clover']],'pageInfo'=>['hasNextPage'=>true,'endCursor'=>'variants-2']];
+  $product=['id'=>'p1','title'=>'Lucky Bags 2027 Earth','productType'=>'ACL Pro Stamped 2027','status'=>'ACTIVE','variants'=>$variant];
+  if(($variables['after']??null)===null) {
+   $products=[$product,[...$product,'id'=>'draft','status'=>'DRAFT'],[...$product,'id'=>'archived','status'=>'ARCHIVED']];
+   $info=['hasNextPage'=>true,'endCursor'=>'products-2'];
+  } else {$products=[];$info=$end;}
+  if($this->mode==='loop')$info=['hasNextPage'=>true,'endCursor'=>'products-2'];
+  return ['collection'=>['id'=>'bags','title'=>'All Bags','products'=>['nodes'=>$products,'pageInfo'=>$info]]];
+ }
 };
-$check(count($catalogService->getArtworkCatalog())===2 && $catalogService->seen===[null,'second'],'Catalog scan paginates variants even when no orders exist');
+$catalogRows=$catalogService->getArtworkCatalog();
+$check(count($catalogRows)===2 && count($catalogService->seen)===4,'All Bags catalog paginates collection products and product variants without orders');
+$check(array_unique(array_column($catalogRows,'product_id'))===['p1'],'Draft and archived products are excluded; no other collection is queried');
+foreach(['missing','ambiguous','loop'] as $mode) {
+ $catalogService->mode=$mode;
+ try{$catalogService->getArtworkCatalog();throw new LogicException('Unsafe catalog scope accepted');}catch(RuntimeException $e){$check(true,'Missing/ambiguous collection or repeated cursor fails closed: '.$mode);}
+}
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks admin artwork naming checks passed.\n";
 // Scope is visible before a scan and exact folders are highlighted afterwards.
@@ -218,10 +240,28 @@ $summaryPlan=$store->create($admin->id,['naming_policy'=>ArtworkNamingService::P
 $store->create($operator->id,['naming_policy'=>ArtworkNamingService::POLICY,'created_at'=>200,'catalog'=>[],'entries'=>[]]);
 $store->create($admin->id,['naming_policy'=>'obsolete','created_at'=>300,'catalog'=>[],'entries'=>[]]);
 $summary=$store->latestSummary($admin->id);
-$check($summary['images']===6 && $summary['products']===1 && $summary['variants']===2 && $summary['good']===2 && $summary['ready']===1 && $summary['review']===2 && $summary['protected']===1,'Dashboard counts distinguish products, variants, correct names, renames, review and protected files');
+$check($summary['images']===0 && $summary['products']===1 && $summary['variants']===2 && $summary['catalog_missing']===2 && $summary['catalog_matched']===0 && $summary['review']===0,'Shopify coverage counts missing catalog variants and excludes unrelated Drive entries');
 $check($summary['checked_at']===100 && $store->latestSummary(99999)===null,'Status snapshots remain actor-scoped and exclude obsolete naming rules');
 $request=Illuminate\Http\Request::create('/admin/settings','GET');$request->setUserResolver(fn()=>$admin);
 $page=$controller->index($request,$store);$check($page->getData()['plan']===null && $page->getData()['summary']===$summary,'Loading settings shows existing counts without restoring an expired actionable preview');
 $check(str_contains($page->render(),'Artwork status') && str_contains($page->render(),'Last checked'),'A compact status row and snapshot time render before a new scan');
+foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
+echo "$checks total admin naming/settings checks passed.\n";
+
+// Shopify is the monitored inventory, including products with no Drive files or orders.
+$gta=[...$row,'catalog_key'=>hash('sha256','gta-luc'),'sku'=>'2027-GTA-LUC-0001','product'=>'Lucky Bags 2027 GTA','variant'=>'Luciano'];
+$luc=['kind'=>'series_folder','id'=>'luc','name'=>'Luciano','path'=>'GROUP B (Carpet) / Luciano'];
+$gtaFile=[...$source('gta','LUC-GTA-BLACK.jpg'),'parent_id'=>'luc','path'=>'GROUP B (Carpet) / Luciano / LUC-GTA-BLACK.jpg'];
+$extra=[...$gtaFile,'id'=>'unrelated','name'=>'UNRELATED-DESIGN.jpg','path'=>'GROUP B (Carpet) / Luciano / UNRELATED-DESIGN.jpg'];
+$shopify->rows=[$gta,$row];$drive->index=[$luc,$folder,$gtaFile,$extra];$catalogPlan=$service->scan($admin->id);
+$coverage=ArtworkRenameStore::summary($catalogPlan);
+$check($coverage['images']===1 && $coverage['catalog_matched']===1 && $coverage['catalog_missing']===1,'Only Shopify-linked images count; catalog products without artwork remain monitored');
+$request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$catalogPlan['token']]);$request->setUserResolver(fn()=>$admin);
+$catalogPage=$controller->index($request,$store);$data=$catalogPage->getData();
+$check(count($data['catalogStatus'])===2 && count($data['visibleEntries'])===1 && $data['catalogStatus'][0]['status']==='matched' && $data['catalogStatus'][1]['status']==='missing','Coverage begins with all Shopify variants, while unrelated Drive files stay outside the monitored table');
+$html=$catalogPage->render();$check(strpos($html,'Shopify product / variant<select')<strpos($html,'Drive artwork<select'),'Mapping asks for the Shopify product before the Drive artwork');
+$check($matcher->namingCandidate($gta,$gtaFile,'Luciano',['side'=>'single','color'=>'BLACK'])!==null,'A Shopify series-only variant can map verified BLACK-labeled GTA artwork');
+$drive->index=[$luc,$folder,$gtaFile,[...$gtaFile,'id'=>'gta-duplicate']];$duplicates=$service->scan($admin->id);
+$check(ArtworkRenameStore::summary($duplicates)['catalog_ambiguous']===1,'Multiple Drive candidates remain ambiguous in Shopify coverage');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";

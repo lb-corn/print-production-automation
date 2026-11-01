@@ -462,3 +462,5 @@ button.review-total:hover{box-shadow:0 3px 12px #102c3d12}button.review-total.ac
 select[data-naming-source][hidden],select[data-naming-catalog][hidden]{display:none}
 
 .naming-picker-list>button[role="option"]{width:100%;border:0;background:transparent;color:inherit;text-align:left;font-family:inherit;box-shadow:none}.naming-picker-list>button[role="option"]:hover,.naming-picker-list>button.active,.naming-picker-list>button[aria-selected="true"]{background:#e9f6f5;color:#007d83}[data-naming-side-needed][hidden]{display:none}
+
+.naming-catalog-status{margin:12px 0;font-size:12px}.naming-catalog-status>input{margin:8px 0;max-width:350px}.naming-catalog-status .naming-table-wrap{max-height:260px;overflow:auto}.naming-catalog-status summary{font-weight:700;cursor:pointer}

@@ -11,9 +11,22 @@ class ArtworkNamingController extends Controller
     {
         $actor=$this->actor($request);
         $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):null;
-        $summary=$plan?ArtworkRenameStore::summary($plan):$store->latestSummary($actor);
+        $currentPlan=$plan && ($plan['naming_policy']??null)===ArtworkNamingService::POLICY;
+        $summary=$currentPlan?ArtworkRenameStore::summary($plan):$store->latestSummary($actor);
         $catalog=[];
-        if($plan)foreach($plan['catalog'] as $row){$profile=(new ArtworkMatcherService())->match($row,[]);if($profile['artwork_review']['suggested_filenames'])$catalog[]=[...$row,'color'=>$profile['color'],'type'=>$profile['design_type'],'series'=>$profile['series_code']];}
+        if($currentPlan)foreach($plan['catalog'] as $row){$profile=(new ArtworkMatcherService())->match($row,[]);if($profile['artwork_review']['suggested_filenames'])$catalog[]=[...$row,'color'=>$profile['color'],'type'=>$profile['design_type'],'series'=>$profile['series_code']];}
+        $catalogStatus=[];$visibleEntries=[];
+        if($currentPlan) {
+            $visibleEntries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) || isset($plan['mappings'][$entry['id']])));
+            foreach($catalog as $row) {
+                $files=array_values(array_filter($visibleEntries,fn($entry)=>in_array($row['catalog_key'],$entry['proposal']['catalog_keys']??[$entry['proposal']['catalog_key']??null],true)));
+                $sides=array_count_values(array_column(array_column($files,'proposal'),'side'));
+                $required=$row['type']==='double'?['front','back']:['single'];
+                $ambiguous=false;$complete=true;
+                foreach($required as $side){if(($sides[$side]??0)>1)$ambiguous=true;if(!($sides[$side]??0))$complete=false;}
+                $catalogStatus[]=[...$row,'status'=>$ambiguous?'ambiguous':($complete?'matched':'missing')];
+            }
+        }
         $scope=[];
         foreach(config('services.google_drive.allowed_root_folders',[]) as $root)$scope[$root]=[];
         if($plan)foreach($plan['index'] as $entry) {
@@ -23,17 +36,18 @@ class ArtworkNamingController extends Controller
         }
         $reviewGroups=[];
         if($plan)foreach($plan['entries'] as $entry)if(in_array($entry['status'],['review','conflict'],true)) {
-            $key=$entry['source_design']??$entry['id'];
+            $attributes=$entry['source_attributes']??[];
+            $key=implode('/',[$entry['source_design']??$entry['id'],$attributes['series']??'',$attributes['color']??'',$attributes['side']??'']);
             if(!isset($reviewGroups[$key]))$reviewGroups[$key]=['entry'=>$entry,'count'=>0];
             $reviewGroups[$key]['count']++;
         }
-        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary'));
+        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries'));
     }
     public function scan(Request $request)
     {
         $actor=$this->actor($request);
         try{$plan=app(ArtworkNamingService::class)->scan($actor);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']]);}
-        catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names')->with('error','Cannot scan Drive and the product catalog. Check service-account access and Shopify read_products access. No files were renamed.');}
+        catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names')->with('error','Cannot load artwork from All Bags and Drive. Check that exactly one All Bags collection exists, Shopify read_products access, and Drive service-account access. No files were renamed.');}
     }
     public function revise(Request $request)
     {

@@ -47,10 +47,11 @@ function namingChoiceFilter(select, query, product = false) {
     if (!select) return;
     const terms = query.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
     const source = sourceChoice?.selectedOptions[0];
+    const catalog = catalogChoice?.selectedOptions[0];
     let count = 0;
     [...select.options].forEach(option => {
         const label = (option.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const eligible = !product || !source?.dataset.series || (option.dataset.series === source.dataset.series && (!source.dataset.color || option.dataset.color === source.dataset.color));
+        const eligible = product || !catalog?.value || !catalog?.dataset.series || (option.dataset.series === catalog.dataset.series && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color));
         option.hidden = !!option.value && (!eligible || !terms.every(term => label.includes(term)));
         option.disabled = option.hidden;
         if (option.value && !option.hidden) count++;
@@ -77,10 +78,7 @@ sourceChoice?.addEventListener('change', () => {
     const source = sourceChoice.selectedOptions[0];
     namingThumbnail('[data-naming-source-image]', source?.dataset.thumbnail);
     namingThumbnail('[data-naming-product-image]', '');
-    if (catalogChoice) {
-        catalogChoice.value = '';
-        namingChoiceFilter(catalogChoice, document.querySelector('[data-naming-product-search]')?.value || '', true);
-    }
+    // Shopify is primary: changing artwork must never clear the chosen product.
     const color = document.querySelector('[data-naming-color]'); if (color) color.value = source?.dataset.color || '';
     const side = document.querySelector('[data-naming-side]'); if (side) side.value = source?.dataset.side || '';
     const link = document.querySelector('[data-naming-original]'); if (link) { link.hidden = !source?.dataset.url; link.href = source?.dataset.url || '#'; }
@@ -88,15 +86,30 @@ sourceChoice?.addEventListener('change', () => {
     const needed = document.querySelector('[data-naming-side-needed]');
     if (needed) needed.hidden = true;
 });
-catalogChoice?.addEventListener('change', () => {
-    const option = catalogChoice.selectedOptions[0];
+function namingMappingAttributes() {
+    const option = catalogChoice?.selectedOptions[0];
+    const source = sourceChoice?.selectedOptions[0];
     namingThumbnail('[data-naming-product-image]', option?.dataset.image);
-    document.querySelector('[data-naming-color]').value = option?.dataset.color || sourceChoice?.selectedOptions[0]?.dataset.color || '';
-    const sourceSide = sourceChoice?.selectedOptions[0]?.dataset.side;
-    document.querySelector('[data-naming-side]').value = option?.dataset.type === 'double' ? (['front','back'].includes(sourceSide) ? sourceSide : '') : 'single';
-    const needed = document.querySelector('[data-naming-side-needed]');
-    if (needed) needed.hidden = !!document.querySelector('[data-naming-side]').value;
+    const color = document.querySelector('[data-naming-color]'); if (color) color.value = option?.dataset.color || source?.dataset.color || '';
+    const side = document.querySelector('[data-naming-side]');
+    if (side) side.value = option?.dataset.type === 'double' ? (['front','back'].includes(source?.dataset.side) ? source.dataset.side : '') : (option?.value ? 'single' : source?.dataset.side || '');
+    const needed = document.querySelector('[data-naming-side-needed]'); if (needed) needed.hidden = !option?.value || !source?.value || !!side?.value;
     namingDetected();
+}
+sourceChoice?.addEventListener('change', namingMappingAttributes);
+catalogChoice?.addEventListener('change', () => {
+    if (sourceChoice) {
+        sourceChoice.value = '';
+        namingChoiceFilter(sourceChoice, '', false);
+        sourceChoice.namingRefresh?.();
+    }
+    namingThumbnail('[data-naming-source-image]', '');
+    const link = document.querySelector('[data-naming-original]'); if (link) link.hidden = true;
+    namingMappingAttributes();
+});
+document.querySelector('[data-catalog-search]')?.addEventListener('input', event => {
+    const terms = event.target.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    document.querySelectorAll('[data-catalog-row]').forEach(row => { row.hidden = !terms.every(term => row.textContent.toLowerCase().includes(term)); });
 });
 function openNamingConfirmation() {
     const count = namingSelected().filter(input => input.checked).length;
@@ -176,7 +189,7 @@ function namingSearchableSelect(select, product = false) {
     trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false');
     const panel = document.createElement('span'); panel.className = 'naming-picker-panel'; panel.hidden = true;
     const search = document.createElement('input'); search.type = 'search'; search.autocomplete = 'off';
-    search.placeholder = product ? 'Search products…' : 'Search designs…';
+    search.placeholder = product ? 'Search Shopify products…' : 'Search Drive artwork…';
     search.setAttribute('aria-label', product ? 'Search matching products' : 'Search designs');
     search.setAttribute(product ? 'data-naming-product-search' : 'data-naming-source-search', '');
     search.setAttribute('role', 'combobox'); search.setAttribute('aria-autocomplete', 'list'); search.setAttribute('aria-expanded', 'false');

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='yearless-design-reuse-v1';
+    public const POLICY='all-bags-active-v2';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 

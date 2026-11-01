@@ -4,6 +4,7 @@ return [
     'factory' => ['api_key' => env('FACTORY_API_KEY')],
 
     'shopify' => [
+        'artwork_collection' => 'All Bags',
         'store' => env('SHOPIFY_STORE'),
         'client_id' => env('SHOPIFY_CLIENT_ID'),
         'client_secret' => env('SHOPIFY_CLIENT_SECRET'),

@@ -38,30 +38,28 @@ function setup(confirmResult, failStep = false) {
     console.log('PASS: uncertain network outcomes stop and do not retry automatically');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 
-// Compact mapping preserves detected attributes and never selects a product by itself.
+// Shopify is primary: file labels must not hide catalog products.
 {
- const element = (dataset={}) => ({dataset, value:'', hidden:false, addEventListener(n,fn){this[n]=fn;}, removeAttribute(n){delete this[n];}});
- const source=element(), catalog=element(), side=element(), color=element(), drive=element(), product=element(), label=element(), advanced=element(), link=element();
- source.selectedOptions=[{value:'file',dataset:{series:'SNP',color:'BLUE',side:'back',thumbnail:'https://drive.google.com/thumbnail?id=file',url:'https://drive.google.com/file/d/file/view'}}];
- const blue={value:'blue',dataset:{series:'SNP',color:'BLUE',type:'double',image:'https://cdn.shopify.com/blue.jpg'}};
- const white={value:'white',dataset:{series:'SNP',color:'WHITE'}};
- const wrongSeries={value:'pse',dataset:{series:'PSE',color:'BLUE'}};
- catalog.options=[blue,white,wrongSeries];catalog.selectedOptions=[blue];
- const sourceSearch=element(), productSearch=element();blue.textContent='Redline Grunge Blue';white.textContent='Redline Grunge White';wrongSeries.textContent='Redline Grunge Blue';source.options=[{value:'miami',textContent:'MIAMI-27 Luciano',dataset:{}},{value:'grunge',textContent:'RED-AND-BLACK-GRUNGE Snipers',dataset:{}}];
- const nodes={'[data-naming-source-search]':sourceSearch,'[data-naming-product-search]':productSearch,'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'[data-naming-side-needed]':advanced,'[data-naming-original]':link};
+ const element = (dataset={}) => ({dataset,value:'',hidden:false,handlers:{},addEventListener(n,fn){(this.handlers[n]??=[]).push(fn);},change(){for(const fn of this.handlers.change||[])fn();},input(e){for(const fn of this.handlers.input||[])fn(e);},removeAttribute(n){delete this[n];}});
+ const source=element(),catalog=element(),side=element(),color=element(),drive=element(),product=element(),label=element(),needed=element(),link=element(),sourceSearch=element(),productSearch=element();
+ const file={value:'file',textContent:'RED-AND-BLACK-GRUNGE',dataset:{series:'SNP',color:'BLUE',side:'back',thumbnail:'https://drive.google.com/thumbnail?id=file',url:'https://drive.google.com/file/d/file/view'}};
+ const wrongColor={value:'white',textContent:'Grunge White',dataset:{series:'SNP',color:'WHITE'}};
+ const wrongSeries={value:'pse',textContent:'Grunge Blue',dataset:{series:'PSE',color:'BLUE'}};
+ const blue={value:'blue',textContent:'Redline Grunge Blue',dataset:{series:'SNP',color:'BLUE',type:'double',image:'https://cdn.shopify.com/blue.jpg'}};
+ source.options=[file,wrongColor,wrongSeries];source.selectedOptions=[file];catalog.options=[blue];catalog.selectedOptions=[blue];catalog.value='blue';
+ const nodes={'[data-naming-source]':source,'[data-naming-catalog]':catalog,'[data-naming-side]':side,'[data-naming-color]':color,'[data-naming-source-image]':drive,'[data-naming-product-image]':product,'[data-naming-detected]':label,'[data-naming-side-needed]':needed,'[data-naming-original]':link,'[data-naming-source-search]':sourceSearch,'[data-naming-product-search]':productSearch};
  vm.runInNewContext(fs.readFileSync('public/js/artwork-names.js','utf8'),{document:{querySelector:s=>nodes[s]||null,querySelectorAll:()=>[]},window:{addEventListener(){}}});
- source.change();assert.equal(side.value,'back');assert.equal(color.value,'BLUE');assert.equal(catalog.value,'');assert(!blue.disabled&&white.disabled&&wrongSeries.disabled);assert.equal(drive.src,source.selectedOptions[0].dataset.thumbnail);
- catalog.change();assert.equal(product.src,blue.dataset.image);assert.equal(side.value,'back');assert(label.textContent.includes('BLUE · back'));
- source.selectedOptions[0].dataset.side='';source.change();assert.equal(advanced.hidden,true);catalog.change();assert.equal(side.value,'');assert.equal(advanced.hidden,false);
- blue.dataset.image='javascript:alert(1)';catalog.change();assert.equal(product.src,undefined);
- productSearch.input({target:{value:'GRUNGE blue'}});assert(!blue.hidden && white.hidden && wrongSeries.hidden);
- productSearch.input({target:{value:'not present'}});assert(blue.hidden);
- productSearch.input({target:{value:''}});assert(!blue.hidden && white.hidden && wrongSeries.hidden);
- sourceSearch.input({target:{value:'miami 27'}});assert(!source.options[0].hidden && source.options[1].hidden);
- sourceSearch.input({target:{value:''}});assert(source.options.every(option=>!option.hidden));
- assert.equal(catalog.value,'');
- console.log('PASS: case-insensitive dropdown search handles spaces/hyphens, clears safely and preserves series/color restrictions');
- console.log('PASS: compact thumbnails filter variants, preserve BACK, expose missing sides and reject unsafe image URLs');
+ catalog.change();assert(!file.disabled&&wrongColor.disabled&&wrongSeries.disabled);
+ source.value='file';source.change();assert.equal(catalog.value,'blue');assert.equal(side.value,'back');assert.equal(color.value,'BLUE');assert(needed.hidden);assert.equal(product.src,blue.dataset.image);
+ file.dataset.side='';source.change();assert(!needed.hidden);assert.equal(side.value,'');
+ productSearch.input({target:{value:'grunge BLUE'}});assert(!blue.hidden);
+ productSearch.input({target:{value:'absent'}});assert(blue.hidden);productSearch.input({target:{value:''}});assert(!blue.hidden);
+ // A Shopify variant without a color option still permits BLACK-labeled Drive artwork.
+ blue.value='gta';blue.textContent='Lucky Bags 2027 GTA';blue.dataset={series:'LUC',color:'',type:'single'};catalog.value='gta';file.textContent='GTA BLACK';file.dataset={series:'LUC',color:'BLACK',side:'single'};
+ catalog.change();assert(!file.disabled);source.value='file';source.change();assert.equal(catalog.value,'gta');assert.equal(color.value,'BLACK');assert.equal(side.value,'single');assert(needed.hidden);
+ productSearch.input({target:{value:'Lucky Bags 2027 GTA'}});assert(!blue.hidden);
+ sourceSearch.input({target:{value:'gta'}});assert(!file.hidden&&wrongColor.hidden);
+ console.log('PASS: Shopify-first picker keeps GTA available, filters Drive series/colors and asks only for missing FRONT/BACK');
 }
 
 // Exercise the enhanced dropdown itself, including keyboard selection and dismissal.
