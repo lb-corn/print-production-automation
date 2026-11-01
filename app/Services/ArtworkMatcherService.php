@@ -24,6 +24,13 @@ class ArtworkMatcherService
 
     public function __construct(private ?GoogleDriveService $drive = null) {}
 
+    public static function seriesForFolder(string $name): ?string
+    {
+        $normalized=trim(preg_replace('/[^A-Z0-9]+/','-',strtoupper($name)),'-');
+        foreach(self::FOLDERS as $series=>$aliases)if(in_array($normalized,$aliases,true))return $series;
+        return null;
+    }
+
     public function seriesFromSku(?string $sku): ?string
     {
         foreach (array_keys(self::SERIES) as $series) {
@@ -49,7 +56,7 @@ class ArtworkMatcherService
             'match_status'=>$custom ? 'CUSTOM' : 'MISSING','confidence'=>null,'matches'=>[]];
         if (!$custom && $series && $design && $variantKnown) {
             foreach ($type === 'double' ? ['FRONT','BACK'] : [null] as $side) {
-                $review['suggested_filenames'][] = $this->filename($series, $design, $color, $side, 'jpg');
+                $review['suggested_filenames'][] = $this->productionFilename($year,$series,$design,$color,$side ?? 'SINGLE','jpg');
             }
         }
         if ($custom) return [...$result,'artwork_review'=>$review];
@@ -75,13 +82,15 @@ class ArtworkMatcherService
             if (!in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['jpg','jpeg','png','tif','tiff','webp','psd','pdf'], true)) continue;
             $name = $this->norm(pathinfo($file['name'], PATHINFO_FILENAME));
             if (preg_match('/(?:^|-)(?:MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/', $name)) continue;
+            $name = $this->namingStem($name,$file['id']);
+            if($name===null)continue;
             $parsed = $this->parse($name, $series, $type, $designs, $year);
             if (!$parsed) continue; // Unrelated files are not errors for this order.
             if ($color !== null && $parsed['color'] !== $color) {
                 if (count($review['mismatches']) < 10) {
                     $review['mismatches'][] = ['filename'=>$file['name'],'attributes'=>['color / variant']];
                     // A rename cannot fix image content. Show the convention only, preserving the extension.
-                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->filename($series,$design,$color,$type === 'double' ? strtoupper($parsed['side']) : null,pathinfo($file['name'],PATHINFO_EXTENSION))];
+                    $review['corrections'][] = ['existing'=>$file['name'], 'suggested'=>$this->productionFilename($year,$series,$design,$color,$parsed['side'],pathinfo($file['name'],PATHINFO_EXTENSION),$file['id'])];
                 }
                 continue;
             }
@@ -162,9 +171,11 @@ class ArtworkMatcherService
         return null;
     }
 
-    private function filename(string $series, string $design, ?string $color, ?string $side, string $extension): string
+    private function productionFilename(string $year,string $series,string $design,?string $color,string $side,string $extension,?string $fileId=null): string
     {
-        return implode('-', array_filter([$series,$design,$color,$side], fn($value)=>$value !== null)).'.'.$extension;
+        $stem=implode('-',array_filter(['LB',$year,$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
+        if($fileId!==null)$stem.='-ID-'.strtoupper(substr(hash('sha256',$fileId),0,12));
+        return $stem.'.'.$extension;
     }
 
     /** Saved previews never confer approval or prove current Drive existence. */
@@ -183,6 +194,56 @@ class ArtworkMatcherService
             $index[] = [...$file,'kind'=>'artwork','parent_id'=>$folderId];
         }
         return $this->match($row, [...array_values($folders),...$index])['matches'];
+    }
+
+
+    /** A rename proposal only: exact catalog/filename evidence, or explicit admin mapping. */
+    public function namingCandidate(array $row, array $file, string $folderName, ?array $mapping = null): ?array
+    {
+        $series=$this->seriesFromSku($row['sku'] ?? null);
+        if (!$series || !in_array($this->norm($folderName),self::FOLDERS[$series],true) || stripos($row['product'] ?? '', 'custom') !== false) return null;
+        if (!preg_match('/^(\d{4})-(.+)-'.preg_quote($series,'/').'-\d+$/',strtoupper(trim($row['sku'])),$sku)) return null;
+        [$known,$variantColor]=$this->variant($row['variant'] ?? '',$series);
+        if (!$known) return null;
+        $extension=pathinfo($file['name'],PATHINFO_EXTENSION);
+        if (!in_array(strtolower($extension),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true)) return null;
+        $name=$this->norm(pathinfo($file['name'],PATHINFO_FILENAME));
+        if (preg_match('/(?:^|-)(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/',$name)) return null;
+        $type=self::SERIES[$series][0];
+        $name=$this->namingStem($name,$file['id']);
+        if($name===null && $mapping===null)return null;
+        if ($mapping !== null) {
+            $side=$mapping['side'] ?? '';
+            if (!in_array($side,$type==='double'?['front','back']:['single'],true)) return null;
+            $color=$this->norm($mapping['color'] ?? '');
+            $color=$color===''?null:$color;
+            if (($color!==null && !$this->isColor($color)) || ($variantColor!==null && $color!==$variantColor)) return null;
+        } else {
+            $designs=$this->designs($row,$this->norm($sku[2]),$sku[1]);
+            $parsed=$this->parse($name,$series,$type,$designs,$sku[1]);
+            if (!$parsed) {
+                // A bare exact design may use its approved folder as series context when preparing a reviewed rename.
+                // An explicit different series is never silently overwritten.
+                foreach (self::SERIES as $definition) foreach ($definition[1] as $alias) if (str_starts_with($name,$alias.'-')) return null;
+                $bare=$name;
+                if (preg_match('/^(\d{4})-(.+)$/',$bare,$parts)) { if($parts[1]!==$sku[1])return null; $bare=$parts[2]; }
+                $parsed=$this->parse($series.'-'.$bare,$series,$type,$designs,$sku[1]);
+            }
+            if (!$parsed || ($variantColor!==null && $parsed['color']!==$variantColor)) return null;
+            $side=$parsed['side']; $color=$parsed['color'];
+        }
+        $target=$this->productionFilename($sku[1],$series,$this->norm($sku[2]),$color,$side,$extension,$file['id']);
+        if(strlen($target)>255)return null;
+        return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
+            'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target];
+    }
+
+    private function namingStem(string $name,string $id): ?string
+    {
+        if(!str_starts_with($name,'LB-'))return $name;
+        $body=substr($name,3);
+        if(preg_match('/^(.+)-ID-([A-F0-9]{12})$/',$body,$parts))return hash_equals(strtoupper(substr(hash('sha256',$id),0,12)),$parts[2])?$parts[1]:null;
+        return $body;
     }
 
     public static function validSelection($item): bool

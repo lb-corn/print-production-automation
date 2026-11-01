@@ -54,7 +54,7 @@ class ArtworkRematchService
     private function identity(array $files): array
     {
         $keys = array_map(fn($file) => json_encode(array_intersect_key($file, array_flip([
-            'id','name','parent_id','side','modifiedTime','md5Checksum',
+            'id','name','parent_id','side','modifiedTime','md5Checksum','version',
         ]))), $files);
         sort($keys);
         return $keys;

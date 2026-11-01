@@ -12,7 +12,7 @@
                 <a href="{{ route('docs') }}" @if(request()->routeIs('docs')) aria-current="page" @endif>Docs <span>Quick guide</span></a>
                 @if(auth()->user()?->role === 'admin')
                     <a class="admin-menu-start" href="{{ route('admin.users') }}" @if(request()->routeIs('admin.users*')) aria-current="page" @endif>Users <span>Admin</span></a>
-                    <a href="{{ route('admin.reset') }}" @if(request()->routeIs('admin.reset')) aria-current="page" @endif>Reset portal data</a>
+                    <a href="{{ route('admin.settings') }}" @if(request()->routeIs('admin.settings')) aria-current="page" @endif>Admin Settings <span>Admin</span></a>
                 @endif
             </nav>
             <form method="post" action="{{ route('logout') }}">

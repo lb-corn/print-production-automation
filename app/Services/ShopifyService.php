@@ -396,4 +396,34 @@ GRAPHQL;
                 ?? null,
         ];
     }
+
+    /** Read every stock manufacturing variant, including products with no orders. */
+    public function getArtworkCatalog(): array
+    {
+        $query = <<<'GRAPHQL'
+query ArtworkCatalog($after: String) {
+  productVariants(first: 100, after: $after) {
+    nodes { id sku title product { title productType status } }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+GRAPHQL;
+        $rows=[]; $after=null; $seen=[];
+        do {
+            $data=$this->graphql($query, ['after'=>$after]);
+            $page=$data['productVariants'] ?? null;
+            if (!is_array($page) || !isset($page['nodes'],$page['pageInfo']['hasNextPage'])) throw new RuntimeException('Incomplete artwork catalog response.');
+            foreach ($page['nodes'] as $variant) {
+                $product=$variant['product'] ?? [];
+                if (!preg_match('/^ACL Pro Stamped \d{4}$/', $product['productType'] ?? '') || ($product['status'] ?? '') === 'ARCHIVED'
+                    || stripos($product['title'] ?? '', 'custom') !== false || empty($variant['sku'])) continue;
+                $rows[]=['catalog_key'=>hash('sha256',$variant['id']),'sku'=>$variant['sku'],'product'=>$product['title'],'variant'=>$variant['title'] ?? ''];
+            }
+            $next=$page['pageInfo']['hasNextPage'];
+            $after=$page['pageInfo']['endCursor'] ?? null;
+            if ($next && (!$after || isset($seen[$after]))) throw new RuntimeException('Artwork catalog pagination did not advance.');
+            if ($after) $seen[$after]=true;
+        } while ($next);
+        return $rows;
+    }
 }

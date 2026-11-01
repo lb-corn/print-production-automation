@@ -38,8 +38,8 @@ foreach (['PSE-DUC-BROWN.png','SUP-DUC-RED.png','PSE-DUCK-RED.png','PSE-DUC-RED-
 }
 $drive->tree['pse']=[$file('invalid','PSE-DUC-BROWN.TIFF')];
 $missing=$matcher->match($row);
-$check($missing['artwork_review']['suggested_filenames']===['PSE-DUC-RED.jpg'],'Missing artwork supplies conventional filename');
-$check($missing['artwork_review']['corrections'][0]['suggested']==='PSE-DUC-RED.TIFF','Corrections preserve actual extension');
+$check($missing['artwork_review']['suggested_filenames']===['LB-2027-PSE-DUC-RED-SINGLE.jpg'],'Missing artwork supplies conventional filename');
+$check(str_ends_with($missing['artwork_review']['corrections'][0]['suggested'],'.TIFF') && str_starts_with($missing['artwork_review']['corrections'][0]['suggested'],'LB-2027-PSE-DUC-RED-SINGLE-ID-'),'Corrections preserve actual extension');
 $check($missing['artwork_review']['expected_folder']==='GROUP B (Carpet) / PSE' && str_ends_with($missing['artwork_review']['folder_url'],'/pse'),'Expected folder and direct link supplied');
 $drive->tree['pse']=[$file('one','PSE-DUC-RED.png'),$file('two','pse_duc_red.tiff')];
 $ambiguous=$matcher->match($row);
@@ -129,7 +129,7 @@ $legacy->update(['match_status'=>'REVIEW','matches'=>[['id'=>'old-mockup','name'
 $drive->fail=true;
 $html=$controller->verification()->render();
 $check(!str_contains($html,'old-mockup') && !str_contains($html,'PSN-ELT-DUCK CAMO RED MOCKUP.jpg'),'Legacy invalid preview is hidden from the right-hand box');
-$check(str_contains($html,'PSE-DUC-RED.jpg') && str_contains($html,'Check production artwork'),'Legacy missing state computes the proposed filename without Drive or database writes');
+$check(str_contains($html,'LB-2027-PSE-DUC-RED-SINGLE.jpg') && str_contains($html,'Check production artwork'),'Legacy missing state computes the proposed filename without Drive or database writes');
 $check($legacy->fresh()->artwork_review===null && $legacy->fresh()->matches[0]['id']==='old-mockup','Rendering missing instructions does not modify saved selections');
 $drive->fail=false;
 // Prove rollback even when a later item fails after an earlier selection was saved.
@@ -159,7 +159,7 @@ $earth=['sku'=>'2027-EAR-CLV-0001','product'=>'Lucky Bags 2027 Earth','variant'=
 $drive->tree['clover']=[$file('earth-jpg','CLV-EAR.jpg')];
 $earthMatch=$matcher->match($earth);
 $check(array_column($earthMatch['matches'],'id')===['earth-jpg'] && $earthMatch['color']===null,'Series-only Clover variant correctly matches colorless Earth JPG');
-$check($earthMatch['artwork_review']['suggested_filenames']===['CLV-EAR.jpg'],'Earth naming suggestion uses requested JPG format without inventing a color');
+$check($earthMatch['artwork_review']['suggested_filenames']===['LB-2027-CLV-EAR-SINGLE.jpg'],'Earth naming suggestion uses requested JPG format without inventing a color');
 $drive->tree['clover']=[$file('colored-earth','CLV-EAR-RED.jpg')];
 $check($matcher->match($earth)['match_status']==='REVIEW','Unique colored artwork for unspecified Shopify color still requires operator review');
 $check(!$matcher->match([...$earth,'variant'=>'Clover / Ultraviolet'])['matches'],'Unrecognized variant color does not silently become colorless');
@@ -243,7 +243,7 @@ foreach (['PSE-ZEB42-RED.jpg','2028-PSN-ELT-ZEBRA NIGHT SKY-RED.jpg'] as $name) 
 $drive->tree=['group-b'=>[$folder('clover','Clover')],'clover'=>[$file('shortened','CLV-BUBBLES.jpg')]];
 $bubble=['sku'=>'2027-BUB-CLV-0001','product'=>'Lucky Bags 2027 Bubble Fusion','variant'=>'Clovers'];
 $nonstandard=$matcher->match($bubble);
-$check($nonstandard['match_status']==='MISSING' && $nonstandard['artwork_review']['suggested_filenames']===['CLV-BUB.jpg'],'Nonstandard Bubble abbreviation gets a canonical SKU filename suggestion without a special-case alias');
+$check($nonstandard['match_status']==='MISSING' && $nonstandard['artwork_review']['suggested_filenames']===['LB-2027-CLV-BUB-SINGLE.jpg'],'Nonstandard Bubble abbreviation gets a canonical SKU filename suggestion without a special-case alias');
 foreach (['CLV-BUB.jpg','CLV-BUBBLE FUSION.jpg'] as $name) {
     $drive->tree['clover']=[$file('bubble',$name)];
     $check($matcher->match($bubble)['match_status']==='REVIEW','Bubble Fusion follows the same standard rule: '.$name);

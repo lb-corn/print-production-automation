@@ -22,3 +22,7 @@ The final generic rule was validated against real Drive listings and isolated fi
 ## Rematch rate-limit feedback
 
 Rematching retains its three-attempts-per-minute protection, scoped to the signed-in operator. Browser requests that exceed the limit return to Artwork Verification with the remaining wait time; JSON requests retain HTTP 429 and Retry-After. The client disables all rematch controls while an accepted submission is running, blocks duplicate submits, and restores controls after browser history navigation. No automatic retry runs. Cache/session-only PHP tests and isolated JavaScript behavior tests cover these cases without invoking Drive, a database write or a print operation.
+
+## Admin bulk filenames
+
+The admin-only **Artwork filenames** tool adds catalog-backed reviewed bulk renaming, stable Drive-ID suffixes, explicit FRONT/BACK/SINGLE names, extension preservation, highlighted folder scope, protected batches and a private before/after audit. See [Admin artwork naming](admin-artwork-naming.md) for setup, tests, partial-failure behavior and deployment requirements. Normal read-only matching is preserved. Missing-file suggestions use the same LB/year/series/design/color/side convention; only real existing files receive a stable ID suffix.

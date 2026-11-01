@@ -72,7 +72,7 @@ class GoogleDriveService
                 'fields' =>
                     'nextPageToken,files(' .
                     'id,name,mimeType,parents,' .
-                    'webViewLink,imageMediaMetadata,modifiedTime,md5Checksum' .
+                    'webViewLink,imageMediaMetadata,modifiedTime,md5Checksum,version,capabilities(canRename)' .
                     ')',
 
                 'pageSize' => 1000,
@@ -90,6 +90,8 @@ class GoogleDriveService
                 $files[] = [
                     'id' => $file->getId(),
                     'modifiedTime' => $file->getModifiedTime(),
+                    'version' => $file->getVersion(),
+                    'canRename' => $file->getCapabilities()?->getCanRename(),
                     'md5Checksum' => $file->getMd5Checksum(),
                     'name' => $file->getName(),
                     'mimeType' => $file->getMimeType(),
@@ -144,7 +146,7 @@ class GoogleDriveService
         $results = [];
         foreach ($this->manufacturingRoots() as $root) {
             foreach ($this->listChildren($root['id']) as $folder) {
-                if ($folder['mimeType'] !== 'application/vnd.google-apps.folder') continue;
+                if ($folder['mimeType'] !== 'application/vnd.google-apps.folder' || !ArtworkMatcherService::seriesForFolder($folder['name'])) continue;
                 if (preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:$|[^A-Z0-9])/i', $folder['name'])) continue;
                 $path = $root['name'].' / '.$folder['name'];
                 $results[] = ['kind'=>'series_folder','id'=>$folder['id'],'name'=>$folder['name'],'path'=>$path];

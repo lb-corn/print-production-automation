@@ -125,6 +125,8 @@ jobs:
           php artisan view:clear
       - name: Run application regression checks
         run: |
+          php tests/artwork-naming.php
+          node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php
           node tests/rematch-controls.cjs
           php tests/drive-index.php

@@ -11,6 +11,7 @@ return [
     ],
 
     'google_drive' => [
+        'rename_enabled' => (bool) env('GOOGLE_DRIVE_RENAME_ENABLED', true),
         'service_account_file' => base_path(
             env(
                 'GOOGLE_SERVICE_ACCOUNT_FILE',
