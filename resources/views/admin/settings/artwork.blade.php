@@ -43,6 +43,7 @@ $ready=$counts['ready']??0;
 $needsReview=($counts['review']??0)+($counts['conflict']??0);
 $protected=($counts['locked']??0)+($counts['standard']??0);
 $preselected=0;
+$standardize=(bool)($plan['standardize']??false);
 @endphp
 
 @if($outdated)
@@ -119,6 +120,15 @@ $preselected=0;
 </div></form></dialog>
 @endif
 <details class="naming-advanced"><summary>Optional filename changes · {{$ready}} proposed{{config('services.google_drive.rename_enabled')?'':' · read only'}}</summary>
+@if($preview)
+@if($standardize)
+<p class="admin-notice"><strong>Standard names preview</strong> · Working filenames are included. Select only the files you want to change. Files used by print batches are protected. Renaming clears affected unbatched approvals and refreshes artwork matches; review and approve those orders again.</p>
+<a class="artwork-folder-link" href="{{route('admin.settings',['section'=>'artwork'])}}">Back to regular artwork matching →</a>
+@else
+<div class="naming-simple-header"><div><strong>Standardize working filenames</strong><span>Optional · preview the app’s suggested names, including files already matching correctly.</span></div>
+<form method="post" action="{{route('admin.artwork-names.standardize')}}" data-catalog-sync>@csrf<button type="submit" class="chip">Prepare standard names</button></form></div>
+@endif
+@endif
 <p class="muted">This is a saved preview from {{date('d M, H:i',$plan['created_at'])}}. After changing Shopify data or Drive files, use Data sync to load the current catalog. Catalog sync does not update orders or print queues.</p>
 <div class="naming-table-tools naming-simple-tools">
 <div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Linked files to review</button><button type="button" class="chip" data-naming-mode="all">Linked files</button></div>
@@ -133,7 +143,7 @@ $preselected=0;
 <tr data-naming-row data-naming-status="{{$entry['status']}}"
 @if($entry['status']!=='ready') hidden
 @endif><td>
-@if($preview&&config('services.google_drive.rename_enabled')&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked($preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
+@if($preview&&config('services.google_drive.rename_enabled')&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked(!$standardize&&$preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
 @endif<span class="badge">{{ucfirst($entry['status'])}}</span></td>
 <td><a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">{{$entry['source']['name']}} ↗</a><small>{{$entry['folder']}}</small></td>
 <td><code>{{$entry['proposal']['target']??'Confirm design first'}}</code>
@@ -149,11 +159,13 @@ $preselected=0;
 @if($preview)
 @if(!config('services.google_drive.rename_enabled'))<p class="admin-notice">Drive filename changes are disabled on this server. To process an order, use the Shopify artwork matching list above to confirm its production files, then return to Artwork Verification to approve. Renaming is optional for confirmed artwork choices. To enable filename changes, the server administrator must enable GOOGLE_DRIVE_RENAME_ENABLED and refresh the Laravel configuration cache.</p>@endif
 @if(config('services.google_drive.rename_enabled'))
-<div class="naming-simple-action"><button type="button" class="chip" data-naming-select hidden>Select all ready</button><span data-naming-selected>{{$ready>500?500:$ready}} ready files selected</span><button class="primary" type="button" data-naming-open data-naming-enabled="1" @disabled(!$ready)>Rename ready files</button></div>
+<div class="naming-simple-action"><button type="button" class="chip" data-naming-select @if(!$standardize) hidden @endif>Select all ready</button><span data-naming-selected>{{$standardize?0:min(500,$ready)}} ready files selected</span><button class="primary" type="button" data-naming-open data-naming-enabled="1" @disabled(!$ready||$standardize)>Rename ready files</button></div>
 <dialog class="naming-confirm-dialog" data-naming-dialog>
 <h3>Rename <span data-naming-confirm-count></span> ready files?</h3><p>Only filenames change. File extensions, contents and print batches stay protected.</p>
+<p>Affected unbatched artwork approvals will be cleared. Review and approve those orders again after the names refresh.</p>
 <label>Admin password<input name="password" type="password" required disabled autocomplete="current-password"></label>
-<label class="naming-dialog-check"><input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches afterwards</label>
+@if($standardize)<input type="hidden" name="refresh" value="1"><p>Unbatched artwork matches refresh automatically after standardization.</p>
+@else<label class="naming-dialog-check"><input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches afterwards</label>@endif
 <div><button type="button" class="chip" data-naming-cancel>Cancel</button><button class="primary" type="submit">Confirm rename</button></div>
 <p data-naming-progress role="status" aria-live="polite"></p>
 </dialog>

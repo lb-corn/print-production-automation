@@ -251,7 +251,7 @@ class ArtworkMatcherService
 
 
     /** A rename proposal only: exact catalog/filename evidence, or explicit admin mapping. */
-    public function namingCandidate(array $row, array $file, string $folderName, ?array $mapping = null): ?array
+    public function namingCandidate(array $row, array $file, string $folderName, ?array $mapping = null, bool $standardize = false): ?array
     {
         $series=$this->seriesFromSku($row['sku'] ?? null);
         if (!$series || !in_array($this->norm($folderName),self::FOLDERS[$series],true) || stripos($row['product'] ?? '', 'custom') !== false) return null;
@@ -297,7 +297,7 @@ class ArtworkMatcherService
         // cannot reinterpret an explicit different color or infer another side.
         $compatible=$strict && $strict['side']===$side
             && ($strict['color']===$color || ($mapping!==null && $strict['color']===null));
-        $target=$compatible?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
+        $target=$compatible&&!$standardize?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
         if(strlen($target)>255)return null;
         return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
             'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target,'design_identity'=>$this->designIdentity($row['product'] ?? '')];
