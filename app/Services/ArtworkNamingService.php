@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='optional-standard-names-v7';
+    public const POLICY='id-suffixed-standard-names-v8';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 

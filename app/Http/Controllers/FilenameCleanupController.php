@@ -13,7 +13,7 @@ class FilenameCleanupController extends Controller
         try {
             $plan=app(ArtworkNamingService::class)->scan($actor,true);
             $preferred=app(ArtworkRenameStore::class)->preferredFilenames();
-            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target'] && ($preferred[$entry['id']]['fingerprint']??null)!==ArtworkMatcherService::artworkFingerprint($entry['source'])));
+            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target'] && !(($preferred[$entry['id']]['policy']??null)===ArtworkNamingService::POLICY && ($preferred[$entry['id']]['fingerprint']??null)===ArtworkMatcherService::artworkFingerprint($entry['source']))));
         } catch(\Throwable $e) { report($e);$loadError='Could not load filename suggestions. Check Shopify and Drive access, then refresh the list.'; }
         return view('admin.settings',['section'=>'filenames','plan'=>$plan,'filenameEntries'=>$entries,'loadError'=>$loadError]);
     }

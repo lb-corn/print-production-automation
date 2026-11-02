@@ -298,6 +298,7 @@ class ArtworkMatcherService
         $compatible=$strict && $strict['side']===$side
             && ($strict['color']===$color || ($mapping!==null && $strict['color']===null));
         $target=$compatible&&!$standardize?$file['name']:$this->productionFilename($series,$row['naming_design']??$this->norm($sku[2]),$color,$side,$extension);
+        if($standardize)$target=substr($target,0,-strlen($extension)-1).'-ID-'.strtoupper(substr(hash('sha256',$file['id']),0,12)).'.'.$extension;
         if(strlen($target)>255)return null;
         return ['catalog_key'=>$row['catalog_key'],'sku'=>$row['sku'],'product'=>$row['product'],'variant'=>$row['variant'],
             'series'=>$series,'type'=>$type,'side'=>$side,'color'=>$color,'target'=>$target,'design_identity'=>$this->designIdentity($row['product'] ?? '')];

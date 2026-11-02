@@ -10,7 +10,7 @@ $canonicalRow=[...$cleanupRow,'catalog_key'=>hash('sha256','cleanup-standard'),'
 $lockedRow=[...$cleanupRow,'catalog_key'=>hash('sha256','cleanup-locked'),'sku'=>'2027-BAT-PSE-0001','product'=>'Lucky Bags 2027 Bat'];
 $cleanupFolder=['kind'=>'series_folder','id'=>'pse','name'=>'PSE','path'=>'GROUP B (Carpet) / PSE'];
 $work=[...$source('cleanup-work','PSE-DUC-RED.jpg'),'canRename'=>true];
-$canonical=[...$source('cleanup-standard','LB-PSE-ZEB-RED-SINGLE.jpg'),'canRename'=>true];
+$canonical=[...$source('cleanup-standard',$standardName('LB-PSE-ZEB-RED-SINGLE','cleanup-standard')),'canRename'=>true];
 $locked=[...$source('cleanup-locked','PSE-BAT-RED.jpg'),'canRename'=>true];
 $unresolved=$source('cleanup-unresolved','some random image.jpg');
 $shopify->rows=[$cleanupRow,$canonicalRow,$lockedRow];$drive->index=[$cleanupFolder,$work,$canonical,$locked,$unresolved];
@@ -24,7 +24,7 @@ $item=ProductionItem::create(['line_item_id'=>'cleanup-order','quantity'=>1,...a
 $batchesBefore=PrintBatch::all()->toJson();
 $processRequest=function($token,$id,$user) { $r=Illuminate\Http\Request::create('/admin/filename-cleanup/process','POST',['plan'=>$token,'file_id'=>$id]);$r->setUserResolver(fn()=>$user);return $r; };
 $response=$cleanup->process($processRequest($data['plan']['token'],$work['id'],$admin));$item=$item->fresh('decision');
-$check($response->isRedirect(route('admin.settings',['section'=>'filenames'])) && $writer->writes===$writesBefore+1 && $item->matches[0]['name']==='LB-PSE-DUC-RED-SINGLE.jpg' && !$item->decision && str_contains(session('ok'),'Renamed PSE-DUC-RED.jpg'),'One-click action updates Drive and the order with a clear success result and fresh approval requirement');
+$check($response->isRedirect(route('admin.settings',['section'=>'filenames'])) && $writer->writes===$writesBefore+1 && $item->matches[0]['name']===$standardName('LB-PSE-DUC-RED-SINGLE',$work['id']) && !$item->decision && str_contains(session('ok'),'Renamed PSE-DUC-RED.jpg'),'One-click action updates Drive and the order with a clear success result and fresh approval requirement');
 $check(PrintBatch::all()->toJson()===$batchesBefore,'One-click cleanup never changes existing queues or batch snapshots');
 $newPage=$cleanup->index($request);$check(!in_array($work['id'],array_column($newPage->getData()['filenameEntries'],'id'),true),'Successfully renamed file disappears from the nonstandard list');
 $cleanup->process($processRequest($data['plan']['token'],$work['id'],$admin));$check($writer->writes===$writesBefore+1 && str_contains(session('error'),'No files were renamed'),'Replayed row actions cannot rename again');
@@ -53,12 +53,17 @@ $r=$processRequest($editPlan['token'],$other['id'],$admin);$r->merge(['suggested
 $check($writer->writes===$writesBefore+1 && $drive->index[1]['name']===$custom && $matcher->match($cleanupRow,$drive->index)['matches'][0]['name']===$custom && str_contains(session('ok'),$custom),'A valid edited design name is written to Drive and remains matchable in the app');
 $check(!in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'An accepted custom filename is remembered instead of being suggested for cleanup again');
 $drive->index[1]['version']='changed-outside-app';$check(in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'A remembered custom filename does not hide a file whose metadata changed later');
-$drive->index[1]['version']='changed-outside-app';$check(in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'A remembered custom filename does not hide a file whose metadata changed later');
 $sharedRow=[...$cleanupRow,'catalog_key'=>hash('sha256','edited-shared'),'product'=>'Lucky Bags 2027 Broken Glass'];$shopify->rows=[$cleanupRow,$sharedRow];$drive->index=[$cleanupFolder,[...$source('edited-shared-source','PSE-DUCK-CAMO-RED.jpeg'),'canRename'=>true]];$sharedPlan=$service->scan($admin->id,true);
 try{$service->setSuggestedName($sharedPlan['token'],$admin->id,'edited-shared-source','LB-PSE-DUC-RED-SINGLE.jpeg');throw new LogicException('Ambiguous short name accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && str_contains($e->getMessage(),'shared'),'Edited names cannot remove product disambiguation when distinct designs share a SKU code');}
 $settingsRequest=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'users']);$settingsRequest->setUserResolver(fn()=>$admin);$usersHtml=(new App\Http\Controllers\AdminSettingsController())->index($settingsRequest)->render();
 $check(str_contains($usersHtml,'Manage Users') && str_contains($usersHtml,'Create user') && substr_count($usersHtml,'<main>')===1 && !str_contains($usersHtml,'Admin only'),'Manage Users renders inside the shared settings layout without Admin-only badges');
 $accountHtml=view('partials.account-menu')->render();$check(!str_contains($accountHtml,'>Users ') && str_contains($accountHtml,'Admin Settings'),'Account menu has one Admin Settings entry instead of a separate Users item');
 $settingsRequest->setUserResolver(fn()=>$operator);try{(new App\Http\Controllers\AdminSettingsController())->index($settingsRequest);throw new LogicException('Operator accessed users tab');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Removing badges does not grant normal users access to Manage Users');}
+$cloverRow=[...$cleanupRow,'catalog_key'=>hash('sha256','reported-clover'),'sku'=>'2027-RET7-CLV-0001','product'=>'Lucky Bags 2027 Retro 7','variant'=>'Clovers'];$lucRow=[...$cloverRow,'catalog_key'=>hash('sha256','reported-luciano'),'sku'=>'2027-RET7-LUC-0001','variant'=>'Luciano'];
+$cloverFolder=['kind'=>'series_folder','id'=>'reported-clv','name'=>'Clover','path'=>'GROUP B (Carpet) / Clover'];$lucFolder=['kind'=>'series_folder','id'=>'reported-luc','name'=>'Luciano','path'=>'GROUP B (Carpet) / Luciano'];
+$short=[...$source('reported-short-clover','LB-CLV-RET7-SINGLE.jpg'),'parent_id'=>$cloverFolder['id'],'path'=>$cloverFolder['path'].' / LB-CLV-RET7-SINGLE.jpg','canRename'=>true];
+$luc=[...$source('10W9EHnm4xOr4OJ4jiHQuCo_4NtOSpSIG','LB-LUC-RET7-BLACK-SINGLE-ID-A170B0A272A7.jpg'),'parent_id'=>$lucFolder['id'],'path'=>$lucFolder['path'].' / LB-LUC-RET7-BLACK-SINGLE-ID-A170B0A272A7.jpg','canRename'=>true];
+$shopify->rows=[$cloverRow,$lucRow];$drive->index=[$cloverFolder,$lucFolder,$short,$luc];$reported=$cleanup->index($request)->getData()['filenameEntries'];
+$check(array_column($reported,'id')===[$short['id']] && $reported[0]['proposal']['target']===$standardName('LB-CLV-RET7-SINGLE',$short['id']),'Cleanup hides the reported correct Luciano name and lists short Clover for its own ID-suffixed suggestion');
 foreach(glob($directory.'/*.json') as $path)unlink($path);rmdir($directory);
 echo "Simple filename cleanup checks passed.\n";
