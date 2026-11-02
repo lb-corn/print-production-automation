@@ -74,7 +74,7 @@ class ArtworkRenameStore
     }
     public function rememberFilename(array $file,int $actor): void
     {
-        $names=$this->preferredFilenames();$names[$file['id']]=['name'=>$file['name'],'fingerprint'=>ArtworkMatcherService::artworkFingerprint($file),'actor'=>$actor,'at'=>gmdate('c')];
+        $names=$this->preferredFilenames();$names[$file['id']]=['name'=>$file['name'],'fingerprint'=>ArtworkMatcherService::artworkFingerprint($file),'policy'=>ArtworkNamingService::POLICY,'actor'=>$actor,'at'=>gmdate('c')];
         $this->write($this->directory.DIRECTORY_SEPARATOR.'filename-preferences.json',$names);
     }
     public function selections(): array

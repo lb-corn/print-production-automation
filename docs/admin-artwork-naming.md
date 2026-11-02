@@ -8,17 +8,17 @@ Open **Admin Settings → Filename cleanup**. The page reads current Shopify cat
 
 | Current filename | Suggested name | Action |
 | --- | --- | --- |
-| CLV-RETRO 7 GRUNGE.jpg | LB-CLV-RET7-SINGLE.jpg | Process suggested name |
+| LB-CLV-RET7-SINGLE.jpg | LB-CLV-RET7-SINGLE-ID-XXXXXXXXXXXX.jpg | Process suggested name |
 
-The product and series are shown separately from the authoritative current Drive filename. **New name** is editable; keep the same series, design, color, side and extension. Both validated old ID-suffixed names and shorter names are supported by matching; the suffix is not mandatory. CLV and LUC identify different series and cannot be interchanged. Product-name, SKU and filename search share one compact toolbar with an adjacent Clear action.
+Cleanup now prefers `LB-SERIES-DESIGN-COLOR-SIDE-ID-XXXXXXXXXXXX.ext`. The ID token is the existing twelve-character uppercase hash of the exact Drive file ID. Correct ID-suffixed names are not listed or shortened. Short names appear for optional alignment. Matching continues accepting shorter names, so deployment does not block existing orders. Color is omitted when unsupported by catalog/reviewed data; CLV and LUC remain separate series. New name stays editable, subject to the existing matching and collision checks.
 
-After a verified rename to an edited, valid name, the app remembers that filename with its exact metadata fingerprint in private filename-preferences.json. It is not repeatedly listed for cleanup. Later file changes invalidate that preference; it never supplies print approval or bypasses matching checks.
+After a verified rename to an edited, valid name, the app remembers its fingerprint and naming-policy version in private filename-preferences.json. It is not repeatedly listed under that policy. File changes or a policy revision invalidate that preference; it never supplies print approval or bypasses matching checks.
 
 Click **Process suggested name** on one row. That request renames that exact Drive file and refreshes unbatched artwork matches. The page returns with a success or failure message; a successfully standardized file disappears from the list. **Refresh** reloads current suggestions. There are no bulk selections, password dialogs, prepare/preview modes or typed confirmation phrases in this UI.
 
 Filename cleanup is optional. Matching and printing can continue using valid legacy names. The Artwork matching screen no longer contains filename processing controls. Old Prepare standard names requests redirect to Filename cleanup.
 
-Files with no reliable catalog identity are excluded rather than assigned guessed names. Use Artwork matching to confirm their design first. A working, exact-file reviewed choice can supply identity and variant evidence for its suggested filename. Standard names use LB-SERIES-DESIGN-COLOR-SIDE, omit absent colors and preserve the actual extension. Existing canonical filenames are not listed. Shared design codes use the normalized full product design when needed to avoid assigning one design's name to another.
+Files with no reliable catalog identity are excluded rather than assigned guessed names. Use Artwork matching to confirm their design first. Reviewed choices can supply identity and variant evidence. Suggestions preserve extensions and keep a full disambiguating product design where codes are shared. Stable ID tokens never resolve duplicate-artwork ambiguity by themselves.
 
 ## Protection and results
 
