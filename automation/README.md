@@ -1,10 +1,28 @@
 # Lucky Bags Factory Agent guide
 
-Release 1.2.0 | Reviewed 30 October 2026 | Windows x64 and Python 3.13
+Release 1.2.1 | Reviewed 2 November 2026 | Windows x64 and Python 3.13
+
+## Simple first-install checklist
+
+**Queueing in the website does not immediately start a physical print.** The right-hand Drive originals are the print files: one PRINT file for a single-sided item, or both FRONT and BACK files for a double-sided item. The Shopify mockup is never the print source. Epson Edge Print receives files through its hot folder, not by this agent clicking a Windows Print dialog.
+
+1. Have IT prepare a patched Windows PC, a dedicated standard operator account, Microsoft Defender and authentic Python 3.13 x64 with current security updates. Keep Epson Edge Print Auto Print OFF. IT may need to create C:\LuckyBagsFactory and give the operator access first.
+2. Verify the release ZIP SHA256, scan it, then extract its contents directly into C:\LuckyBagsFactory. Do not copy the developer automation folder, its virtual environments or any credentials.
+3. Open ordinary PowerShell in that directory. Run `./install.ps1 -PythonExe "C:\Path\To\Python313\python.exe"`, replacing the interpreter path with the actual signed python.org installation. Do not bypass execution policy; ask IT to approve reviewed scripts if Windows blocks them.
+4. Edit .env: use `PRODUCTION_API=https://lbprint.app.keenpillar.com/api`, a unique FACTORY_API_KEY matching the server, a dedicated Google Viewer credential JSON, and the actual Epson pilot hot-folder path. The factory account should not receive the web application's Drive Editor credentials.
+5. Run `./protect-agent.ps1`, then `./run-once.ps1 -CheckOnly`. A successful configuration check does not prove the network, Google account, Defender or printer works.
+6. Test one disposable order with quantity one. Approve its right-hand Drive artwork in the website, create the print batch, then run `./run-once.ps1`. Confirm the batch becomes PREPARED and the manifest lists the expected one or two originals. Nothing should print at this stage.
+7. In that batch's website page, review and sign HANDOFF. Run `./run-once.ps1` again. Inspect the files/jobs in Epson Edge Print with Auto Print OFF, verify scale, media, side pairing and copies, and only then start the physical print. Confirm PRINTED in the website after inspecting the actual output.
+
+Repeat the pilot for a double-sided item before enabling `./install-autostart.ps1`. Do not run a second agent PC against the same queue. Quantities above one are prepared but automatic handoff remains blocked until a quantity/preset adapter has been validated.
+
+Windows administrators and the account running the agent can still stop or delete its local files. The website cannot make a local folder undeletable. This release does not add remote shell commands, remote self-updates or arbitrary web-controlled deletion. The agent polls outbound HTTPS; it does not open an inbound service. Keep firewall/Defender enabled and do not expose the hot folder as a public share.
+
+Version 1.2.1 binds copied hot-folder bytes to the verified manifest hash and rejects changes during scanning/copying. New web batches include Drive checksum/revision evidence when available, and the agent checks it before downloading. Older batch snapshots lacking those fields retain the legacy download checks; create a fresh approved pilot batch after deploying the web update for that additional protection.
 
 ## Installation decision
 
-Use this release for a controlled factory pilot, not unattended end-to-end printing. The code was reviewed and tested locally. The review did not inspect malware on the client PC, perform an external penetration test, run a real Defender scan, or operate the physical printer. No software can be certified malware-free by this review.
+Use this release for a controlled factory pilot, not unattended end-to-end printing. The code was reviewed and tested locally, and the distribution ZIP received a local Microsoft Defender custom scan. This did not inspect the client PC, perform an external penetration test or operate the physical printer. No software can be certified malware-free by this review.
 
 The intended equipment is the Epson SureColor F9470H. The operator previously confirmed the SC-F9400H queue on USB003, Epson Edge Print, hot-folder support, and Auto Print OFF. Those facts were supplied by the operator; they were not rechecked remotely during this review. Keep Auto Print OFF. This agent never connects to AnyDesk or changes Epson settings.
 
@@ -107,6 +125,6 @@ The updater accepts only the explicit source allowlist, rejects unexpected archi
 
 ## Security review evidence
 
-The review and limitations are in SECURITY_REVIEW.md. Thirteen Python regression tests cover path, format, hash, redirect, duplicate publication, scan and quantity gates. PHP regression tests cover the application lifecycle, material math, signed confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 30 October 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
+The review and limitations are in SECURITY_REVIEW.md. Seventeen Python tests cover paths, formats, hashes, redirects, duplicate publication, scan/copy substitution, approved Drive revision checks, one/two originals and quantity gates. PHP tests cover lifecycle, material math, named confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 2 November 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
 
 Install only after the factory owner or IT accepts the remaining Print PC checks. This release supports controlled preparation and human-authorized single-set handoff, not a claim of fully automatic, quantity-aware, malware-proof printing.
