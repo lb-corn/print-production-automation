@@ -113,6 +113,8 @@ $preselected=0;
 <input type="hidden" name="color" data-naming-color>
 <label class="artwork-color-confirm" data-match-color-confirm hidden><input type="checkbox" name="color_correction_confirmed" value="1" data-match-color-checkbox disabled> I checked the artwork: its actual color matches Shopify; the filename color label is wrong.</label>
 <div class="artwork-match-footer"><label><input type="checkbox" name="reuse" value="1" checked> Remember for matching versions</label><button type="submit" class="primary" data-match-confirm disabled>Confirm this artwork</button></div>
+<p class="admin-notice" data-match-feedback role="status" aria-live="polite" hidden></p>
+<a class="artwork-folder-link" data-match-review-orders href="{{route('production')}}" hidden>Return to Artwork Verification →</a>
 <small class="muted">Confirm only when the images show the same design. This saves your choice and refreshes unbatched matches. Print approval is still required.</small>
 </div></form></dialog>
 @endif

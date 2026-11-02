@@ -1,6 +1,20 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+// Save feedback is visible in-dialog for validation errors and uncertain connections.
+(async()=>{
+ const source=fs.readFileSync('public/js/artwork-names.js','utf8');
+ async function saveCase(fetchImpl){
+  const button={disabled:false,textContent:''},feedback={hidden:true,textContent:''},orders={hidden:true},form={dataset:{},action:'/review'};
+  const context={document:{querySelector:s=>s==='[data-match-confirm]'?button:s==='[data-match-feedback]'?feedback:orders},fetch:fetchImpl,FormData:class{},AbortController,setTimeout:()=>1,clearTimeout(){},namingMatchSelection(){button.disabled=false;},TypeError,SyntaxError};
+  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('async function namingSaveChoice('),source.indexOf('function namingArtworkExclusions(')),context);await context.namingSaveChoice(form);return {form,button,feedback,orders};
+ }
+ const invalid=await saveCase(async()=>({ok:false,json:async()=>({message:'This file is labeled BACK.'})}));assert(invalid.feedback.textContent.includes('BACK')&&!invalid.feedback.hidden&&!invalid.button.disabled&&!invalid.form.dataset.submitting);
+ const saved=await saveCase(async()=>({ok:true,json:async()=>({status:'ok',message:'Artwork choice saved.',url:'/settings?plan=saved'})}));assert(saved.form.dataset.saved==='1'&&saved.button.disabled&&!saved.orders.hidden&&saved.feedback.textContent==='Artwork choice saved.');
+ const offline=await saveCase(async()=>{throw new TypeError('Network failed');});assert(offline.feedback.textContent.includes('uncertain')&&!offline.button.disabled&&!offline.form.dataset.submitting);
+ const partial=await saveCase(async()=>({ok:true,json:async()=>({status:'warning',message:'Choice saved, refresh failed.',url:'/settings'})}));assert(partial.form.dataset.saved==='1'&&partial.feedback.textContent.includes('refresh failed'));
+ console.log('PASS: artwork save shows validation, success, partial refresh and uncertain network results without leaving a stuck saving state');
+})().catch(error=>{console.error(error);process.exitCode=1;});
 function setup(confirmResult, failStep = false, rejectBegin = false) {
     const calls = []; const redirects = []; const dialog = {open: confirmResult, showModal(){this.open=true;}, close(){this.open=false;}, addEventListener(){}}; const progress = {textContent: ''}; const password = {value: 'transient password'};
     const controls = [{disabled: false}];

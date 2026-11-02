@@ -34,7 +34,9 @@ class ArtworkNamingService
                 abort_unless(($mapping['color']??null)===$expectedColor,422,'The corrected color must equal the selected Shopify variant.');
                 $plan['color_correction_reviews'][]=['file_id'=>$id,'original_name'=>$entries[$id]['source']['name'],'from'=>$attributes['color'],'to'=>$expectedColor,'actor'=>$actor,'at'=>gmdate('c')];
             }
-            abort_if(in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
+            $single=$this->matcher->match($row,[])['design_type']==='single';
+            abort_if($single && ($attributes['side']??null)==='back',422,'This product needs single-sided artwork, but this file is labeled BACK. Choose the production front file. If the filename is incorrect, verify the image and correct its side in Drive, then sync the catalog.');
+            abort_if(!$single && in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
             if(!empty($mapping['catalog_key']))$plan['mappings'][$id]=$mapping;
             if($reuse && !$colorMismatch) {
                 $folderName=trim(substr($entries[$id]['folder'],strrpos($entries[$id]['folder'],'/')+1));
