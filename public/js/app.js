@@ -259,6 +259,18 @@ document.addEventListener('click', async (event) => {
         button.textContent = 'Copy unavailable — select the filename';
     }
 });
+const filenameProcessForms = [...document.querySelectorAll('[data-filename-process]')];
+let filenameProcessing = false;
+filenameProcessForms.forEach(form => form.addEventListener('submit', event => {
+    if (filenameProcessing) { event.preventDefault(); return; }
+    filenameProcessing = true;
+    filenameProcessForms.forEach(other => { const button=other.querySelector('button');button.disabled=true;if(other===form){button.textContent='Processing…';other.setAttribute('aria-busy','true');} });
+}));
+window.addEventListener('pageshow',()=>{
+    filenameProcessing=false;
+    filenameProcessForms.forEach(form=>{form.removeAttribute('aria-busy');const button=form.querySelector('button');button.disabled=false;button.textContent='Process suggested name';});
+});
+
 const catalogSyncForms = [...document.querySelectorAll('[data-catalog-sync]')];
 const catalogSyncButtons = [...document.querySelectorAll('[data-catalog-sync] button[type="submit"], button[form="artwork-scan-form"]')];
 let catalogSyncPending = false;

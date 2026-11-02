@@ -10,7 +10,8 @@ class AdminSettingsController extends Controller
     {
         abort_unless($request->user()?->role==='admin',403);
         $section=$request->query('section','artwork');
-        abort_unless(in_array($section,['artwork','sync','reset'],true),404);
+        abort_unless(in_array($section,['artwork','filenames','sync','reset'],true),404);
+        if($section==='filenames')return app(FilenameCleanupController::class)->index($request);
         if($section==='sync') {
             $plan=$request->query('plan')?app(ArtworkRenameStore::class)->load((string)$request->query('plan'),$request->user()->id,true):null;
             $summary=$plan?ArtworkRenameStore::summary($plan):app(ArtworkRenameStore::class)->latestSummary($request->user()->id);

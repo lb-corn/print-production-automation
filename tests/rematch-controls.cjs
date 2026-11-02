@@ -2,6 +2,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 {
+ const source=fs.readFileSync('public/js/app.js','utf8'),events={};
+ const forms=[0,1].map(()=>({attributes:{},button:{disabled:false,textContent:'Process suggested name'},querySelector(){return this.button;},addEventListener(k,fn){this[k]=fn;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}}));
+ vm.runInNewContext(source.slice(source.indexOf('const filenameProcessForms ='),source.indexOf('const catalogSyncForms =')),{document:{querySelectorAll:()=>forms},window:{addEventListener:(k,fn)=>events[k]=fn}});
+ const first={preventDefault(){this.prevented=true;}};forms[0].submit(first);assert(!first.prevented&&forms.every(f=>f.button.disabled)&&forms[0].button.textContent==='Processing…');
+ const duplicate={preventDefault(){this.prevented=true;}};forms[1].submit(duplicate);assert(duplicate.prevented);
+ events.pageshow();assert(forms.every(f=>!f.button.disabled&&f.button.textContent==='Process suggested name'&&!f.attributes['aria-busy']));
+ console.log('PASS: simple filename processing blocks duplicate actions and restores controls after browser navigation');
+}
+{
  const source=fs.readFileSync('public/js/app.js','utf8');const events={};
  const forms=[0,1].map(()=>({attributes:{},addEventListener(name,handler){this[name]=handler;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}}));
  const buttons=[{textContent:'Sync catalog',dataset:{},disabled:false},{textContent:'Refresh files',dataset:{},disabled:false}];

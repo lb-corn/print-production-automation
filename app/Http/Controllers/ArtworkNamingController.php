@@ -76,14 +76,8 @@ class ArtworkNamingController extends Controller
     }
     public function standardize(Request $request)
     {
-        $actor=$this->actor($request);
-        try {
-            $plan=app(ArtworkNamingService::class)->scan($actor,true);
-            return redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token']])->with('ok','Optional standard names prepared. Nothing was renamed or changed on orders. Select only the files you want to rename, then review and confirm.');
-        } catch(\Throwable $e) {
-            report($e);
-            return redirect()->route('admin.settings',['section'=>'artwork'])->with('error','Could not prepare standard names. Check Shopify and Drive access and try again. No files or orders were changed.');
-        }
+        $this->actor($request);
+        return redirect()->route('admin.settings',['section'=>'filenames']);
     }
     public function syncSources(Request $request)
     {
@@ -96,7 +90,7 @@ class ArtworkNamingController extends Controller
             return redirect()->route('admin.settings',['section'=>'sync'])->with('error','Catalog sync failed while reading Shopify products or Drive artwork. Check integration access and try again.');
         }
         return redirect()->route('admin.settings',['section'=>'sync','plan'=>$plan['token'],'artwork_search'=>$search])
-            ->with('ok',sprintf('Catalog synced: %d Shopify variants · %d Drive artwork files. Open Artwork filenames to review the refreshed data. Orders, approvals and print queues were not changed.',count($plan['catalog']),count(array_filter($plan['index'],fn($file)=>($file['kind']??'')==='artwork'))));
+            ->with('ok',sprintf('Catalog synced: %d Shopify variants · %d Drive artwork files. Open Artwork matching to review the refreshed data. Orders, approvals and print queues were not changed.',count($plan['catalog']),count(array_filter($plan['index'],fn($file)=>($file['kind']??'')==='artwork'))));
     }
     public function revise(Request $request)
     {
