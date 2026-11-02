@@ -127,6 +127,7 @@ jobs:
         run: |
           php tests/artwork-naming.php
           php tests/artwork-standardization.php
+          php tests/filename-cleanup.php
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php
           node tests/rematch-controls.cjs

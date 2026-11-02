@@ -44,3 +44,9 @@ $check($response->getStatusCode()===429 && str_contains($response->getData(true)
 $check($syncHandle($syncRequest(2))->getStatusCode()===200,'Catalog limits are isolated per administrator');
 $route=app('router')->getRoutes()->getByName('admin.data-sync');
 $check(in_array('throttle:catalog-sync',$route->gatherMiddleware()) && !in_array('throttle:3,1',$route->gatherMiddleware()),'Data sync route uses its dedicated limiter instead of the generic error page');
+$limiter->for('filename-cleanup',app(RateLimiter::class)->limiter('filename-cleanup'));
+$cleanupCalls=0;$cleanupNext=function()use(&$cleanupCalls){$cleanupCalls++;return response('cleanup permitted');};
+$cleanupHandle=function($request)use($middleware,$cleanupNext){try{return $middleware->handle($request,$cleanupNext,'filename-cleanup');}catch(Illuminate\Http\Exceptions\HttpResponseException $e){return $e->getResponse();}};
+for($i=0;$i<10;$i++)$cleanupHandle($request(1));
+$response=$cleanupHandle($request(1));
+$check($response->isRedirect(route('admin.settings',['section'=>'filenames'])) && $cleanupCalls===10 && str_contains(session('error'),'seconds'),'Filename cleanup limits redirect to its own menu with retry guidance instead of a generic 429 page');

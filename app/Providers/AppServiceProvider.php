@@ -9,6 +9,14 @@ use Illuminate\Http\Request;
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\ProductionService::class);}
  public function boot():void {
+  RateLimiter::for('filename-cleanup',function(Request $request){
+   return Limit::perMinute(10)->by('filename-cleanup:'.($request->user()?->getAuthIdentifier()??$request->ip()))
+    ->response(function(Request $request,array $headers){
+     $message='Please wait '.max(1,(int)($headers['Retry-After']??60)).' seconds before processing another filename. This request did not rename any file.';
+     if($request->expectsJson())return response()->json(['message'=>$message],429,$headers);
+     return redirect()->route('admin.settings',['section'=>'filenames'])->with('error',$message)->withHeaders($headers);
+    });
+  });
   RateLimiter::for('catalog-sync', function (Request $request) {
    return Limit::perMinute(3)
     ->by('catalog-sync:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))

@@ -6,7 +6,7 @@
 </section>
 
 <div class="naming-status-row" aria-label="Artwork status">
-@foreach(['products'=>'Products','images'=>'Linked files','catalog_matched'=>'Variants found','catalog_missing'=>'Missing','catalog_ambiguous'=>'Review','ready'=>'To rename'] as $key=>$label)
+@foreach(['products'=>'Products','images'=>'Linked files','catalog_matched'=>'Variants found','catalog_missing'=>'Missing','catalog_ambiguous'=>'Review'] as $key=>$label)
 <span><b>{{$summary[$key]??'—'}}</b> {{$label}}</span>
 @endforeach
 <small>@if($summary)Last checked {{date('d M, H:i',$summary['checked_at'])}} · {{$summary['variants']}} variants @else Click Check files to load counts @endif</small>
@@ -36,14 +36,8 @@
 @if($plan)
 
 @php
-$counts=array_count_values(array_column($visibleEntries,'status'));
 $outdated=($plan['naming_policy']??null)!==\App\Services\ArtworkNamingService::POLICY;
 $preview=$plan['status']==='preview'&&!$outdated;
-$ready=$counts['ready']??0;
-$needsReview=($counts['review']??0)+($counts['conflict']??0);
-$protected=($counts['locked']??0)+($counts['standard']??0);
-$preselected=0;
-$standardize=(bool)($plan['standardize']??false);
 @endphp
 
 @if($outdated)
@@ -119,70 +113,6 @@ $standardize=(bool)($plan['standardize']??false);
 <small class="muted">Confirm only when the images show the same design. This saves your choice and refreshes unbatched matches. Print approval is still required.</small>
 </div></form></dialog>
 @endif
-<details class="naming-advanced"><summary>Optional filename changes · {{$ready}} proposed{{config('services.google_drive.rename_enabled')?'':' · read only'}}</summary>
-@if($preview)
-@if($standardize)
-<p class="admin-notice"><strong>Standard names preview</strong> · Working filenames are included. Select only the files you want to change. Files used by print batches are protected. Renaming clears affected unbatched approvals and refreshes artwork matches; review and approve those orders again.</p>
-<a class="artwork-folder-link" href="{{route('admin.settings',['section'=>'artwork'])}}">Back to regular artwork matching →</a>
-@else
-<div class="naming-simple-header"><div><strong>Standardize working filenames</strong><span>Optional · preview the app’s suggested names, including files already matching correctly.</span></div>
-<form method="post" action="{{route('admin.artwork-names.standardize')}}" data-catalog-sync>@csrf<button type="submit" class="chip">Prepare standard names</button></form></div>
 @endif
 @endif
-<p class="muted">This is a saved preview from {{date('d M, H:i',$plan['created_at'])}}. After changing Shopify data or Drive files, use Data sync to load the current catalog. Catalog sync does not update orders or print queues.</p>
-<div class="naming-table-tools naming-simple-tools">
-<div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Linked files to review</button><button type="button" class="chip" data-naming-mode="all">Linked files</button></div>
-<input type="search" name="artwork_filename_filter" id="artwork-filename-filter" data-naming-search autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="Filter filenames" aria-label="Filter filenames">
-</div>
-<form id="artwork-naming-apply" method="post" action="{{route('admin.artwork-names.begin')}}" data-step-url="{{route('admin.artwork-names.step')}}">
-
-@csrf<input type="hidden" name="plan" value="{{$plan['token']}}"><input type="hidden" name="confirmation" value="RENAME"><input type="hidden" name="reviewed" value="1"><input type="hidden" name="username" autocomplete="username" value="{{auth()->user()?->email}}">
-<div class="naming-table-wrap"><table><thead><tr><th>Status</th><th>Current file</th><th>New name</th></tr></thead><tbody>
-
-@foreach($visibleEntries as $entry)
-<tr data-naming-row data-naming-status="{{$entry['status']}}"
-@if($entry['status']!=='ready') hidden
-@endif><td>
-@if($preview&&config('services.google_drive.rename_enabled')&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked(!$standardize&&$preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
-@endif<span class="badge">{{ucfirst($entry['status'])}}</span></td>
-<td><a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">{{$entry['source']['name']}} ↗</a><small>{{$entry['folder']}}</small></td>
-<td><code>{{$entry['proposal']['target']??'Confirm design first'}}</code>
-@if($entry['reason']??null)<small>{{$entry['reason']}}</small>
-@endif
-@if($entry['artwork_duplicate']??false)<small>Duplicate artwork still needs review.</small>
-@endif
-<details class="naming-row-detail"><summary>Details</summary><small>{{$entry['proposal']['sku']??''}} · {{$entry['proposal']['product']??''}} · {{$entry['proposal']['variant']??''}} · {{$entry['proposal']['side']??''}}<br>{{$entry['basis']??''}}</small></details></td></tr>
-
-@endforeach
-</tbody></table><p class="naming-filter-empty" data-naming-empty hidden>No files in this view. <button type="button" data-naming-clear>Show all files</button></p></div>
-
-@if($preview)
-@if(!config('services.google_drive.rename_enabled'))<p class="admin-notice">Drive filename changes are disabled on this server. To process an order, use the Shopify artwork matching list above to confirm its production files, then return to Artwork Verification to approve. Renaming is optional for confirmed artwork choices. To enable filename changes, the server administrator must enable GOOGLE_DRIVE_RENAME_ENABLED and refresh the Laravel configuration cache.</p>@endif
-@if(config('services.google_drive.rename_enabled'))
-<div class="naming-simple-action"><button type="button" class="chip" data-naming-select @if(!$standardize) hidden @endif>Select all ready</button><span data-naming-selected>{{$standardize?0:min(500,$ready)}} ready files selected</span><button class="primary" type="button" data-naming-open data-naming-enabled="1" @disabled(!$ready||$standardize)>Rename ready files</button></div>
-<dialog class="naming-confirm-dialog" data-naming-dialog>
-<h3>Rename <span data-naming-confirm-count></span> ready files?</h3><p>Only filenames change. File extensions, contents and print batches stay protected.</p>
-<p>Affected unbatched artwork approvals will be cleared. Review and approve those orders again after the names refresh.</p>
-<label>Admin password<input name="password" type="password" required disabled autocomplete="current-password"></label>
-@if($standardize)<input type="hidden" name="refresh" value="1"><p>Unbatched artwork matches refresh automatically after standardization.</p>
-@else<label class="naming-dialog-check"><input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches afterwards</label>@endif
-<div><button type="button" class="chip" data-naming-cancel>Cancel</button><button class="primary" type="submit">Confirm rename</button></div>
-<p data-naming-progress role="status" aria-live="polite"></p>
-</dialog>
-@endif
-
-@endif
-</form></details>
-
-@if($plan['events'])<details class="naming-advanced"><summary>Rename audit · {{count($plan['events'])}} events</summary>
-@foreach($plan['events'] as $event)<p><code>{{$event['old_name']}}</code> → <code>{{$event['new_name']}}</code> · {{$event['status']}} · {{$event['at']}}</p>
-@endforeach</details>
-@endif
-
-@endif
-
-@endif
-<details class="naming-advanced"><summary>Naming rules and setup</summary><p>Example: <code>LB-PSE-DUC-RED-SINGLE.jpg</code>. No year is added. Actual extensions are preserved. App-compatible filenames stay unchanged, including existing ID suffixes. New names do not add IDs. Shared design codes use the full product design name when a reviewed correction is needed.</p><p>Rename permission requires Editor access for the existing service account. Files in batches, mockups and nested folders are excluded. Uncertain network outcomes stop without automatic retries.</p>
-@if(!config('services.google_drive.rename_enabled'))<p>Applying renames is disabled by server configuration.</p>
-@endif</details>
 <script src="{{asset('js/artwork-names.js')}}?v={{filemtime(public_path('js/artwork-names.js'))}}" defer></script>

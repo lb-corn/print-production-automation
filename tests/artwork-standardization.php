@@ -40,7 +40,7 @@ $check($writer->writes===0 && $item->fresh('decision')->toJson()===$before && Pr
 $check(empty($store->latestPreview($admin->id)['standardize']),'Regular artwork navigation never implicitly restores an optional standardization preview');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$optional['token']]);$request->setUserResolver(fn()=>$admin);
 $html=$controller->index($request,$store)->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
-$check($xpath->query('//input[@name="ids[]"]')->length===1 && $xpath->query('//input[@name="ids[]"][@checked]')->length===0 && str_contains($html,'Standard names preview'),'Optional rename UI starts with no files selected and explains the explicit mode');
+$check($xpath->query('//input[@name="ids[]"]')->length===0 && str_contains($html,'Filename cleanup'),'Artwork UI has no legacy standardization preview or bulk selections');
 // A destination appearing after preparation must reject the run before any write.
 $collision=[...$file,'id'=>'canonical-collision','name'=>$entry['proposal']['target'],'path'=>$folder['path'].' / '.$entry['proposal']['target']];$drive->index[]=$collision;
 try{$service->begin($optional['token'],$admin->id,[$file['id']],false);throw new LogicException('Collision accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===0,'A canonical destination collision blocks optional renaming without adding IDs');}
@@ -88,7 +88,7 @@ $legacyId='legacy-compatible';$legacy=[...$file,'id'=>$legacyId,'name'=>'LB-CLV-
 $check($matcher->namingCandidate($retro,$legacy,'Clover')['target']===$legacy['name'] && $matcher->namingCandidate($retro,$legacy,'Clover',null,true)['target']==='LB-CLV-RET7-SINGLE.JPEG','Optional standardization can remove a validated old ID suffix while ordinary matching preserves it');
 $writesBefore=$writer->writes;$ordersBefore=ProductionItem::all()->toJson();
 $request=Illuminate\Http\Request::create('/admin/artwork-names/standardize','POST');$request->setUserResolver(fn()=>$admin);$response=$controller->standardize($request);parse_str(parse_url($response->getTargetUrl(),PHP_URL_QUERY),$query);
-$check(!empty($store->load($query['plan'],$admin->id)['standardize']) && $writer->writes===$writesBefore && ProductionItem::all()->toJson()===$ordersBefore,'Admin Prepare standard names action creates only a preview with no order or Drive mutation');
+$check(($query['section']??null)==='filenames' && $writer->writes===$writesBefore && ProductionItem::all()->toJson()===$ordersBefore,'Legacy Prepare standard names action redirects to simple cleanup without mutations');
 $request=Illuminate\Http\Request::create('/admin/artwork-names/standardize','POST');$request->setUserResolver(fn()=>$operator);
 try{$controller->standardize($request);throw new LogicException('Operator prepared names');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Normal users cannot prepare optional filename changes');}
 $route=app('router')->getRoutes()->getByName('admin.artwork-names.standardize');

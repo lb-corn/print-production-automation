@@ -91,7 +91,7 @@ $controller=new App\Http\Controllers\ArtworkNamingController();$request=Illumina
 try{$controller->index($request,$store);throw new LogicException('Operator admitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Operators cannot invoke the admin naming controller');}
 Illuminate\Support\Facades\Auth::login($admin);view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $request=Illuminate\Http\Request::create('/admin/artwork-names','GET',['plan'=>$stale['token']]);$request->setUserResolver(fn()=>$admin);
-$html=$controller->index($request,$store)->render();$check(str_contains($html,'Check files') && str_contains($html,'Rename ready files') && str_contains($html,'Confirm rename'),'Admin page renders scan, review, explicit confirmation and filename preview');
+$html=$controller->index($request,$store)->render();$check(str_contains($html,'Sync catalog') && str_contains($html,'Filename cleanup') && !str_contains($html,'id="artwork-naming-apply"'),'Artwork matching links to separate filename cleanup without bulk rename controls');
 $request=Illuminate\Http\Request::create('/admin/artwork-names/begin','POST',['plan'=>$stale['token'],'ids'=>['stale']]);$request->setUserResolver(fn()=>$admin);
 try{$controller->begin($request);throw new LogicException('Unconfirmed apply admitted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['password'],$e->errors()['confirmation'],$e->errors()['reviewed']),'Apply requires admin password, typed RENAME and explicit review');}
 // Test full catalog pagination without Shopify credentials or order history.
@@ -175,7 +175,7 @@ $settingsHtml=$settings->index($request)->render();
 $check(substr_count($settingsHtml,'<main>')===1 && str_contains($settingsHtml,'Admin Settings') && str_contains($settingsHtml,'DANGER ZONE') && str_contains($settingsHtml,'RESET PORTAL') && !str_contains($settingsHtml,'id="artwork-naming-apply"'),'Reset is a separate section inside one settings page, retaining its destructive-action confirmations');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
 $settingsHtml=$settings->index($request)->render();
-$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Check files') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
+$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Sync catalog') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
 $menu=view('partials.account-menu')->render();
 $check(str_contains($menu,'Admin Settings') && !str_contains($menu,'Artwork filenames') && !str_contains($menu,'Reset portal data'),'Account menu groups the two tools under a single Admin Settings link');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'../../credentials']);$request->setUserResolver(fn()=>$admin);
@@ -248,8 +248,8 @@ $shopify->rows=[$row];$drive->index=[$folder,$source('simple-ui','Duck Camo Red.
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$simple['token'],'section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
 $simpleHtml=$controller->index($request,$store)->render();$dom=new DOMDocument();@$dom->loadHTML($simpleHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//input[@data-naming-search]/ancestor::form')->length===0,'Filename search is outside the password form so it cannot become the username field');
-$check($xpath->query('//dialog[@data-naming-dialog]//input[@type="password" and @disabled]')->length===1 && !str_contains($simpleHtml,'Type RENAME'),'Confirmation is one short dialog, without an always-visible password block or typing a phrase');
-$check($xpath->query('//input[@name="ids[]" and @checked]')->length===1,'Safe ready files are preselected automatically');
+$check($xpath->query('//dialog[@data-naming-dialog]')->length===0 && !str_contains($simpleHtml,'Type RENAME'),'Artwork matching has no filename password dialog or rename phrase');
+$check($xpath->query('//input[@name="ids[]"]')->length===0,'Artwork matching contains no bulk filename selection');
 $check(!str_contains($simpleHtml,'Check and standardize Drive names') && !str_contains($simpleHtml,'Destructive production reset'),'Settings navigation has no subtitles or explanatory filler');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
@@ -293,7 +293,7 @@ $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$choos
 $chooser=$controller->index($request,$store);$check(isset($chooser->getData()['reviewGroups']['standard-chooser']),'The visual chooser includes correctly named files, not only review/conflict files');
 $chooserHtml=$chooser->render();$dom=new DOMDocument();@$dom->loadHTML($chooserHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//dialog[@data-artwork-match-dialog]//select[@data-naming-catalog and @hidden]')->length===1 && $xpath->query('//button[@data-match-product]')->length===1,'A single product worklist opens one focused visual comparison without visible mapping dropdowns');
-$check($xpath->query('//details[summary[contains(text(),"Optional filename changes")]]//form[@id="artwork-naming-apply"]')->length===1,'Advanced filename controls are collapsed instead of competing with product matching');
+$check($xpath->query('//form[@id="artwork-naming-apply"]')->length===0 && str_contains($chooserHtml,'Filename cleanup'),'Filename processing lives in a separate Admin menu');
 $blueDouble=[...$bubbleDouble,'catalog_key'=>hash('sha256','blue-double'),'variant'=>'Snipers / Blue'];$shopify->rows=[$blueDouble];$drive->index=[$doubleFolder,$source('side-guard','SNP-BUBBLES-BLUE-FRONT.jpg','snp')];$guard=$service->scan($admin->id);
 try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$blueDouble['catalog_key'],'side'=>'back','color'=>'BLUE']],false);throw new LogicException('Wrong side mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts explicit FRONT/BACK');}
 $redDouble=[...$blueDouble,'catalog_key'=>hash('sha256','red-double'),'variant'=>'Snipers / Red'];$shopify->rows=[$redDouble];$guard=$service->scan($admin->id);
@@ -484,7 +484,7 @@ parse_str(parse_url($response->getTargetUrl(),PHP_URL_QUERY),$query);
 $check(($query['artwork_search']??null)===$midnightRow['product'],'Refresh keeps the blocked product search in the destination');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',$query);$request->setUserResolver(fn()=>$admin);
 $html=$controller->index($request,$store)->render();
-$check(str_contains($html,'value="'.$midnightRow['product'].'"') && str_contains($html,'Optional filename changes') && !str_contains($html,'data-naming-open') && !str_contains($html,'name="ids[]"'),'Read-only filename preview has no selected files or dead rename action, and retains product search');
+$check(str_contains($html,'value="'.$midnightRow['product'].'"') && str_contains($html,'Filename cleanup') && !str_contains($html,'data-naming-open') && !str_contains($html,'name="ids[]"'),'Artwork matching retains product search without any filename rename action');
 $snapshot=function(){return collect(['users','production_items','verification_decisions','print_batches','batch_confirmations'])->mapWithKeys(fn($table)=>[$table=>Illuminate\Support\Facades\DB::table($table)->orderBy('id')->get()->toJson()])->all();};
 $beforeCatalogSync=$snapshot();$beforeSelections=$store->selections();$writesBefore=$writer->writes;
 $correctedGta=[...$row,'catalog_key'=>hash('sha256','corrected-gta'),'product'=>'Lucky Bags 2027 GTA','variant'=>'Luciano','sku'=>'2027-GTA-LUC-0001'];$shopify->rows=[$correctedGta];
