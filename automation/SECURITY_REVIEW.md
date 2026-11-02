@@ -1,6 +1,6 @@
 # Factory Agent security review
 
-Review date: 2 November 2026. Release: 1.2.1. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+Review date: 2 November 2026. Current release: 1.2.2. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
 
 ## 1.2.1 follow-up
 
@@ -68,3 +68,7 @@ Use a disposable test database and temporary artwork/hot directories. No live pr
 - Microsoft Defender command-line scanning: https://learn.microsoft.com/en-us/defender-endpoint/command-line-arguments-microsoft-defender-antivirus
 - Google Drive authorization scopes: https://developers.google.com/workspace/drive/api/guides/api-specific-auth
 - OSV query API: https://google.github.io/osv.dev/post-v1-querybatch/
+
+## 1.2.2 private installation packaging
+
+The default make-release.ps1 now intentionally includes the local .env and service-account.json in a separately named PrivateInstall ZIP. Both inputs and automation/dist remain excluded from Git. This archive contains real secrets and is not encrypted: transfer only to the trusted Print PC and keep it private. The existing web credential was copied locally at the owner's request; its Drive permissions are not reduced by copying it. Prefer replacing it with a dedicated Viewer credential before distribution. No credentials or private archive are committed. -PublicRelease retains the original credential-free update allowlist; update-agent.ps1 rejects installer secrets and never replaces installed configuration. Relative configuration paths resolve against the agent installation, not the caller's working directory. Packaging tests use fake credentials and no network, Google or printer activity. The previous Defender scan applies only to the earlier 1.2.1 credential-free ZIP, not these new archives.

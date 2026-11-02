@@ -1,25 +1,25 @@
 # Lucky Bags Factory Agent guide
 
-Release 1.2.1 | Reviewed 2 November 2026 | Windows x64 and Python 3.13
+Release 1.2.2 | Reviewed 2 November 2026 | Windows x64 and Python 3.13
 
 ## Printable guide and release ZIP
 
 Use the [four-page Print PC installation and test guide](../docs/Print-PC-Installation-and-Test-Guide.pdf) for the complete development-PC packaging, client configuration, pilot and recovery checklist.
 
-On the development PC, build the release from the approved project source:
+On the development PC, keep your private `automation/.env` and `automation/service-account.json` beside the scripts (both excluded from Git). If `.env` is missing, the build creates it from `config.example.env`. Set `GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json`; relative credential and workspace paths resolve beside the installed agent, independent of the PowerShell working directory. Prefer a separate Viewer account; reusing the web account also exposes its broader Drive permissions if this PC or ZIP is compromised. Build your private installer:
 
 ```powershell
 cd D:\LuckyBags\Automation\print-production-automation
 .\automation\make-release.ps1
 ```
 
-Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.2.1.zip` and the matching `.sha256.txt`. Do not manually ZIP the entire automation directory; the release script excludes credentials, environments and runtime files.
+Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.2.2-PrivateInstall.zip` and its matching `.sha256.txt`. This ZIP intentionally includes `.env` and `service-account.json`. Transfer it only to the trusted Print PC; ZIP compression is not encryption. Never upload it to GitHub, a public download link or the website. Logs, virtual environments and downloaded artwork remain excluded. The private bundle must remain under `automation/dist`, which Git ignores.
 
 Transfer both generated files to the Print PC using a trusted method. Before extraction, compare the ZIP hash with the accompanying trusted checksum:
 
 ```powershell
-Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.2.1.zip" -Algorithm SHA256
-Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.2.1.sha256.txt"
+Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.2.2-PrivateInstall.zip" -Algorithm SHA256
+Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.2.2-PrivateInstall.sha256.txt"
 ```
 
 Use the actual download/transfer directory. Stop if the hashes differ; letter case does not matter. Scan the ZIP with Defender, extract to `C:\LuckyBagsFactory`, and follow the guide. Rebuilding a ZIP can change its checksum, so always use the checksum generated with that exact ZIP. A matching checksum is not a publisher signature.
@@ -29,9 +29,9 @@ Use the actual download/transfer directory. Stop if the hashes differ; letter ca
 **Queueing in the website does not immediately start a physical print.** The right-hand Drive originals are the print files: one PRINT file for a single-sided item, or both FRONT and BACK files for a double-sided item. The Shopify mockup is never the print source. Epson Edge Print receives files through its hot folder, not by this agent clicking a Windows Print dialog.
 
 1. Have IT prepare a patched Windows PC, a dedicated standard operator account, Microsoft Defender and authentic Python 3.13 x64 with current security updates. Keep Epson Edge Print Auto Print OFF. IT may need to create C:\LuckyBagsFactory and give the operator access first.
-2. Verify the release ZIP SHA256, scan it, then extract its contents directly into C:\LuckyBagsFactory. Do not copy the developer automation folder, its virtual environments or any credentials.
+2. Verify the release ZIP SHA256, scan it, then extract its contents directly into C:\LuckyBagsFactory. The private ZIP already includes the selected credentials and .env. Do not extract over an existing installation: that could replace its secrets.
 3. Open ordinary PowerShell in that directory. Run `./install.ps1 -PythonExe "C:\Path\To\Python313\python.exe"`, replacing the interpreter path with the actual signed python.org installation. Do not bypass execution policy; ask IT to approve reviewed scripts if Windows blocks them.
-4. Edit .env: use `PRODUCTION_API=https://lbprint.app.keenpillar.com/api`, a unique FACTORY_API_KEY matching the server, a dedicated Google Viewer credential JSON, and the actual Epson pilot hot-folder path. The factory account should not receive the web application's Drive Editor credentials.
+4. Edit .env: use `PRODUCTION_API=https://lbprint.app.keenpillar.com/api`, a unique FACTORY_API_KEY matching the server, `GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json` (already bundled), and the actual Epson pilot hot-folder path. Normally only the API key and hot-folder path need editing. Keep the supplied relative workspace path. Prefer dedicated Viewer credentials.
 5. Run `./protect-agent.ps1`, then `./run-once.ps1 -CheckOnly`. A successful configuration check does not prove the network, Google account, Defender or printer works.
 6. Test one disposable order with quantity one. Approve its right-hand Drive artwork in the website, create the print batch, then run `./run-once.ps1`. Confirm the batch becomes PREPARED and the manifest lists the expected one or two originals. Nothing should print at this stage.
 7. In that batch's website page, review and sign HANDOFF. Run `./run-once.ps1` again. Inspect the files/jobs in Epson Edge Print with Auto Print OFF, verify scale, media, side pairing and copies, and only then start the physical print. Confirm PRINTED in the website after inspecting the actual output.
@@ -44,7 +44,7 @@ Version 1.2.1 binds copied hot-folder bytes to the verified manifest hash and re
 
 ## Installation decision
 
-Use this release for a controlled factory pilot, not unattended end-to-end printing. The code was reviewed and tested locally, and the distribution ZIP received a local Microsoft Defender custom scan. This did not inspect the client PC, perform an external penetration test or operate the physical printer. No software can be certified malware-free by this review.
+Use this release for a controlled factory pilot, not unattended end-to-end printing. The code was reviewed and tested locally. The previous 1.2.1 credential-free ZIP received a local Microsoft Defender custom scan; that scan does not cover the new 1.2.2 archives. This did not inspect the client PC, perform an external penetration test or operate the physical printer. No software can be certified malware-free by this review.
 
 The intended equipment is the Epson SureColor F9470H. The operator previously confirmed the SC-F9400H queue on USB003, Epson Edge Print, hot-folder support, and Auto Print OFF. Those facts were supplied by the operator; they were not rechecked remotely during this review. Keep Auto Print OFF. This agent never connects to AnyDesk or changes Epson settings.
 
@@ -88,7 +88,7 @@ cd C:\LuckyBagsFactory
 
 The installer validates the signed interpreter and platform, creates a private virtual environment, installs wheels from official PyPI using the pinned SHA256 lock, and checks dependency consistency. It does not install a startup task or run print jobs. The audit environment used locally is not part of the release.
 
-5. Edit .env, then place the read-only Google service-account JSON at the configured path. Do not share either file. Never include them in Git, release archives or email.
+5. Edit the bundled .env: match the server API key and the actual Epson hot folder. The private installer already includes service-account.json. Public updates do not. Keep both files and the private ZIP out of Git, public downloads and email.
 6. Run .\protect-agent.ps1 as the operator who will run the agent. It restricts the installation to that operator, SYSTEM and Administrators. If it fails, stop and have IT provision equivalent permissions; do not grant Everyone or Users write access. Protect any external hot folder and external credential location separately. This does not protect against malware already running as that same operator or Administrator.
 
 ## Required configuration
@@ -97,7 +97,7 @@ The installer validates the signed interpreter and platform, creates a private v
 | --- | --- |
 | PRODUCTION_API | Final HTTPS URL ending in /api. No redirects, username, query or fragment. |
 | FACTORY_API_KEY | Unique random secret matching the hosted server; at least 32 characters. |
-| GOOGLE_SERVICE_ACCOUNT_FILE | Absolute local path to the dedicated read-only credential JSON. |
+| GOOGLE_SERVICE_ACCOUNT_FILE | service-account.json beside the installed agent, or an absolute local path to the dedicated Viewer JSON. |
 | FACTORY_PRINT_DIR | Dedicated local artwork workspace, separate from the hot folder. |
 | EDGE_PRINT_HOT_FOLDER | Existing local folder watched by the confirmed Edge Print preset. |
 | MAX_ARTWORK_MB | Maximum original size per artwork; default 100 MB, hard limit 500 MB. |
@@ -147,6 +147,12 @@ The updater accepts only the explicit source allowlist, rejects unexpected archi
 
 ## Security review evidence
 
-The review and limitations are in SECURITY_REVIEW.md. Seventeen Python tests cover paths, formats, hashes, redirects, duplicate publication, scan/copy substitution, approved Drive revision checks, one/two originals and quantity gates. PHP tests cover lifecycle, material math, named confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 2 November 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
+The review and limitations are in SECURITY_REVIEW.md. Eighteen Python tests cover portable installation paths, paths, formats, hashes, redirects, duplicate publication, scan/copy substitution, approved Drive revision checks, one/two originals and quantity gates. PHP tests cover lifecycle, material math, named confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 2 November 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
 
 Install only after the factory owner or IT accepts the remaining Print PC checks. This release supports controlled preparation and human-authorized single-set handoff, not a claim of fully automatic, quantity-aware, malware-proof printing.
+
+## Public updates (no credentials)
+
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.2.2.zip with exactly the original 17 code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+
+Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).

@@ -22,8 +22,13 @@ load_dotenv(HERE / '.env', override=False)
 VERSION = (HERE / 'VERSION').read_text(encoding='utf-8').strip()
 BASE = os.getenv('PRODUCTION_API', '').rstrip('/')
 KEY = os.getenv('FACTORY_API_KEY', '').strip()
-CREDS = Path(os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', str(HERE / 'service-account.json')))
-OUT = Path(os.getenv('FACTORY_PRINT_DIR', str(HERE / 'factory_print')))
+def installation_path(value):
+    path = Path(value)
+    return path if path.is_absolute() else HERE / path
+
+
+CREDS = installation_path(os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json'))
+OUT = installation_path(os.getenv('FACTORY_PRINT_DIR', 'factory_print'))
 HOT = os.getenv('EDGE_PRINT_HOT_FOLDER', '').strip()
 POLL = max(10, int(os.getenv('POLL_SECONDS', '30')))
 MAX_FILE_BYTES = int(os.getenv('MAX_ARTWORK_MB', '100')) * 1024 * 1024
