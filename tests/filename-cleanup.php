@@ -65,5 +65,10 @@ $short=[...$source('reported-short-clover','LB-CLV-RET7-SINGLE.jpg'),'parent_id'
 $luc=[...$source('10W9EHnm4xOr4OJ4jiHQuCo_4NtOSpSIG','LB-LUC-RET7-BLACK-SINGLE-ID-A170B0A272A7.jpg'),'parent_id'=>$lucFolder['id'],'path'=>$lucFolder['path'].' / LB-LUC-RET7-BLACK-SINGLE-ID-A170B0A272A7.jpg','canRename'=>true];
 $shopify->rows=[$cloverRow,$lucRow];$drive->index=[$cloverFolder,$lucFolder,$short,$luc];$reported=$cleanup->index($request)->getData()['filenameEntries'];
 $check(array_column($reported,'id')===[$short['id']] && $reported[0]['proposal']['target']===$standardName('LB-CLV-RET7-SINGLE',$short['id']),'Cleanup hides the reported correct Luciano name and lists short Clover for its own ID-suffixed suggestion');
+$check($matcher->isStandardFilename($luc) && !$matcher->isStandardFilename($short),'Format classification identifies the exact supplied standard name and the short Clover name correctly');
+$stalePage=$service->scan($admin->id,true);foreach($stalePage['entries'] as &$staleEntry)if($staleEntry['id']===$luc['id']){$staleEntry['status']='ready';$staleEntry['proposal']['target']='LB-LUC-RET7-BLACK-SINGLE.jpg';}unset($staleEntry);$store->save($stalePage);$writesBefore=$writer->writes;
+$cleanup->process($processRequest($stalePage['token'],$luc['id'],$admin));
+$check($writer->writes===$writesBefore && str_contains(session('error'),'already uses the expected ID-suffixed format'),'A cached shortening action is rejected even if it presents a ready row');
+try{$service->begin($stalePage['token'],$admin->id,[$luc['id']],true);throw new LogicException('Standard-name shortening accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'The rename engine independently blocks standard-name shortening');}
 foreach(glob($directory.'/*.json') as $path)unlink($path);rmdir($directory);
 echo "Simple filename cleanup checks passed.\n";

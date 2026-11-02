@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='id-suffixed-standard-names-v8';
+    public const POLICY='preserve-standard-id-names-v9';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 
@@ -150,6 +150,7 @@ class ArtworkNamingService
         abort_if(!$ids || count($ids)!==count(array_unique($ids)),422,'Choose distinct ready files.');
         $entries=array_column($plan['entries'],null,'id');
         foreach($ids as $id)abort_unless(isset($entries[$id])&&$entries[$id]['status']==='ready',422,'Only ready files from this preview may be renamed.');
+        if(!empty($plan['standardize']))foreach($ids as $id)abort_if($this->matcher->isStandardFilename($entries[$id]['source']),422,'This file already uses the expected ID-suffixed format. No rename is needed. Refresh the list.');
         $this->revalidate($plan,$ids);
         $plan['status']='applying';$plan['expires_at']=time()+7200;$plan['pending']=array_values($ids);$plan['renamed']=0;$plan['refresh']=$refresh||!empty($plan['standardize']);$plan['approved_ids']=array_values($ids);$plan['confirmed_at']=gmdate('c');
         $this->store->save($plan);return $plan;
