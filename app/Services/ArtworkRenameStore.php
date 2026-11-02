@@ -29,7 +29,7 @@ class ArtworkRenameStore
         foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json')?:[] as $path) {
             if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
             try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
-            if(($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
+            if(!empty($plan['standardize']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
             if(!$latest || $plan['created_at']>$latest['created_at'])$latest=$plan;
         }
         return $latest;

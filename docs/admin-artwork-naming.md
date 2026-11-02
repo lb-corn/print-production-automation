@@ -30,6 +30,14 @@ Admin Reset production data deletes only imported production items, their approv
 
 ## Workflow
 
+### Optional standard names for working artwork
+
+Under **Artwork filenames → Optional filename changes**, choose **Prepare standard names** to create an explicit preview that also includes working legacy names and old ID-suffixed names. Ordinary sync, matching and artwork confirmation keep existing compatible names. Optional previews are not restored as the default matching view. Suggestions use `LB-SERIES-DESIGN-COLOR-SIDE` and preserve the actual extension, for example `LB-CLV-RET7-SINGLE.JPEG`. Reviewed choices supply design/color/side evidence; ambiguous identities and destination collisions stay blocked.
+
+No files start selected. Select the files to change, review the original/new names and confirm with the existing admin-password dialog. Preparing the preview changes no orders or Drive files. The Drive rename feature flag and Editor capability checks still apply. Files referenced by protected batches, including completed/failed batches, cannot be renamed. Writes recheck metadata, parent, catalog and destination and use the existing conditional metadata-only operation and durable audit.
+
+Successful renames update saved choice fingerprints and automatically refresh unbatched artwork matches. Affected unbatched approvals require fresh operator review; batches, file IDs and contents stay unchanged. Partial/uncertain failures stop further writes and do not retain stale approval. Inspect Drive/audit and prepare a fresh preview before attempting remaining names. Later regular or optional scans leave canonical files unchanged. Deployment does not perform live renames.
+
 **Admin Settings → Data sync → Sync catalog** refreshes only active Shopify All Bags products/variants and the approved Drive artwork index. It always creates a fresh preview, so corrected SKUs replace stale catalog data. It does not import orders, rematch saved orders, change approvals, create queues, rename Drive files or alter users. The page separates source summaries, last-check counts and sync/view actions. Order backlog sync and artwork rematch remain separate operational actions.
 
 **Check files & refresh orders** reads current Drive filenames, replaces the saved Admin preview, and rematches unbatched production orders using that same index. Use this after renaming files in Drive or another environment; opening a saved preview alone does not refresh orders. The result reports order match counts or an explicit refresh failure. No rename permission is needed, no print approval is granted, and batched items remain protected. Filename changes are optional and collapsed; when disabled, the preview has no rename checkboxes or inactive submit button. Missing-order cards link to a product-filtered matching worklist, including already-found variants.

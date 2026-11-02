@@ -126,6 +126,7 @@ jobs:
       - name: Run application regression checks
         run: |
           php tests/artwork-naming.php
+          php tests/artwork-standardization.php
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php
           node tests/rematch-controls.cjs

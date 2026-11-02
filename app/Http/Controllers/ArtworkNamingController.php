@@ -74,6 +74,17 @@ class ArtworkNamingController extends Controller
             return $response->with('error','Current Drive files checked, but order matches could not refresh. Run Rematch Artwork and check the integration logs if it fails. No files were renamed.');
         }
     }
+    public function standardize(Request $request)
+    {
+        $actor=$this->actor($request);
+        try {
+            $plan=app(ArtworkNamingService::class)->scan($actor,true);
+            return redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token']])->with('ok','Optional standard names prepared. Nothing was renamed or changed on orders. Select only the files you want to rename, then review and confirm.');
+        } catch(\Throwable $e) {
+            report($e);
+            return redirect()->route('admin.settings',['section'=>'artwork'])->with('error','Could not prepare standard names. Check Shopify and Drive access and try again. No files or orders were changed.');
+        }
+    }
     public function syncSources(Request $request)
     {
         $actor=$this->actor($request);
