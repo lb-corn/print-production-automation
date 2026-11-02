@@ -30,6 +30,8 @@ Admin Reset production data deletes only imported production items, their approv
 
 ## Workflow
 
+**Admin Settings → Data sync → Sync catalog** refreshes only active Shopify All Bags products/variants and the approved Drive artwork index. It always creates a fresh preview, so corrected SKUs replace stale catalog data. It does not import orders, rematch saved orders, change approvals, create queues, rename Drive files or alter users. The page separates source summaries, last-check counts and sync/view actions. Order backlog sync and artwork rematch remain separate operational actions.
+
 **Check files & refresh orders** reads current Drive filenames, replaces the saved Admin preview, and rematches unbatched production orders using that same index. Use this after renaming files in Drive or another environment; opening a saved preview alone does not refresh orders. The result reports order match counts or an explicit refresh failure. No rename permission is needed, no print approval is granted, and batched items remain protected. Filename changes are optional and collapsed; when disabled, the preview has no rename checkboxes or inactive submit button. Missing-order cards link to a product-filtered matching worklist, including already-found variants.
 
 1. Open **Account → Admin Settings → Artwork filenames** as an active administrator.
