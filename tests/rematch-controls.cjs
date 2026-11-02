@@ -3,6 +3,18 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 {
  const source=fs.readFileSync('public/js/app.js','utf8'),events={};
+ const input={value:'',addEventListener(k,fn){this[k]=fn;},focus(){this.focused=true;}},clear={hidden:true,addEventListener(k,fn){this[k]=fn;}},count={},empty={};
+ const rows=[{dataset:{filenameSearchText:'CLV-RETRO 7 GRUNGE.jpg LB-CLV-RET7-SINGLE.jpg Lucky Bags Retro 7 Clovers 2027-RET7-CLV-0001'}},{dataset:{filenameSearchText:'old-duck.jpg LB-PSE-DUC-RED-SINGLE.jpg Duck Camo Red 2027-DUC-PSE-0001'}}];
+ const nodes={'[data-filename-search]':input,'[data-filename-clear]':clear,'[data-filename-count]':count,'[data-filename-empty]':empty};
+ vm.runInNewContext(source.slice(source.indexOf('const filenameSearch ='),source.indexOf('const filenameProcessForms =')),{document:{querySelector:s=>nodes[s],querySelectorAll:()=>rows},window:{addEventListener:(k,fn)=>events[k]=fn}});
+ input.value='RET7 SINGLE';input.input();assert(!rows[0].hidden&&rows[1].hidden&&count.textContent==='1 of 2 files');
+ input.value='2027-DUC-PSE';input.input();assert(rows[0].hidden&&!rows[1].hidden);
+ input.value='no such filename';input.input();assert(rows.every(r=>r.hidden)&&!empty.hidden);
+ clear.click();assert(rows.every(r=>!r.hidden)&&empty.hidden&&clear.hidden&&input.focused);
+ console.log('PASS: filename search filters current/suggested names and SKU, handles no results and clears without submitting rename actions');
+}
+{
+ const source=fs.readFileSync('public/js/app.js','utf8'),events={};
  const forms=[0,1].map(()=>({attributes:{},button:{disabled:false,textContent:'Process suggested name'},querySelector(){return this.button;},addEventListener(k,fn){this[k]=fn;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}}));
  vm.runInNewContext(source.slice(source.indexOf('const filenameProcessForms ='),source.indexOf('const catalogSyncForms =')),{document:{querySelectorAll:()=>forms},window:{addEventListener:(k,fn)=>events[k]=fn}});
  const first={preventDefault(){this.prevented=true;}};forms[0].submit(first);assert(!first.prevented&&forms.every(f=>f.button.disabled)&&forms[0].button.textContent==='Processing…');

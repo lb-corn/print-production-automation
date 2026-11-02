@@ -259,6 +259,26 @@ document.addEventListener('click', async (event) => {
         button.textContent = 'Copy unavailable — select the filename';
     }
 });
+const filenameSearch = document.querySelector('[data-filename-search]');
+if (filenameSearch) {
+    const rows=[...document.querySelectorAll('[data-filename-row]')];
+    const clear=document.querySelector('[data-filename-clear]');
+    const count=document.querySelector('[data-filename-count]');
+    const empty=document.querySelector('[data-filename-empty]');
+    const normalize=text=>text.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const filter=()=>{
+        const terms=normalize(filenameSearch.value).split(/\s+/).filter(Boolean);let visible=0;
+        rows.forEach(row=>{const text=normalize(row.dataset.filenameSearchText||'');row.hidden=!terms.every(term=>text.includes(term));if(!row.hidden)visible++;});
+        if(clear)clear.hidden=!filenameSearch.value;
+        if(count)count.textContent=`${visible} of ${rows.length} files`;
+        if(empty)empty.hidden=visible>0||!terms.length;
+    };
+    filenameSearch.addEventListener('input',filter);
+    clear?.addEventListener('click',()=>{filenameSearch.value='';filter();filenameSearch.focus();});
+    window.addEventListener('pageshow',filter);
+    filter();
+}
+
 const filenameProcessForms = [...document.querySelectorAll('[data-filename-process]')];
 let filenameProcessing = false;
 filenameProcessForms.forEach(form => form.addEventListener('submit', event => {
