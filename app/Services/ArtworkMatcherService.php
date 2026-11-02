@@ -335,6 +335,14 @@ class ArtworkMatcherService
         return ['design'=>$name,'side'=>$side,'color'=>$color,'series'=>$series];
     }
 
+    public function isStandardFilename(array $file): bool
+    {
+        if(!in_array(strtolower(pathinfo($file['name']??'',PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true) || empty($file['id']))return false;
+        $stem=strtoupper(pathinfo($file['name'],PATHINFO_FILENAME));
+        $series=implode('|',array_map(fn($code)=>preg_quote($code,'/'),array_keys(self::SERIES)));
+        return preg_match('/^LB-('.$series.')-[A-Z0-9]+(?:-[A-Z0-9]+)*-(FRONT|BACK|SINGLE)-ID-([A-F0-9]{12})$/D',$stem,$parts)===1
+            && hash_equals(strtoupper(substr(hash('sha256',$file['id']),0,12)),$parts[3]);
+    }
     private function namingStem(string $name,string $id): ?string
     {
         if(!str_starts_with($name,'LB-'))return $name;

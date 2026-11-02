@@ -12,6 +12,8 @@ Open **Admin Settings → Filename cleanup**. The page reads current Shopify cat
 
 Cleanup now prefers `LB-SERIES-DESIGN-COLOR-SIDE-ID-XXXXXXXXXXXX.ext`. The ID token is the existing twelve-character uppercase hash of the exact Drive file ID. Correct ID-suffixed names are not listed or shortened. Short names appear for optional alignment. Matching continues accepting shorter names, so deployment does not block existing orders. Color is omitted when unsupported by catalog/reviewed data; CLV and LUC remain separate series. New name stays editable, subject to the existing matching and collision checks.
 
+The cleanup list explicitly excludes valid standard-format files, independently of canonical-name suggestions. The row endpoint and rename engine also reject attempts to process those files from a cached page. Deploy the latest main release before expecting policy changes in production; merging alone does not run the manual deployment workflow.
+
 After a verified rename to an edited, valid name, the app remembers its fingerprint and naming-policy version in private filename-preferences.json. It is not repeatedly listed under that policy. File changes or a policy revision invalidate that preference; it never supplies print approval or bypasses matching checks.
 
 Click **Process suggested name** on one row. That request renames that exact Drive file and refreshes unbatched artwork matches. The page returns with a success or failure message; a successfully standardized file disappears from the list. **Refresh** reloads current suggestions. There are no bulk selections, password dialogs, prepare/preview modes or typed confirmation phrases in this UI.

@@ -13,7 +13,8 @@ class FilenameCleanupController extends Controller
         try {
             $plan=app(ArtworkNamingService::class)->scan($actor,true);
             $preferred=app(ArtworkRenameStore::class)->preferredFilenames();
-            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target'] && !(($preferred[$entry['id']]['policy']??null)===ArtworkNamingService::POLICY && ($preferred[$entry['id']]['fingerprint']??null)===ArtworkMatcherService::artworkFingerprint($entry['source']))));
+            $matcher=app(ArtworkMatcherService::class);
+            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!$matcher->isStandardFilename($entry['source']) && !empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target'] && !(($preferred[$entry['id']]['policy']??null)===ArtworkNamingService::POLICY && ($preferred[$entry['id']]['fingerprint']??null)===ArtworkMatcherService::artworkFingerprint($entry['source']))));
         } catch(\Throwable $e) { report($e);$loadError='Could not load filename suggestions. Check Shopify and Drive access, then refresh the list.'; }
         return view('admin.settings',['section'=>'filenames','plan'=>$plan,'filenameEntries'=>$entries,'loadError'=>$loadError]);
     }
@@ -27,6 +28,7 @@ class FilenameCleanupController extends Controller
             abort_unless(!empty($plan['standardize']),422,'Refresh the filename list before processing a suggestion.');
             $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
             abort_unless($entry && $entry['status']==='ready',422,'This file cannot be renamed. Refresh the list to see its current status.');
+            abort_if(app(ArtworkMatcherService::class)->isStandardFilename($entry['source']),422,'This file already uses the expected ID-suffixed format. No rename is needed. Refresh the list.');
             if(isset($data['suggested_name']) && $data['suggested_name']!==$entry['proposal']['target']) {
                 app(ArtworkNamingService::class)->setSuggestedName($data['plan'],$actor,$data['file_id'],$data['suggested_name']);
                 $entry['proposal']['target']=trim($data['suggested_name']);
