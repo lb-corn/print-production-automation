@@ -500,6 +500,24 @@ $drive->fail=true;$request=Illuminate\Http\Request::create('/admin/data-sync','P
 $check(str_contains(session('error'),'Catalog sync failed') && $snapshot()===$beforeCatalogSync,'Catalog read failure reports an error without changing operational records');
 $route=app('router')->getRoutes()->getByName('admin.data-sync');
 $check(in_array('POST',$route->methods()) && in_array(App\Http\Middleware\RequireAdmin::class,$route->gatherMiddleware()) && in_array(App\Http\Middleware\PortalWriteLock::class,$route->gatherMiddleware()),'Catalog sync requires an authenticated serialized admin POST');
+// The visual chooser must never save a BACK file as single-sided production art.
+$retro=[...$row,'product'=>'Lucky Bags 2027 Retro 7','variant'=>'Clovers','sku'=>'2027-RET7-CLV-0001','catalog_key'=>hash('sha256','retro-seven')];
+$retroFolder=['kind'=>'series_folder','id'=>'clv','name'=>'Clover','path'=>'GROUP B (Carpet) / Clover'];
+$retroBack=[...$source('retro-seven-file','CLV-RETRO 7 GRUNGE-BACK.jpg'),'parent_id'=>'clv','path'=>$retroFolder['path'].' / CLV-RETRO 7 GRUNGE-BACK.jpg'];
+$shopify->rows=[$retro];$drive->index=[$retroFolder,$retroBack];$retroPlan=$service->scan($admin->id);$beforeRetro=$snapshot();
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$retroPlan['token'],'catalog_key'=>$retro['catalog_key'],'file_id'=>$retroBack['id'],'side'=>'single','color'=>''],[],[],['HTTP_ACCEPT'=>'application/json']);$request->setUserResolver(fn()=>$admin);
+$response=$controller->revise($request);
+$check($response->getStatusCode()===422 && str_contains($response->getData(true)['message'],'labeled BACK') && $snapshot()===$beforeRetro,'Retro 7 BACK mismatch returns an actionable JSON error without saving a false single-sided choice');
+$drive->index[1]['name']='CLV-RETRO 7 GRUNGE-FRONT.jpg';$drive->index[1]['path']=$retroFolder['path'].' / '.$drive->index[1]['name'];
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();$retroPlan=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$retroPlan['token'],'catalog_key'=>$retro['catalog_key'],'file_id'=>$retroBack['id'],'side'=>'single','color'=>''],[],[],['HTTP_ACCEPT'=>'application/json']);$request->setUserResolver(fn()=>$admin);
+$response=$controller->revise($request);
+$check($response->getStatusCode()===200 && $response->getData(true)['status']==='ok' && $matcher->match($retro,$drive->index)['match_status']==='REVIEW','Verified FRONT file can be confirmed for a single-sided product with a clear saved result');
+$request->setUserResolver(fn()=>$operator);
+try{$controller->revise($request);throw new RuntimeException('Operator reached admin matching');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Normal users cannot submit Admin artwork choices');}
+auth()->setUser($operator);$operatorCard=view('partials.artwork-review',['item'=>(object)[...$retro,...$matcher->match($retro,[]),'production_batch'=>null]])->render();
+$check(!str_contains($operatorCard,'Choose artwork for this product') && !str_contains(view('partials.account-menu')->render(),'Admin Settings'),'Normal users see neither the Admin matching link nor Admin Settings menu');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
 config(['services.google_drive.rename_enabled'=>true]);
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
