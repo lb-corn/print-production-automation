@@ -2,6 +2,28 @@
 
 Release 1.2.1 | Reviewed 2 November 2026 | Windows x64 and Python 3.13
 
+## Printable guide and release ZIP
+
+Use the [four-page Print PC installation and test guide](../docs/Print-PC-Installation-and-Test-Guide.pdf) for the complete development-PC packaging, client configuration, pilot and recovery checklist.
+
+On the development PC, build the release from the approved project source:
+
+```powershell
+cd D:\LuckyBags\Automation\print-production-automation
+.\automation\make-release.ps1
+```
+
+Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.2.1.zip` and the matching `.sha256.txt`. Do not manually ZIP the entire automation directory; the release script excludes credentials, environments and runtime files.
+
+Transfer both generated files to the Print PC using a trusted method. Before extraction, compare the ZIP hash with the accompanying trusted checksum:
+
+```powershell
+Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.2.1.zip" -Algorithm SHA256
+Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.2.1.sha256.txt"
+```
+
+Use the actual download/transfer directory. Stop if the hashes differ; letter case does not matter. Scan the ZIP with Defender, extract to `C:\LuckyBagsFactory`, and follow the guide. Rebuilding a ZIP can change its checksum, so always use the checksum generated with that exact ZIP. A matching checksum is not a publisher signature.
+
 ## Simple first-install checklist
 
 **Queueing in the website does not immediately start a physical print.** The right-hand Drive originals are the print files: one PRINT file for a single-sided item, or both FRONT and BACK files for a double-sided item. The Shopify mockup is never the print source. Epson Edge Print receives files through its hot folder, not by this agent clicking a Windows Print dialog.
