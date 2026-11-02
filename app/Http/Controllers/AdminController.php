@@ -16,7 +16,7 @@ class AdminController extends Controller
 
     public function index()
     {
-        return view('admin.users', ['users' => User::orderBy('name')->paginate(20)]);
+        return view('admin.users', ['users' => User::orderBy('name')->paginate(20)->withQueryString()]);
     }
 
     public function create(Request $request)

@@ -19,7 +19,7 @@ $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'fi
 $writesBefore=$writer->writes;$page=$cleanup->index($request);$data=$page->getData();$html=$page->render();
 $check(array_column($data['filenameEntries'],'id')===[$work['id'],$locked['id']] && $writer->writes===$writesBefore,'Cleanup lists only nonstandard files with suggestions, excluding canonical and unidentified files');
 $dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
-$check($xpath->query('//form[@data-filename-process]')->length===1 && str_contains($html,'Process suggested name') && str_contains($html,'Protected by print batch') && !str_contains($html,'type="password"') && !str_contains($html,'name="ids[]"'),'Cleanup has one-click row actions, clear batch protection and no password/bulk preview UI');
+$check($xpath->query('//form[@data-filename-process]')->length===1 && str_contains($html,'Process suggested name') && str_contains($html,'In print batch') && !str_contains($html,'type="password"') && !str_contains($html,'name="ids[]"'),'Cleanup has one-click row actions, clear batch protection and no password/bulk preview UI');
 $item=ProductionItem::create(['line_item_id'=>'cleanup-order','quantity'=>1,...array_intersect_key($cleanupRow,array_flip(['sku','product','variant'])),...$matcher->match($cleanupRow,$drive->index)]);app(ProductionService::class)->verify($item,'CORRECT',$admin->id);
 $batchesBefore=PrintBatch::all()->toJson();
 $processRequest=function($token,$id,$user) { $r=Illuminate\Http\Request::create('/admin/filename-cleanup/process','POST',['plan'=>$token,'file_id'=>$id]);$r->setUserResolver(fn()=>$user);return $r; };
@@ -36,5 +36,29 @@ $cleanup->process($processRequest($pending['token'],$other['id'],$admin));$check
 config(['services.google_drive.rename_enabled'=>false]);$disabled=$cleanup->index($request)->render();$check(str_contains($disabled,'Renaming is disabled on this server') && !str_contains($disabled,'data-filename-process'),'Server-disabled renaming explains the blocker instead of offering a dead action');config(['services.google_drive.rename_enabled'=>true]);
 try{$cleanup->process($processRequest($pending['token'],$other['id'],$operator));throw new LogicException('Operator renamed');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Normal users cannot invoke one-click renaming');}
 $route=app('router')->getRoutes()->getByName('admin.filename-cleanup.process');$check(in_array(App\Http\Middleware\RequireAdmin::class,$route->gatherMiddleware()) && in_array(App\Http\Middleware\PortalWriteLock::class,$route->gatherMiddleware()),'Cleanup retains Admin authentication and serialization against batching');
+// Edited targets must remain valid for the same exact product and variant.
+$drive->index=[$cleanupFolder,$other];$shopify->rows=[$cleanupRow];$editable=$cleanup->index($request);$editPlan=$editable->getData()['plan'];$editHtml=$editable->render();
+$check(str_contains($editHtml,'Current name in Drive') && str_contains($editHtml,'name="suggested_name"') && str_contains($editHtml,'Lucky Bags 2027 Duck Camo') && str_contains($editHtml,'filename-cleanup-search'),'Cleanup exposes product search, authoritative Drive names and editable suggestions');
+$writesBefore=$writer->writes;
+foreach(['LB-LUC-DUC-RED-SINGLE.jpeg','LB-PSE-DUC-BLUE-SINGLE.jpeg','LB-PSE-DUC-RED-BACK.jpeg','LB-PSE-DUC-RED-SINGLE.png','../LB-PSE-DUC-RED-SINGLE.jpeg'] as $invalid) {
+    $r=$processRequest($editPlan['token'],$other['id'],$admin);$r->merge(['suggested_name'=>$invalid]);$cleanup->process($r);
+    $check($writer->writes===$writesBefore && str_contains(session('error'),'No files were renamed'),'Edited name rejects wrong identity, variant, side, extension or path: '.$invalid);
+}
+$custom='LB-PSE-DUCK-CAMO-RED-SINGLE.jpeg';
+$service->setSuggestedName($editPlan['token'],$admin->id,$other['id'],$custom);
+$drive->index[]=[...$other,'id'=>'edited-name-collision','name'=>$custom,'path'=>$cleanupFolder['path'].' / '.$custom];
+$r=$processRequest($editPlan['token'],$other['id'],$admin);$r->merge(['suggested_name'=>$custom]);$cleanup->process($r);
+$check($writer->writes===$writesBefore && str_contains(session('error'),'No files were renamed'),'An edited target is checked again when a destination appears after the edit');array_pop($drive->index);
+$r=$processRequest($editPlan['token'],$other['id'],$admin);$r->merge(['suggested_name'=>$custom]);$cleanup->process($r);
+$check($writer->writes===$writesBefore+1 && $drive->index[1]['name']===$custom && $matcher->match($cleanupRow,$drive->index)['matches'][0]['name']===$custom && str_contains(session('ok'),$custom),'A valid edited design name is written to Drive and remains matchable in the app');
+$check(!in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'An accepted custom filename is remembered instead of being suggested for cleanup again');
+$drive->index[1]['version']='changed-outside-app';$check(in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'A remembered custom filename does not hide a file whose metadata changed later');
+$drive->index[1]['version']='changed-outside-app';$check(in_array($other['id'],array_column($cleanup->index($request)->getData()['filenameEntries'],'id'),true),'A remembered custom filename does not hide a file whose metadata changed later');
+$sharedRow=[...$cleanupRow,'catalog_key'=>hash('sha256','edited-shared'),'product'=>'Lucky Bags 2027 Broken Glass'];$shopify->rows=[$cleanupRow,$sharedRow];$drive->index=[$cleanupFolder,[...$source('edited-shared-source','PSE-DUCK-CAMO-RED.jpeg'),'canRename'=>true]];$sharedPlan=$service->scan($admin->id,true);
+try{$service->setSuggestedName($sharedPlan['token'],$admin->id,'edited-shared-source','LB-PSE-DUC-RED-SINGLE.jpeg');throw new LogicException('Ambiguous short name accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && str_contains($e->getMessage(),'shared'),'Edited names cannot remove product disambiguation when distinct designs share a SKU code');}
+$settingsRequest=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'users']);$settingsRequest->setUserResolver(fn()=>$admin);$usersHtml=(new App\Http\Controllers\AdminSettingsController())->index($settingsRequest)->render();
+$check(str_contains($usersHtml,'Manage Users') && str_contains($usersHtml,'Create user') && substr_count($usersHtml,'<main>')===1 && !str_contains($usersHtml,'Admin only'),'Manage Users renders inside the shared settings layout without Admin-only badges');
+$accountHtml=view('partials.account-menu')->render();$check(!str_contains($accountHtml,'>Users ') && str_contains($accountHtml,'Admin Settings'),'Account menu has one Admin Settings entry instead of a separate Users item');
+$settingsRequest->setUserResolver(fn()=>$operator);try{(new App\Http\Controllers\AdminSettingsController())->index($settingsRequest);throw new LogicException('Operator accessed users tab');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Removing badges does not grant normal users access to Manage Users');}
 foreach(glob($directory.'/*.json') as $path)unlink($path);rmdir($directory);
 echo "Simple filename cleanup checks passed.\n";

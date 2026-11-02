@@ -67,6 +67,16 @@ class ArtworkRenameStore
             'good'=>($counts['standard']??0)+($counts['renamed']??0),'ready'=>$counts['ready']??0,
             'review'=>($counts['review']??0)+($counts['conflict']??0),'protected'=>$counts['locked']??0,'catalog_matched'=>$coverage['matched'],'catalog_missing'=>$coverage['missing'],'catalog_ambiguous'=>$coverage['ambiguous'],'checked_at'=>$plan['created_at']];
     }
+    public function preferredFilenames(): array
+    {
+        $path=$this->directory.DIRECTORY_SEPARATOR.'filename-preferences.json';
+        return is_file($path)?json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR):[];
+    }
+    public function rememberFilename(array $file,int $actor): void
+    {
+        $names=$this->preferredFilenames();$names[$file['id']]=['name'=>$file['name'],'fingerprint'=>ArtworkMatcherService::artworkFingerprint($file),'actor'=>$actor,'at'=>gmdate('c')];
+        $this->write($this->directory.DIRECTORY_SEPARATOR.'filename-preferences.json',$names);
+    }
     public function selections(): array
     {
         $path=$this->directory.DIRECTORY_SEPARATOR.'artwork-selections.json';
