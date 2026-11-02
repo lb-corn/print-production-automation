@@ -30,6 +30,8 @@ Admin Reset production data deletes only imported production items, their approv
 
 ## Workflow
 
+**Check files & refresh orders** reads current Drive filenames, replaces the saved Admin preview, and rematches unbatched production orders using that same index. Use this after renaming files in Drive or another environment; opening a saved preview alone does not refresh orders. The result reports order match counts or an explicit refresh failure. No rename permission is needed, no print approval is granted, and batched items remain protected. Filename changes are optional and collapsed; when disabled, the preview has no rename checkboxes or inactive submit button. Missing-order cards link to a product-filtered matching worklist, including already-found variants.
+
 1. Open **Account → Admin Settings → Artwork filenames** as an active administrator.
 2. The page loads a recent admin-bound preview automatically, or performs a fresh read-only scan when none is recent and valid. **Check files** forces an immediate refresh. The fixed collection name is **All Bags**, saved in `config/services.php`. Only **ACTIVE** products in that exact collection are read, including products without orders. Draft, archived and other-collection products are excluded. Missing or duplicate exact collection names stop the scan; there is no whole-store fallback. Collection products and each product’s variants are fully paginated. Old previews must be refreshed after this scope change.
 3. Inspect the current and proposed names. Exact SKU-code or full-title evidence can suggest a name, using an approved folder as series context for a reviewed rename. Arbitrary abbreviations, unidentified designs/colors and missing print sides are never guessed.

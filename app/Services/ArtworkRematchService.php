@@ -11,11 +11,11 @@ class ArtworkRematchService
     public function __construct(private GoogleDriveService $drive, private ArtworkMatcherService $matcher) {}
 
     /** Fetch before taking database locks; a failed Drive request leaves all selections untouched. */
-    public function rematch(): array
+    public function rematch(?array $index = null): array
     {
         self::ensureSchemaReady();
         $this->matcher->refreshReviewedSelections();
-        $index = $this->drive->artworkIndex();
+        $index ??= $this->drive->artworkIndex();
         $counts = ['matched'=>0,'missing'=>0,'ambiguous'=>0,'skipped'=>0];
         DB::transaction(function () use ($index, &$counts) {
             // Same lock order as batch creation, serializing selection changes against batching.

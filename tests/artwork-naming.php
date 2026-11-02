@@ -10,7 +10,7 @@ use App\Services\{ArtworkNamingService,ArtworkMatcherService,ArtworkRenameStore,
 use App\Models\{ProductionItem,PrintBatch,VerificationDecision,User};
 use GuzzleHttp\{Client,HandlerStack};use GuzzleHttp\Handler\MockHandler;use GuzzleHttp\Psr7\Response;
 $checks=0;$check=function($ok,$message)use(&$checks){if(!$ok)throw new RuntimeException($message);$checks++;echo 'PASS: '.$message.PHP_EOL;};
-$drive=new class extends GoogleDriveService{public array $index=[];public function __construct(){}public function artworkIndex():array{return $this->index;}};
+$drive=new class extends GoogleDriveService{public array $index=[];public int $reads=0;public function __construct(){}public function artworkIndex():array{$this->reads++;return $this->index;}};
 $shopify=new class extends ShopifyService{public array $rows=[];public function __construct(){}public function getArtworkCatalog():array{return $this->rows;}};
 $matcher=new ArtworkMatcherService($drive);
 $folder=['kind'=>'series_folder','id'=>'pse','name'=>'PSE','path'=>'GROUP B (Carpet) / PSE'];
@@ -293,7 +293,7 @@ $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$choos
 $chooser=$controller->index($request,$store);$check(isset($chooser->getData()['reviewGroups']['standard-chooser']),'The visual chooser includes correctly named files, not only review/conflict files');
 $chooserHtml=$chooser->render();$dom=new DOMDocument();@$dom->loadHTML($chooserHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//dialog[@data-artwork-match-dialog]//select[@data-naming-catalog and @hidden]')->length===1 && $xpath->query('//button[@data-match-product]')->length===1,'A single product worklist opens one focused visual comparison without visible mapping dropdowns');
-$check($xpath->query('//details[summary[contains(text(),"Filename changes")]]//form[@id="artwork-naming-apply"]')->length===1,'Advanced filename controls are collapsed instead of competing with product matching');
+$check($xpath->query('//details[summary[contains(text(),"Optional filename changes")]]//form[@id="artwork-naming-apply"]')->length===1,'Advanced filename controls are collapsed instead of competing with product matching');
 $blueDouble=[...$bubbleDouble,'catalog_key'=>hash('sha256','blue-double'),'variant'=>'Snipers / Blue'];$shopify->rows=[$blueDouble];$drive->index=[$doubleFolder,$source('side-guard','SNP-BUBBLES-BLUE-FRONT.jpg','snp')];$guard=$service->scan($admin->id);
 try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$blueDouble['catalog_key'],'side'=>'back','color'=>'BLUE']],false);throw new LogicException('Wrong side mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts explicit FRONT/BACK');}
 $redDouble=[...$blueDouble,'catalog_key'=>hash('sha256','red-double'),'variant'=>'Snipers / Red'];$shopify->rows=[$redDouble];$guard=$service->scan($admin->id);
@@ -367,7 +367,7 @@ $ambiguous=$matcher->match($row,[$folder,$source('ui-duplicate-a','PSE-DUC-RED.j
 $check($ambiguous['match_status']==='AMBIGUOUS' && $ambiguous['artwork_review']['suggested_filenames']===[],'Ambiguous matches produce no misleading filename suggestion');
 auth()->setUser($admin);$ambiguous['artwork_review']['suggested_filenames']=['legacy-misleading.jpg'];$viewItem=(object)[...$row,...$ambiguous,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//button[@data-copy-filename]')->length===0 && str_contains($html,'PSE-DUC-RED.jpeg'),'Ambiguous-artwork UI hides even stale copy suggestions and shows conflicting filenames');
-$missing=$matcher->match($row,[$folder]);$viewItem=(object)[...$row,...$missing,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$check((new DOMXPath($dom))->query('//button[@data-copy-filename]')->length===1,'Missing artwork still presents its standard filename suggestion');
+$missing=$matcher->match($row,[$folder]);$viewItem=(object)[...$row,...$missing,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$check((new DOMXPath($dom))->query('//button[@data-copy-filename]')->length===0 && !str_contains($html,'LB-PSE-DUC-RED-SINGLE.jpg') && str_contains($html,'Choose artwork for this product'),'Missing artwork directs Admin to product matching without filename suggestions or copy controls');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
 
@@ -458,9 +458,11 @@ $midnightPlan=$service->scan($admin->id);
 $check(count(array_filter($midnightPlan['entries'],fn($e)=>$e['status']==='review'))===2 && $matcher->match($midnightRow,$drive->index)['match_status']==='MISSING','MIDNIGHT is not automatically guessed to mean BLACK');
 $midnightPlan=$service->revisePair($midnightPlan['token'],$admin->id,$midnightRow['catalog_key'],'midnight-front','midnight-back',false);
 $check(array_column($midnightPlan['entries'],'status')===['standard','standard'] && array_column(array_column($midnightPlan['entries'],'proposal'),'target')===array_column($midnightPair,'name'),'Reviewed MIDNIGHT FRONT/BACK pair retains actual names instead of requiring BLACK renames');
+config(['services.google_drive.rename_enabled'=>false]);
 $writesBefore=$writer->writes;$service->saveReviewedChoice($midnightPlan,$admin->id,$midnightRow['catalog_key'],['midnight-front','midnight-back']);
 $midnightReload=$service->scan($admin->id);$midnightMatch=$matcher->match($midnightRow,$drive->index);
 $check(array_column($midnightReload['entries'],'status')===['standard','standard'] && $midnightMatch['match_status']==='REVIEW' && count($midnightMatch['matches'])===2 && $midnightMatch['artwork_review']['selection_source']==='admin' && $writer->writes===$writesBefore,'Saved pair survives scan and production rematch with zero rename writes and no print approval');
+config(['services.google_drive.rename_enabled'=>true]);
 try{$service->begin($midnightReload['token'],$admin->id,['midnight-front','midnight-back'],false);throw new LogicException('Reviewed standard pair submitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'Already accepted pair cannot be submitted for another rename');}
 $changedPair=$drive->index;$changedPair[1]['version']='2';
 $check($matcher->match($midnightRow,$changedPair)['match_status']==='MISSING','Changing the reviewed artwork still invalidates the saved pair');
@@ -468,5 +470,21 @@ $redPair=$midnightPair;$redPair[0]['name']='SRF-SUREFIRE OG-RED-FRONT.jpg';$redP
 $redProposal=$service->build([$midnightFolder,$redPair[0]],[$midnightRow],['midnight-front'=>['catalog_key'=>$midnightRow['catalog_key'],'side'=>'front','color'=>'BLACK']],[])[0];
 $check($redProposal['status']==='ready' && $redProposal['proposal']['target']!==$redPair[0]['name'],'An explicit wrong color token is not silently accepted by the absent-color exception');
 config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
+// A fresh Admin check must also populate orders after files were renamed elsewhere.
+config(['services.google_drive.rename_enabled'=>false]);
+$shopify->rows=[$midnightRow];$drive->index=[$midnightFolder];
+foreach(['front','back'] as $side)$drive->index[]=[...$source('fresh-black-'.$side,'LB-SRF-SOG-BLACK-'.strtoupper($side).'.jpg'),'parent_id'=>'srf','path'=>$midnightFolder['path'].' / LB-SRF-SOG-BLACK-'.strtoupper($side).'.jpg'];
+$refreshItem=ProductionItem::create(['line_item_id'=>'fresh-black-order',...array_intersect_key($midnightRow,array_flip(['sku','product','variant'])),'quantity'=>1,'match_status'=>'MISSING','matches'=>[],'is_custom'=>false]);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/scan','POST',['artwork_search'=>$midnightRow['product']]);$request->setUserResolver(fn()=>$admin);
+$readsBefore=$drive->reads;$writesBefore=$writer->writes;$response=$controller->scan($request);
+$refreshItem=$refreshItem->fresh('decision');
+$check($refreshItem->match_status==='REVIEW' && count($refreshItem->matches)===2 && !$refreshItem->decision,'Check files populates an empty Black order from current canonical Drive names, without print approval');
+$check($drive->reads===$readsBefore+1 && $writer->writes===$writesBefore && str_contains(session('ok'),'orders refreshed'),'Admin refresh reuses one fresh Drive scan and succeeds with renaming disabled');
+parse_str(parse_url($response->getTargetUrl(),PHP_URL_QUERY),$query);
+$check(($query['artwork_search']??null)===$midnightRow['product'],'Refresh keeps the blocked product search in the destination');
+$request=Illuminate\Http\Request::create('/admin/settings','GET',$query);$request->setUserResolver(fn()=>$admin);
+$html=$controller->index($request,$store)->render();
+$check(str_contains($html,'value="'.$midnightRow['product'].'"') && str_contains($html,'Optional filename changes') && !str_contains($html,'data-naming-open') && !str_contains($html,'name="ids[]"'),'Read-only filename preview has no selected files or dead rename action, and retains product search');
+config(['services.google_drive.rename_enabled'=>true]);
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
