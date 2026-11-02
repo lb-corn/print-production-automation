@@ -74,6 +74,19 @@ class ArtworkNamingController extends Controller
             return $response->with('error','Current Drive files checked, but order matches could not refresh. Run Rematch Artwork and check the integration logs if it fails. No files were renamed.');
         }
     }
+    public function syncSources(Request $request)
+    {
+        $actor=$this->actor($request);
+        $search=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
+        // Ignore any displayed plan: catalog corrections must replace the saved snapshot.
+        try { $plan=app(ArtworkNamingService::class)->scan($actor); }
+        catch(\Throwable $e) {
+            report($e);
+            return redirect()->route('admin.settings',['section'=>'sync'])->with('error','Catalog sync failed while reading Shopify products or Drive artwork. Check integration access and try again.');
+        }
+        return redirect()->route('admin.settings',['section'=>'sync','plan'=>$plan['token'],'artwork_search'=>$search])
+            ->with('ok',sprintf('Catalog synced: %d Shopify variants · %d Drive artwork files. Open Artwork filenames to review the refreshed data. Orders, approvals and print queues were not changed.',count($plan['catalog']),count(array_filter($plan['index'],fn($file)=>($file['kind']??'')==='artwork'))));
+    }
     public function revise(Request $request)
     {
         $actor=$this->actor($request);

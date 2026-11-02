@@ -1,8 +1,8 @@
 @if($loadError??null)<p class="admin-notice" role="alert">{{$loadError}}</p>@endif
 <section class="naming-simple-header">
 <div><strong>Shopify artwork matching</strong><span>All Bags collection · Active Shopify products only.</span></div>
-<form id="artwork-scan-form" method="post" action="{{route('admin.artwork-names.scan')}}">
-@csrf<input type="hidden" name="artwork_search" value="{{$catalogSearch??''}}"><button class="primary" type="submit" data-naming-scan>Check files & refresh orders</button></form>
+<form id="artwork-scan-form" method="post" action="{{route('admin.data-sync')}}">
+@csrf<input type="hidden" name="artwork_search" value="{{$catalogSearch??''}}"><button class="primary" type="submit">Sync catalog</button></form>
 </section>
 
 <div class="naming-status-row" aria-label="Artwork status">
@@ -117,7 +117,7 @@ $preselected=0;
 </div></form></dialog>
 @endif
 <details class="naming-advanced"><summary>Optional filename changes · {{$ready}} proposed{{config('services.google_drive.rename_enabled')?'':' · read only'}}</summary>
-<p class="muted">This is a saved preview from {{date('d M, H:i',$plan['created_at'])}}. If files were renamed in Drive, use Check files & refresh orders above to load their current names and update order artwork.</p>
+<p class="muted">This is a saved preview from {{date('d M, H:i',$plan['created_at'])}}. After changing Shopify data or Drive files, use Data sync to load the current catalog. Catalog sync does not update orders or print queues.</p>
 <div class="naming-table-tools naming-simple-tools">
 <div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Linked files to review</button><button type="button" class="chip" data-naming-mode="all">Linked files</button></div>
 <input type="search" name="artwork_filename_filter" id="artwork-filename-filter" data-naming-search autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="Filter filenames" aria-label="Filter filenames">
