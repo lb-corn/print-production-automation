@@ -109,7 +109,7 @@ def integrity():
     if not CREDS.is_file():
         raise ValueError('Google read-only service-account credentials are missing')
     no_reparse(CREDS)
-    if not OUT.is_absolute() or str(OUT).startswith(('\\\\', '//')) or OUT.resolve() in {HERE, OUT.resolve().parent}:
+    if not OUT.is_absolute() or str(OUT).startswith(('\\\\', '//')) or OUT.resolve() in {HERE, OUT.resolve().parent} or HERE.is_relative_to(OUT.resolve()):
         raise ValueError('FACTORY_PRINT_DIR must be a dedicated local absolute directory')
     no_reparse(OUT)
     if HOT:
@@ -117,7 +117,7 @@ def integrity():
         if not hot.is_absolute() or str(hot).startswith(('\\\\', '//')):
             raise ValueError('Hot folder must be a dedicated local absolute directory')
         hot = no_reparse(hot).resolve()
-        if hot == HERE or hot == hot.parent or hot.is_relative_to(OUT.resolve()) or OUT.resolve().is_relative_to(hot):
+        if hot == HERE or hot == hot.parent or HERE.is_relative_to(hot) or hot.is_relative_to(OUT.resolve()) or OUT.resolve().is_relative_to(hot):
             raise ValueError('Hot folder must not overlap the artwork workspace or agent code')
     if not 1 <= MAX_FILE_BYTES <= 500 * 1024 * 1024:
         raise ValueError('MAX_ARTWORK_MB must be between 1 and 500')
@@ -128,10 +128,12 @@ def integrity():
 
 
 def drive():
+    import httplib2
+    from google_auth_httplib2 import AuthorizedHttp
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
     credentials = service_account.Credentials.from_service_account_file(str(CREDS), scopes=['https://www.googleapis.com/auth/drive.readonly'])
-    return build('drive', 'v3', credentials=credentials, cache_discovery=False)
+    return build('drive', 'v3', http=AuthorizedHttp(credentials, http=httplib2.Http(timeout=60)), cache_discovery=False)
 
 
 def check_magic(path):
@@ -182,7 +184,8 @@ def validate_batch(batch):
             name = safe(f"{order.get('order', '')}_{identity}_{artwork.get('side', '')}") + ext
             material = safe(artwork.get('material'))
             files.append({'relative': str(Path(material) / name), 'drive_file_id': artwork['drive_file_id'],
-                          'mime': MIME_TYPES[ext], 'quantity': order['quantity'], 'side': artwork.get('side')})
+                          'mime': MIME_TYPES[ext], 'quantity': order['quantity'], 'side': artwork.get('side'),
+                          'expected_md5': artwork.get('md5_checksum'), 'expected_version': artwork.get('drive_version')})
     if len({file['relative'] for file in files}) != len(files):
         raise ValueError('Duplicate artwork destinations')
     if payload.get('order_count') != len(orders) or payload.get('artwork_file_count') != len(files):
@@ -211,10 +214,14 @@ def write_json(path, data):
 
 def download(service, file, destination):
     from googleapiclient.http import MediaIoBaseDownload
-    metadata = service.files().get(fileId=file['drive_file_id'], fields='id,mimeType,size,md5Checksum').execute()
+    metadata = service.files().get(fileId=file['drive_file_id'], fields='id,mimeType,size,md5Checksum,version').execute()
     size = int(metadata.get('size', 0))
     if metadata.get('mimeType') != file['mime'] or not 0 < size <= MAX_FILE_BYTES or not metadata.get('md5Checksum'):
         raise ValueError('Drive original has unexpected type, size or missing checksum')
+    if file.get('expected_md5') and metadata['md5Checksum'] != file['expected_md5']:
+        raise ValueError('Drive content differs from the approved batch snapshot')
+    if file.get('expected_version') and str(metadata.get('version')) != str(file['expected_version']):
+        raise ValueError('Drive revision differs from the approved batch snapshot')
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(destination.name + '.download')
     no_reparse(temporary)
@@ -259,7 +266,7 @@ def prepare(batch):
         raise
 
 
-def verify_prepared_batch(batch):
+def verify_prepared_batch(batch, with_hashes=False):
     expected = validate_batch(batch)
     folder = batch_folder(batch)
     manifest_path = contained(folder, 'batch.json')
@@ -278,8 +285,8 @@ def verify_prepared_batch(batch):
         if path.stat().st_size != entry.get('bytes') or digest(path) != entry.get('sha256'):
             raise ValueError('Prepared artwork hash mismatch')
         check_magic(path)
-        result.append(path)
-    allowed = {path.resolve() for path in result} | {manifest_path.resolve(), (folder / 'handoff.json').resolve()}
+        result.append((path, entry['sha256']) if with_hashes else path)
+    allowed = {(item[0] if with_hashes else item).resolve() for item in result} | {manifest_path.resolve(), (folder / 'handoff.json').resolve()}
     for path in folder.rglob('*'):
         no_reparse(path)
         if path.is_file() and path.resolve() not in allowed:
@@ -300,7 +307,8 @@ def handoff(batch):
             raise ValueError('An existing Edge Print hot folder must be configured')
         if not batch.get('handoff_authorized'):
             raise ValueError('Recorded human handoff confirmation is required')
-        folder, sources = verify_prepared_batch(batch)
+        folder, verified = verify_prepared_batch(batch, with_hashes=True)
+        sources = [source for source, _ in verified]
         journal = contained(folder, 'handoff.json')
         # Once publication starts, never automatically republish even if Edge Print consumes files.
         if journal.exists():
@@ -312,19 +320,21 @@ def handoff(batch):
         # Quantity/preset automation has not been validated. Do not silently print one copy of a multi-set job.
         if any(order['quantity'] != 1 for order in batch['payload']['orders']):
             raise RuntimeError('Multi-set hot-folder handoff requires a validated Edge Print quantity adapter; use manual preparation')
-        for source in sources:
+        for source, approved_hash in verified:
             scan_file(source)
+            if digest(no_reparse(source)) != approved_hash:
+                raise ValueError('Prepared artwork changed during scanning')
         write_json(journal, {'state': 'publishing', 'payload_sha256': payload_hash(batch)})
-        for source in sources:
+        for source, approved_hash in verified:
             destination = contained(Path(HOT), safe(batch['batch_id'][:50] + '_' + source.parent.name[:20] + '_' + source.stem[:40]) + source.suffix)
             if destination.exists():
                 raise ValueError('Hot-folder destination already exists; operator review required')
             temporary = contained(Path(HOT), destination.name + '.lbtmp')
-            with open(source, 'rb') as src, open(temporary, 'xb') as dst:
+            with open(no_reparse(source), 'rb') as src, open(temporary, 'xb') as dst:
                 shutil.copyfileobj(src, dst)
                 dst.flush()
                 os.fsync(dst.fileno())
-            if digest(temporary) != digest(source):
+            if digest(temporary) != approved_hash:
                 raise ValueError('Hot-folder copy hash mismatch')
             temporary.rename(destination)
         write_json(journal, {'state': 'published', 'payload_sha256': payload_hash(batch)})

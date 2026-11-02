@@ -1,6 +1,16 @@
 # Factory Agent security review
 
-Review date: 30 October 2026. Release: 1.2.0. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+Review date: 2 November 2026. Release: 1.2.1. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+
+## 1.2.1 follow-up
+
+- Fixed a handoff time-of-check gap: copied bytes must match the manifest hash already verified, rather than whichever source bytes exist after copying. Changes during scanning/copying fail closed; regression tested.
+- New batch payloads carry available Drive MD5/version evidence, checked before download. Historical batches without these fields still use legacy live-Drive checksum checks; create fresh approved batches after deploying the web update for the added protection.
+- Google HTTP calls now have an explicit 60-second transport timeout. Workspace/hot-folder paths cannot be ancestors of agent source.
+- Corrected the example API host to lbprint.app.keenpillar.com and documented the exact single/two-original pilot journey and local administrator limitations.
+- Seventeen Python regressions pass, including one/two-file handoff and blocked substitutions. OSV returned no advisory matches for the 23 exact locked packages on 2 November 2026. This is not a malicious-package audit or a malware-free guarantee.
+- No client installation, physical printer test, real service-account access, live batch claim or print handoff was performed during this review.
+- The credential-free distribution ZIP received a local Microsoft Defender custom scan; scan start/completion events were checked. This is not a client-device inspection or malware-free certification. The archive allowlist and agent manifest hash were verified separately.
 
 ## Decision
 
@@ -27,7 +37,7 @@ Controlled pilot only. Do not enable unattended full production. The agent prepa
 ## Trust boundaries and remaining risks
 
 - A compromised Windows operator account or Administrator can alter source, configuration, manifests and credentials. ACLs and optional source hashes do not make the agent tamper-proof. Use a dedicated patched account, endpoint protection and independent backups.
-- Artwork approval currently binds Drive file IDs, not immutable Drive revisions. A trusted Drive editor can change an original between approval and preparation; re-review edited originals. Local hashes protect the downloaded version after preparation, not the historical approval content.
+- Historical approval snapshots may bind only Drive file IDs. New batch payloads include available Drive MD5/version evidence and the agent checks it. Missing metadata in legacy batches remains a risk; re-review modified originals and create fresh batches. This is not an immutable archive of every approved revision.
 - A valid image/PDF may exploit a vulnerable RIP/parser. Defender and file signatures reduce risk but cannot prove artwork safe. Keep Edge Print/OS/drivers patched. PDF active content is not stripped; the RIP must safely process approved originals.
 - The dedicated Google account can read every Drive resource shared to it. Limit Viewer sharing to required artwork only. The factory API uses one deployment secret, not per-device enrollment, expiry or attestation.
 - The installation supports one trusted agent PC. Preparation claims are atomic, but no per-device handoff lease or distributed ownership protocol is implemented. Do not run multiple agent PCs against the same deployment.
@@ -39,7 +49,7 @@ Controlled pilot only. Do not enable unattended full production. The agent prepa
 
 ## Dependency result
 
-The exact 23 public package names and versions in requirements.lock were queried against https://api.osv.dev/v1/querybatch on 30 October 2026. No advisory matches were returned. See dependency-audit.json. This is a point-in-time database result, not a guarantee against unknown vulnerabilities or supply-chain compromise.
+The exact 23 public package names and versions in requirements.lock were queried against https://api.osv.dev/v1/querybatch on 2 November 2026. No advisory matches were returned. See dependency-audit.json. This is a point-in-time database result, not a guarantee against unknown vulnerabilities or supply-chain compromise.
 
 ## Verification commands
 
