@@ -169,6 +169,8 @@ class ArtworkMatcherService
     {
         $name = $this->norm($variant);
         if (in_array($name, ['', 'DEFAULT-TITLE', ...(self::FOLDERS[$series] ?? [])], true)) return [true, null];
+        // A different known series is a catalog contradiction, never a color.
+        foreach(self::FOLDERS as $other=>$aliases)if($other!==$series && in_array($name,$aliases,true))return [false,null];
         // Color is the whole option, not any substring inside a longer variant.
         if (str_contains($variant, '/')) {
             $parts = array_map('trim', explode('/', $variant));

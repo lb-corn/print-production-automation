@@ -198,6 +198,12 @@ query ProductionBacklog($first: Int!) {
                     unfulfilledQuantity
                     sku
                     variantTitle
+                    variant {
+                        id
+                        sku
+                        title
+                        product { id }
+                    }
 
                     product {
                         id
@@ -319,7 +325,16 @@ GRAPHQL;
                     continue;
                 }
 
+                // Order line SKU/title can retain the values from checkout. Resolve
+                // corrections only through this line's exact, still-linked variant.
+                $currentVariant=$line['variant']??null;
+                $linkedVariant=is_array($currentVariant) && !empty($currentVariant['id'])
+                    && !empty($line['product']['id'])
+                    && ($currentVariant['product']['id']??null)===$line['product']['id'];
                 $items[] = [
+                    'shopify_variant_id'=>$linkedVariant?$currentVariant['id']:null,
+                    'order_sku'=>$line['sku']??null,
+                    'order_variant'=>$line['variantTitle']??null,
                     'line_item_id' =>
                         $line['id'],
 
@@ -343,12 +358,10 @@ GRAPHQL;
                         $productType,
 
                     'variant' =>
-                        $line['variantTitle']
-                        ?? null,
+                        $linkedVariant?($currentVariant['title']??null):($line['variantTitle']??null),
 
                     'sku' =>
-                        $line['sku']
-                        ?? null,
+                        $linkedVariant?($currentVariant['sku']??null):($line['sku']??null),
 
                     'quantity' =>
                         $unfulfilledQuantity,

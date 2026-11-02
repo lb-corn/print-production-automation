@@ -23,6 +23,9 @@ class BacklogSyncService
                 if (isset(app(ProductionService::class)->batchIndex(true)[$row['line_item_id']])) { $skipped++; continue; }
                 $fields = array_intersect_key($row, array_flip(['order_number','product','variant','sku','quantity','shopify_image']));
                 $match = $this->matcher->match($row, $index);
+                if(!empty($row['shopify_variant_id']) && (($row['order_sku']??null)!==($row['sku']??null) || ($row['order_variant']??null)!==($row['variant']??null))) {
+                    $match['artwork_review']['catalog_refresh']=['variant_id'=>$row['shopify_variant_id'],'order_sku'=>$row['order_sku']??null,'current_sku'=>$row['sku']??null,'order_variant'=>$row['order_variant']??null,'current_variant'=>$row['variant']??null];
+                }
                 if ($item) {
                     $contextChanged = $item->sku !== ($fields['sku'] ?? $item->sku) || $item->variant !== ($fields['variant'] ?? $item->variant) || $item->product !== ($fields['product'] ?? $item->product);
                     $item->fill($fields);
