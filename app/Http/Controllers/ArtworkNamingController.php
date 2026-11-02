@@ -10,6 +10,7 @@ class ArtworkNamingController extends Controller
     public function index(Request $request,ArtworkRenameStore $store)
     {
         $actor=$this->actor($request);
+        $catalogSearch=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
         $loadError=null;
         $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);
         if(!$plan && !$request->query('plan')) {
@@ -54,13 +55,24 @@ class ArtworkNamingController extends Controller
             $entry['source_attributes']=$attributes;
             $reviewGroups[$entry['id']]=['entry'=>$entry,'count'=>1];
         }
-        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries','loadError'));
+        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries','loadError','catalogSearch'));
     }
     public function scan(Request $request)
     {
         $actor=$this->actor($request);
-        try{$plan=app(ArtworkNamingService::class)->scan($actor);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']]);}
+        $search=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
+        try{$plan=app(ArtworkNamingService::class)->scan($actor);}
         catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names')->with('error','Cannot load artwork from All Bags and Drive. Check that exactly one All Bags collection exists, Shopify read_products access, and Drive service-account access. No files were renamed.');}
+        $response=redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token'],'artwork_search'=>$search]);
+        try {
+            $counts=app(\App\Services\ArtworkRematchService::class)->rematch($plan['index']);
+            return $response->with('ok',sprintf('Current Drive files checked and unbatched orders refreshed: %d matched · %d missing · %d ambiguous · %d protected. Review artwork in Artwork Verification before approval. No files were renamed.',$counts['matched'],$counts['missing'],$counts['ambiguous'],$counts['skipped']));
+        } catch(\App\Exceptions\ArtworkSchemaNotReady $e) {
+            return $response->with('warning','Current Drive files checked, but orders could not refresh: '.$e->getMessage());
+        } catch(\Throwable $e) {
+            report($e);
+            return $response->with('error','Current Drive files checked, but order matches could not refresh. Run Rematch Artwork and check the integration logs if it fails. No files were renamed.');
+        }
     }
     public function revise(Request $request)
     {
