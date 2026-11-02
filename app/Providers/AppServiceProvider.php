@@ -9,6 +9,16 @@ use Illuminate\Http\Request;
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\ProductionService::class);}
  public function boot():void {
+  RateLimiter::for('catalog-sync', function (Request $request) {
+   return Limit::perMinute(3)
+    ->by('catalog-sync:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+    ->response(function (Request $request, array $headers) {
+     $seconds=max(1,(int)($headers['Retry-After'] ?? 60));
+     $message='Catalog sync limit reached. Please wait '.$seconds.' seconds and try again. This request did not change the catalog, orders or print queues.';
+     if ($request->expectsJson()) return response()->json(['message'=>$message],429,$headers);
+     return redirect()->route('admin.settings',['section'=>'sync'])->with('error',$message)->withHeaders($headers);
+    });
+  });
   RateLimiter::for('artwork-rematch', function (Request $request) {
    return Limit::perMinute(3)
     ->by('artwork-rematch:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
