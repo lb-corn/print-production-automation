@@ -1,6 +1,6 @@
 # Admin artwork matching and filename cleanup
 
-Admin Settings has separate sections for Artwork matching, Data sync, Filename cleanup and Reset portal data. Only active administrators can access these sections or their POST actions.
+Admin Settings has separate sections for Artwork matching, Data sync, Filename cleanup, Manage Users and Reset portal data. Manage Users replaces the standalone Users dropdown entry; existing user-management bookmarks and actions remain supported. Cosmetic Admin-only badges are omitted, while all authorization checks remain enforced.
 
 ## Simple optional filename cleanup
 
@@ -10,7 +10,11 @@ Open **Admin Settings → Filename cleanup**. The page reads current Shopify cat
 | --- | --- | --- |
 | CLV-RETRO 7 GRUNGE.jpg | LB-CLV-RET7-SINGLE.jpg | Process suggested name |
 
-Click **Process suggested name** on one row. That request renames that exact Drive file and refreshes unbatched artwork matches. The page returns with a success or failure message; a successfully standardized file disappears from the list. **Refresh list** reloads current suggestions. There are no bulk selections, password dialogs, prepare/preview modes or typed confirmation phrases in this UI.
+The product and series are shown separately from the authoritative current Drive filename. **New name** is editable; keep the same series, design, color, side and extension. Both validated old ID-suffixed names and shorter names are supported by matching; the suffix is not mandatory. CLV and LUC identify different series and cannot be interchanged. Product-name, SKU and filename search share one compact toolbar with an adjacent Clear action.
+
+After a verified rename to an edited, valid name, the app remembers that filename with its exact metadata fingerprint in private filename-preferences.json. It is not repeatedly listed for cleanup. Later file changes invalidate that preference; it never supplies print approval or bypasses matching checks.
+
+Click **Process suggested name** on one row. That request renames that exact Drive file and refreshes unbatched artwork matches. The page returns with a success or failure message; a successfully standardized file disappears from the list. **Refresh** reloads current suggestions. There are no bulk selections, password dialogs, prepare/preview modes or typed confirmation phrases in this UI.
 
 Filename cleanup is optional. Matching and printing can continue using valid legacy names. The Artwork matching screen no longer contains filename processing controls. Old Prepare standard names requests redirect to Filename cleanup.
 
@@ -18,7 +22,7 @@ Files with no reliable catalog identity are excluded rather than assigned guesse
 
 ## Protection and results
 
-The row action is an authenticated Admin POST with CSRF, a per-administrator limiter and the shared PortalWriteLock. A server-side, actor-bound expiring snapshot carries its original metadata and suggestion; the browser supplies only the snapshot token and exact file ID. The server recomputes and checks the suggestion against current catalog, Drive metadata, parent folder, destination and batch references before writing. It never trusts a submitted filename.
+The row action is an authenticated Admin POST with CSRF, a per-administrator limiter and the shared PortalWriteLock. A server-side actor-bound snapshot carries original metadata and suggestions. An edited name is accepted only if the matcher recognizes it for the same product identity, series, color and side, with the original extension. Shared design codes must retain the full disambiguating product design. The server rechecks the edited target against current catalog, metadata, parent, destinations and batch references before writing. It never blindly trusts a submitted filename.
 
 Files referenced by protected batches, including queued, claimed, completed and failed batches, are blocked. Destination collisions and duplicate artwork are blocked. Missing Drive Editor access and disabled server renaming are shown directly on the list instead of offering actions that cannot work. Replay and stale-file submissions do not perform another rename. The limiter redirects to Filename cleanup with retry guidance rather than displaying the generic 429 page.
 

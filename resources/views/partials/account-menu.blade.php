@@ -11,8 +11,7 @@
                 <a href="{{ route('profile') }}" @if(request()->routeIs('profile')) aria-current="page" @endif>Profile</a>
                 <a href="{{ route('docs') }}" @if(request()->routeIs('docs')) aria-current="page" @endif>Docs <span>Quick guide</span></a>
                 @if(auth()->user()?->role === 'admin')
-                    <a class="admin-menu-start" href="{{ route('admin.users') }}" @if(request()->routeIs('admin.users*')) aria-current="page" @endif>Users <span>Admin</span></a>
-                    <a href="{{ route('admin.settings') }}" @if(request()->routeIs('admin.settings')) aria-current="page" @endif>Admin Settings <span>Admin</span></a>
+                    <a class="admin-menu-start" href="{{ route('admin.settings') }}" @if(request()->routeIs('admin.settings') || request()->routeIs('admin.users*')) aria-current="page" @endif>Admin Settings</a>
                 @endif
             </nav>
             <form method="post" action="{{ route('logout') }}">

@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Services\{ArtworkNamingService,ArtworkRenameStore};
+use App\Services\{ArtworkNamingService,ArtworkRenameStore,ArtworkMatcherService};
 use Illuminate\Http\Request;
 
 class FilenameCleanupController extends Controller
@@ -12,20 +12,25 @@ class FilenameCleanupController extends Controller
         $actor=$this->actor($request);$plan=null;$entries=[];$loadError=null;
         try {
             $plan=app(ArtworkNamingService::class)->scan($actor,true);
-            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target']));
+            $preferred=app(ArtworkRenameStore::class)->preferredFilenames();
+            $entries=array_values(array_filter($plan['entries'],fn($entry)=>!empty($entry['proposal']) && $entry['source']['name']!==$entry['proposal']['target'] && ($preferred[$entry['id']]['fingerprint']??null)!==ArtworkMatcherService::artworkFingerprint($entry['source'])));
         } catch(\Throwable $e) { report($e);$loadError='Could not load filename suggestions. Check Shopify and Drive access, then refresh the list.'; }
         return view('admin.settings',['section'=>'filenames','plan'=>$plan,'filenameEntries'=>$entries,'loadError'=>$loadError]);
     }
     public function process(Request $request)
     {
         $actor=$this->actor($request);
-        $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200']);
+        $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','suggested_name'=>'sometimes|required|string|max:255']);
         $back=redirect()->route('admin.settings',['section'=>'filenames']);
         try {
             $plan=app(ArtworkRenameStore::class)->load($data['plan'],$actor);
             abort_unless(!empty($plan['standardize']),422,'Refresh the filename list before processing a suggestion.');
             $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
             abort_unless($entry && $entry['status']==='ready',422,'This file cannot be renamed. Refresh the list to see its current status.');
+            if(isset($data['suggested_name']) && $data['suggested_name']!==$entry['proposal']['target']) {
+                app(ArtworkNamingService::class)->setSuggestedName($data['plan'],$actor,$data['file_id'],$data['suggested_name']);
+                $entry['proposal']['target']=trim($data['suggested_name']);
+            }
             app(ArtworkNamingService::class)->begin($data['plan'],$actor,[$data['file_id']],true);
         } catch(\Throwable $e) {
             report($e);
