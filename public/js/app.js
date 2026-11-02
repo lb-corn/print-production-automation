@@ -259,6 +259,23 @@ document.addEventListener('click', async (event) => {
         button.textContent = 'Copy unavailable — select the filename';
     }
 });
+const catalogSyncForms = [...document.querySelectorAll('[data-catalog-sync]')];
+const catalogSyncButtons = [...document.querySelectorAll('[data-catalog-sync] button[type="submit"], button[form="artwork-scan-form"]')];
+let catalogSyncPending = false;
+catalogSyncForms.forEach(form => form.addEventListener('submit', event => {
+    if (catalogSyncPending) { event.preventDefault(); return; }
+    catalogSyncPending = true;
+    catalogSyncForms.forEach(other => other.setAttribute('aria-busy', 'true'));
+    catalogSyncButtons.forEach(button => { button.dataset.catalogSyncLabel = button.textContent; button.disabled = true; button.textContent = 'Syncing catalog…'; });
+}));
+window.addEventListener('pageshow', () => {
+    catalogSyncPending = false;
+    catalogSyncForms.forEach(form => form.removeAttribute('aria-busy'));
+    catalogSyncButtons.forEach(button => {
+        if (button.dataset.catalogSyncLabel !== undefined) { button.textContent = button.dataset.catalogSyncLabel; delete button.dataset.catalogSyncLabel; button.disabled = false; }
+    });
+});
+
 const rematchForms = [...document.querySelectorAll('[data-rematch-form]')];
 let rematchPending = false;
 rematchForms.forEach((form) => {

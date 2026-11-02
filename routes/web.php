@@ -6,7 +6,7 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\ReadOnlyDemo::cl
 
 Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::class, \App\Http\Middleware\ReadOnlyDemo::class, \App\Http\Middleware\PortalWriteLock::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/settings', [\App\Http\Controllers\AdminSettingsController::class, 'index'])->name('settings');
-    Route::post('/data-sync', [\App\Http\Controllers\ArtworkNamingController::class, 'syncSources'])->middleware('throttle:3,1')->name('data-sync');
+    Route::post('/data-sync', [\App\Http\Controllers\ArtworkNamingController::class, 'syncSources'])->middleware('throttle:catalog-sync')->name('data-sync');
     Route::get('/artwork-names', fn(\Illuminate\Http\Request $request)=>redirect()->route('admin.settings',array_filter(['section'=>'artwork','plan'=>$request->query('plan')])))->name('artwork-names');
     Route::post('/artwork-names/scan', [\App\Http\Controllers\ArtworkNamingController::class, 'scan'])->name('artwork-names.scan');
     Route::post('/artwork-names/review', [\App\Http\Controllers\ArtworkNamingController::class, 'revise'])->name('artwork-names.review');

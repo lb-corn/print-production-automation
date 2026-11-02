@@ -15,7 +15,7 @@
 <div class="catalog-sync-footer">
 <p>Orders and print queues are managed separately.</p>
 <div class="catalog-sync-actions"><a class="chip" href="{{route('admin.settings',array_filter(['section'=>'artwork','plan'=>$plan['token']??null]))}}">View artwork catalog</a>
-<form method="post" action="{{route('admin.data-sync')}}" onsubmit="const button=this.querySelector('button'); if(button.disabled)return false; button.disabled=true; button.textContent='Syncing catalog…'; this.setAttribute('aria-busy','true');">
+<form method="post" action="{{route('admin.data-sync')}}" data-catalog-sync>
 @csrf<button class="primary" type="submit">Sync catalog</button>
 </form></div>
 </div>

@@ -1,7 +1,7 @@
 @if($loadError??null)<p class="admin-notice" role="alert">{{$loadError}}</p>@endif
 <section class="naming-simple-header">
 <div><strong>Shopify artwork matching</strong><span>All Bags collection · Active Shopify products only.</span></div>
-<form id="artwork-scan-form" method="post" action="{{route('admin.data-sync')}}">
+<form id="artwork-scan-form" method="post" action="{{route('admin.data-sync')}}" data-catalog-sync>
 @csrf<input type="hidden" name="artwork_search" value="{{$catalogSearch??''}}"><button class="primary" type="submit">Sync catalog</button></form>
 </section>
 

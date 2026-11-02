@@ -30,3 +30,17 @@ $check($response->getStatusCode()===429 && isset($response->getData(true)['messa
 $check($handle($request(2))->getStatusCode()===200,'Operators have separate rematch limits');
 $route=app('router')->getRoutes()->getByName('production.rematch');
 $check(in_array('throttle:artwork-rematch',$route->gatherMiddleware()),'Rematch route uses the dedicated limiter');
+
+$limiter->for('catalog-sync',app(RateLimiter::class)->limiter('catalog-sync'));
+$syncCalls=0;$syncNext=function()use(&$syncCalls){$syncCalls++;return response('catalog permitted');};
+$syncHandle=function($request)use($middleware,$syncNext){try{return $middleware->handle($request,$syncNext,'catalog-sync');}catch(Illuminate\Http\Exceptions\HttpResponseException $e){return $e->getResponse();}};
+$syncRequest=function(int $id,bool $json=false)use($request){$r=$request($id,$json);$r->server->set('REQUEST_URI','/admin/data-sync');return $r;};
+for($i=0;$i<3;$i++)$check($syncHandle($syncRequest(1))->getStatusCode()===200,'Catalog sync allowance is independent of rematch attempt '.($i+1));
+$response=$syncHandle($syncRequest(1));
+$check($response->isRedirect(route('admin.settings',['section'=>'sync'])) && $syncCalls===3,'Limited catalog browser POST redirects to Data sync without running integrations');
+$check(str_contains(session('error'),'Catalog sync limit reached') && str_contains(session('error'),'seconds') && (int)$response->headers->get('Retry-After')>0,'Catalog throttle includes a friendly notice and retry duration');
+$response=$syncHandle($syncRequest(1,true));
+$check($response->getStatusCode()===429 && str_contains($response->getData(true)['message'],'Catalog sync') && $syncCalls===3,'Catalog JSON requests retain actionable 429 responses without running sync');
+$check($syncHandle($syncRequest(2))->getStatusCode()===200,'Catalog limits are isolated per administrator');
+$route=app('router')->getRoutes()->getByName('admin.data-sync');
+$check(in_array('throttle:catalog-sync',$route->gatherMiddleware()) && !in_array('throttle:3,1',$route->gatherMiddleware()),'Data sync route uses its dedicated limiter instead of the generic error page');
