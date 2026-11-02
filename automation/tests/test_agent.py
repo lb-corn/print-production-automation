@@ -20,6 +20,12 @@ def batch(quantity=1):
 
 
 class AgentSecurityTests(unittest.TestCase):
+    def test_relative_configuration_uses_install_folder(self):
+        self.assertEqual(agent.installation_path('service-account.json'), agent.HERE / 'service-account.json')
+        self.assertEqual(agent.installation_path('factory_print'), agent.HERE / 'factory_print')
+        absolute = Path(tempfile.gettempdir()).resolve() / 'factory-creds.json'
+        self.assertEqual(agent.installation_path(str(absolute)), absolute)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='lb-agent-test-')
         self.root = Path(self.temp.name)
