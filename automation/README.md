@@ -1,6 +1,6 @@
 # Lucky Bags Factory Agent guide
 
-Release 1.3.0 | Reviewed 3 November 2026 | Windows x64 and Python 3.13
+Release 1.3.1 | Reviewed 3 November 2026 | Windows x64 and Python 3.13
 
 ## Printable guide and release ZIP
 
@@ -13,13 +13,13 @@ cd D:\LuckyBags\Automation\print-production-automation
 .\automation\make-release.ps1
 ```
 
-Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.3.0-PrivateInstall.zip` and its matching `.sha256.txt`. This ZIP intentionally includes `.env` and `service-account.json`. Transfer it only to the trusted Print PC; ZIP compression is not encryption. Never upload it to GitHub, a public download link or the website. Logs, virtual environments and downloaded artwork remain excluded. The private bundle must remain under `automation/dist`, which Git ignores.
+Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.3.1-PrivateInstall.zip` and its matching `.sha256.txt`. This ZIP intentionally includes `.env` and `service-account.json`. Transfer it only to the trusted Print PC; ZIP compression is not encryption. Never upload it to GitHub, a public download link or the website. Logs, virtual environments and downloaded artwork remain excluded. The private bundle must remain under `automation/dist`, which Git ignores.
 
 Transfer both generated files to the Print PC using a trusted method. Before extraction, compare the ZIP hash with the accompanying trusted checksum:
 
 ```powershell
-Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.3.0-PrivateInstall.zip" -Algorithm SHA256
-Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.3.0-PrivateInstall.sha256.txt"
+Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.3.1-PrivateInstall.zip" -Algorithm SHA256
+Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.3.1-PrivateInstall.sha256.txt"
 ```
 
 Use the actual download/transfer directory. Stop if the hashes differ; letter case does not matter. Scan the ZIP with Defender, extract to `C:\LuckyBagsFactory`, and follow the guide. Rebuilding a ZIP can change its checksum, so always use the checksum generated with that exact ZIP. A matching checksum is not a publisher signature.
@@ -147,16 +147,18 @@ The updater accepts only the explicit source allowlist, rejects unexpected archi
 
 ## Security review evidence
 
-The review and limitations are in SECURITY_REVIEW.md. Twenty-four Python tests cover monitoring, read-only diagnostics, portable installation paths, paths, formats, hashes, redirects, duplicate publication, scan/copy substitution, approved Drive revision checks, one/two originals and quantity gates. PHP tests cover lifecycle, material math, named confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 2 November 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
+The review and limitations are in SECURITY_REVIEW.md. Twenty-six Python tests cover monitoring, read-only diagnostics, portable installation paths, paths, formats, hashes, redirects, duplicate publication, scan/copy substitution, approved Drive revision checks, one/two originals and quantity gates. PHP tests cover lifecycle, material math, named confirmations, API authentication and state transitions. PowerShell scripts were parsed but not installed on the client PC. The 23 pinned dependency versions returned zero advisory matches from OSV on 2 November 2026. That check does not detect every vulnerability or malicious package and must be repeated for future releases.
 
 Install only after the factory owner or IT accepts the remaining Print PC checks. This release supports controlled preparation and human-authorized single-set handoff, not a claim of fully automatic, quantity-aware, malware-proof printing.
 
 ## Public updates (no credentials)
 
-Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.3.0.zip with 18 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.3.1.zip with 19 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
 
 Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).
 
 ## Monitoring and read-only connection test
 
 See [Factory Agent monitoring and upgrade instructions](../docs/factory-agent-monitoring.md). Version 1.3.0 adds outbound heartbeats and explicit diagnostics. Existing v1.2.2 batch processing remains compatible; the standalone test-connectivity.ps1 helper also works with v1.2.2. The old updater must be replaced with the reviewed updater from the verified public ZIP before accepting its new health-helper entry. No credentials, autostart tasks, Epson settings or batch confirmation rules are changed. Use run-once.ps1 -Health for read-only key verification and -Diagnose for a safe local diagnostic report; neither claims a batch. Header status is connection-only; PC details stay in Admin Settings > Factory Agent.
+
+Connection-only status for an existing PC: copy report-connection.ps1 beside the existing agent scripts and run it. It reads the installed VERSION/source hash and sends heartbeats only; it never calls the batch API. Keep its window open. No agent upgrade or autostart is required. The admin tab labels this mode explicitly.

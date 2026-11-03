@@ -21,4 +21,8 @@ class FactoryMonitoringController extends Controller {
         abort_unless($request->user()?->role==='admin',403);
         return response()->download(resource_path('factory-agent-test-connectivity.ps1'),'test-connectivity.ps1',['Cache-Control'=>'no-store']);
     }
+    public function connectionReporter(Request $request){
+        abort_unless($request->user()?->role==='admin',403);
+        return response()->download(resource_path('factory-agent-report-connection.ps1'),'report-connection.ps1',['Cache-Control'=>'no-store']);
+    }
 }

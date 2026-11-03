@@ -20,7 +20,7 @@ try {
     $Version = (Get-Content (Join-Path $Fixture 'VERSION') -Raw).Trim()
     $Private = Join-Path $Fixture "dist\LuckyBags-Factory-Agent-v$Version-PrivateInstall.zip"
     $Names = Entries $Private
-    Check ($Names.Count -eq 20 -and $Names -contains '.env' -and $Names -contains 'service-account.json' -and $Names -contains 'test-connectivity.ps1') 'Private bundle must contain exactly 20 approved entries including both secrets and the health check.'
+    Check ($Names.Count -eq 21 -and $Names -contains '.env' -and $Names -contains 'service-account.json' -and $Names -contains 'test-connectivity.ps1') 'Private bundle must contain exactly 21 approved entries including both secrets and the health check.'
     $EnvPath = Join-Path $Fixture '.env'
     $Before = (Get-FileHash -LiteralPath $EnvPath).Hash
     (Get-Item -LiteralPath $EnvPath -Force).Attributes = [IO.FileAttributes]::Hidden
@@ -37,7 +37,7 @@ try {
     & (Join-Path $Fixture 'make-release.ps1') -PublicRelease
     $Public = Join-Path $Fixture "dist\LuckyBags-Factory-Agent-v$Version.zip"
     $Names = Entries $Public
-    Check ($Names.Count -eq 18 -and $Names -notcontains '.env' -and $Names -notcontains 'service-account.json' -and $Names -contains 'test-connectivity.ps1') 'Public update exposed private files or omitted the health check.'
+    Check ($Names.Count -eq 19 -and $Names -notcontains '.env' -and $Names -notcontains 'service-account.json' -and $Names -contains 'test-connectivity.ps1') 'Public update exposed private files or omitted the health check.'
     Write-Host 'Release packaging checks passed (private/hidden files, public exclusions, checksum, preserved settings and invalid inputs).'
 } finally {
     $Resolved = [IO.Path]::GetFullPath($Fixture)

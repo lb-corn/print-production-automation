@@ -1,6 +1,6 @@
 # Factory Agent security review
 
-Review date: 3 November 2026. Current release: 1.3.0. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+Review date: 3 November 2026. Current release: 1.3.1. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
 
 ## 1.2.1 follow-up
 
@@ -76,3 +76,7 @@ The default make-release.ps1 now intentionally includes the local .env and servi
 ## 1.3.0 monitoring review
 
 Authenticated health/heartbeat routes are separate from batch endpoints and the production write lock. Heartbeats use a separate outbound HTTPS session with certificate verification, no ambient proxy/.netrc, no redirects, bounded reads/timeouts and no automatic batch retry. The server allowlists telemetry fields and error codes, rejects unknown/nested secret fields, caps activity and agent records, checks client timestamps and rejects non-increasing samples. Server receipt time controls Online status. Public header responses contain only connection state/count/expiry. Details require an active authenticated admin. No paths, customer text or secret values are sent or logged. Printer readiness and Epson state remain Unknown. Diagnostics only list one Drive file ID for connectivity (not transmitted), test empty owned directories, and scan a benign local file. They do not download or publish artwork. PC telemetry is self-reported, not independent attestation. New archives require their own client antivirus checks; no physical-PC/print test or external penetration test was performed. See docs/factory-agent-monitoring.md for deployment and the v1.2.2 updater compatibility step.
+
+## 1.3.1 connection-only reporter
+
+report-connection.ps1 reads installed version/source metadata, never batches or artwork. It sends only allowlisted telemetry over verified HTTPS and cannot start the worker, print, call Drive or change credentials. Its mode is distinguished from production-agent reports. Monitoring URLs are same-origin paths and their rate-limit buckets are isolated. The admin page omits release/version installation instructions; installed data comes solely from PC reports.

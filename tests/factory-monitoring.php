@@ -67,7 +67,11 @@ $check(hash_file('sha256',resource_path('factory-agent-test-connectivity.ps1'))=
 // Render the actual admin page with disposable data for responsive/browser checks.
 auth()->setUser($admin);view()->share('errors',new Illuminate\Support\ViewErrorBag());$app->instance('request',Request::create('/admin/settings?section=agent'));
 $html=view('admin.settings',['section'=>'agent','monitoring'=>$monitor->snapshot()])->render();
-$check(str_contains($html,'Agent installation &amp; health') && str_contains($html,'data-factory-connection') && str_contains($html,'test-connectivity.ps1'),'Admin page includes installation guidance and the shared connection badge');
+$check(str_contains($html,'Factory connection') && str_contains($html,'data-factory-connection') && str_contains($html,'report-connection.ps1') && !str_contains($html,'Installation &amp; connection test'),'Admin page shows a compact connection summary without embedded installation/version instructions');
+$check(str_contains($html,'data-status-url="/admin/factory-agent/status"') && str_contains($html,'data-status-url="/workspace/factory-status"'),'Polling URLs stay on the current origin behind HTTPS proxies');
+$sample['sampled_at_ms']+=100;$monitor->accept([...$sample,'reporter_mode'=>'connection_only']);
+$check(FactoryAgent::where('agent_id',$sample['agent_id'])->first()->telemetry['reporter_mode']==='connection_only','Connection-only reports are clearly distinguished from the production worker');
+$check(hash_file('sha256',resource_path('factory-agent-report-connection.ps1'))===hash_file('sha256',base_path('automation/report-connection.ps1')),'Downloadable connection reporter matches the bundled reviewed script');
 if(in_array('--preview',$argv,true))file_put_contents(__DIR__.'/../tmp/agent-preview.html',$html);
 Illuminate\Support\Facades\Schema::drop('factory_agents');
 $check(!$controller->health($monitor)->getData(true)['monitoring_ready'] && $monitor->connection()['state']==='unavailable','Health remains read-only and usable before the monitoring migration');

@@ -5,7 +5,7 @@ $Version = (Get-Content -LiteralPath (Join-Path $Root 'VERSION') -Raw).Trim()
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release version.' }
 $Include = @('factory_agent.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md')
 $Suffix = ''
-$Include += 'test-connectivity.ps1'
+$Include += @('test-connectivity.ps1','report-connection.ps1')
 if (!$PublicRelease) {
     # Private installation bundles are local-only. Never include secrets in public updates.
     $PrivateDist = [IO.Path]::GetFullPath((Join-Path $Root 'dist'))
