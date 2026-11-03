@@ -12,6 +12,9 @@ import signal
 import subprocess
 import sys
 import time
+import threading
+import uuid
+import platform
 from urllib.parse import urlsplit
 
 import requests
@@ -43,6 +46,158 @@ log = logging.getLogger('factory-agent')
 SESSION = requests.Session()
 # Never obtain credentials/proxies from .netrc or ambient proxy environment settings.
 SESSION.trust_env = False
+MONITOR_SESSION = requests.Session()
+MONITOR_SESSION.trust_env = False
+MONITOR_STOP = threading.Event()
+MONITOR_LOCK = threading.Lock()
+MONITOR_STATE = {'process_status': 'running', 'stage': 'idle', 'batch_id': None}
+
+
+def monitor_request(method, path, payload=None):
+    """Separate, bounded outbound connection: never calls a batch endpoint or follows redirects."""
+    url = urlsplit(BASE)
+    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment or url.path.rstrip('/') != '/api':
+        raise ValueError('Monitoring requires a final HTTPS /api URL')
+    if len(KEY) < 32 or KEY.lower().startswith(('change', 'replace')):
+        raise ValueError('Factory API key is not configured')
+    if path not in {'/factory/heartbeat', '/factory/health'}:
+        raise ValueError('Unsupported monitoring endpoint')
+    with MONITOR_SESSION.request(method, BASE + path, json=payload,
+                                 headers={'Authorization': f'Bearer {KEY}', 'Accept': 'application/json'},
+                                 timeout=(5, 10), allow_redirects=False, verify=True, stream=True) as response:
+        if response.status_code != 200:
+            raise RuntimeError(f'Monitoring HTTP {response.status_code}')
+        data = bytearray()
+        for chunk in response.iter_content(8192):
+            data.extend(chunk)
+            if len(data) > 65536:
+                raise ValueError('Monitoring response exceeds size limit')
+        return json.loads(data)
+
+
+def stable_agent_id():
+    path = no_reparse(HERE / 'agent-id')
+    try:
+        with path.open('x', encoding='ascii') as handle:
+            handle.write(str(uuid.uuid4()))
+    except FileExistsError:
+        pass
+    if path.stat().st_size > 64:
+        raise ValueError('Invalid agent identifier file')
+    return str(uuid.UUID(path.read_text(encoding='ascii').strip()))
+
+
+def monitor_state(**values):
+    with MONITOR_LOCK:
+        MONITOR_STATE.update(values)
+
+
+def record_operation(kind, error_code=None):
+    entry = {'kind': kind, 'at_ms': time.time_ns() // 1000000}
+    if error_code:
+        entry['error_code'] = error_code
+    monitor_state(**{'last_failure' if error_code else 'last_success': entry})
+
+
+def heartbeat_payload():
+    with MONITOR_LOCK:
+        data = json.loads(json.dumps(MONITOR_STATE))
+    # No machine/user names, filenames, paths, keys, tokens, exceptions or artwork are sent.
+    return {**data, 'agent_id': stable_agent_id(), 'agent_version': VERSION,
+            'source_sha256': digest(HERE / 'factory_agent.py'), 'python_version': platform.python_version(),
+            'windows_version': platform.version() if os.name == 'nt' else '0.0',
+            'sampled_at_ms': time.time_ns() // 1000000, 'workspace_exists': OUT.is_dir(),
+            'hot_folder_exists': bool(HOT and Path(HOT).is_dir()), 'credentials_present': CREDS.is_file()}
+
+
+def send_heartbeat():
+    return monitor_request('POST', '/factory/heartbeat', heartbeat_payload())
+
+
+def heartbeat_loop():
+    while not MONITOR_STOP.is_set():
+        try:
+            send_heartbeat()
+        except Exception:
+            # Neither raw exceptions nor remote response bodies can leak credentials into logs.
+            log.warning('Monitoring unavailable; batch processing was not retried by monitoring')
+        MONITOR_STOP.wait(30)
+
+
+def finish_monitor(monitor):
+    MONITOR_STOP.set()
+    monitor_state(process_status='stopping')
+    monitor.join(timeout=1)
+    if not monitor.is_alive():
+        try:
+            send_heartbeat()
+        except Exception:
+            pass
+
+
+def directory_probe(path):
+    """Create/remove only an empty directory we own. Never publish a file into the RIP."""
+    root = no_reparse(path)
+    if not root.is_dir():
+        return False
+    probe = contained(root, '.lb-directory-check-' + uuid.uuid4().hex)
+    probe.mkdir()
+    probe.rmdir()
+    return True
+
+
+def explicit_diagnostics():
+    result = {'checked_at_ms': time.time_ns() // 1000000, 'workspace_writable': False,
+              'hot_folder_writable': None, 'defender_enabled': None, 'defender_realtime': None,
+              'defender_scan': None, 'drive_connected': None, 'error_code': None}
+    configuration_valid = False
+    try:
+        integrity()
+        configuration_valid = True
+        OUT.mkdir(parents=True, exist_ok=True)
+        result['workspace_writable'] = directory_probe(OUT)
+        if HOT:
+            result['hot_folder_writable'] = directory_probe(Path(HOT))
+    except Exception:
+        result['error_code'] = 'configuration'
+    if configuration_valid:
+        try:
+            drive().files().list(pageSize=1, fields='files(id)', q='trashed = false').execute()
+            result['drive_connected'] = True
+        except Exception:
+            result['drive_connected'] = False
+            result['error_code'] = result['error_code'] or 'drive_unreachable'
+    if os.name == 'nt' and result['workspace_writable']:
+        try:
+            powershell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+            check = subprocess.run([str(powershell), '-NoProfile', '-NonInteractive', '-Command',
+                                    'Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled | ConvertTo-Json -Compress'],
+                                   shell=False, capture_output=True, text=True, timeout=20)
+            if check.returncode != 0:
+                raise RuntimeError('Defender status unavailable')
+            status_data = json.loads(check.stdout)
+            result['defender_enabled'] = status_data.get('AntivirusEnabled') is True
+            result['defender_realtime'] = status_data.get('RealTimeProtectionEnabled') is True
+            # A benign local test proves scanner execution, not the safety of future artwork.
+            probe = contained(OUT, '.lb-defender-check-' + uuid.uuid4().hex + '.txt')
+            try:
+                with probe.open('x', encoding='ascii') as handle:
+                    handle.write('Lucky Bags diagnostic: no artwork or print commands.')
+                scan_file(probe)
+                result['defender_scan'] = True
+            finally:
+                if probe.is_file():
+                    no_reparse(probe).unlink()
+        except Exception:
+            result['defender_scan'] = False
+            result['error_code'] = result['error_code'] or 'defender_unavailable'
+    if result['defender_enabled'] is False or result['defender_realtime'] is False:
+        result['error_code'] = result['error_code'] or 'defender_unavailable'
+    if HOT and result['hot_folder_writable'] is False:
+        result['error_code'] = result['error_code'] or 'handoff_unavailable'
+    monitor_state(diagnostics=result)
+    record_operation('diagnostic', result['error_code'])
+    return result
 
 
 def digest(path, algorithm='sha256'):
@@ -98,7 +253,9 @@ def api(method, path, **kwargs):
 def status(batch_id, state):
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise ValueError('Invalid batch database ID')
-    return api('POST', f'/factory/batches/{batch_id}/status', json={'status': state})
+    result = api('POST', f'/factory/batches/{batch_id}/status', json={'status': state})
+    monitor_state(batch_id=batch_id, stage={'CLAIMED': 'validating', 'DOWNLOADING': 'downloading', 'PREPARED': 'prepared', 'SENT_TO_RIP': 'sent_to_rip', 'FAILED': 'error'}[state])
+    return result
 
 
 def integrity():
@@ -351,18 +508,31 @@ def handoff(batch):
 
 
 def once():
-    integrity()
-    batch = api('GET', '/factory/batches/next').get('batch')
-    if not batch:
-        return False
-    validate_batch(batch)
-    if batch.get('status') == 'QUEUED':
-        prepare(batch)
-    elif batch.get('status') == 'HANDOFF_REQUESTED':
-        handoff(batch)
-    else:
-        raise ValueError('Server returned an unsupported batch state')
-    return True
+    operation = 'poll'
+    try:
+        integrity()
+        batch = api('GET', '/factory/batches/next').get('batch')
+        if not batch:
+            monitor_state(stage='idle', batch_id=None)
+            record_operation('poll')
+            return False
+        validate_batch(batch)
+        monitor_state(batch_id=batch['id'], stage='validating')
+        if batch.get('status') == 'QUEUED':
+            operation = 'prepare'
+            prepare(batch)
+        elif batch.get('status') == 'HANDOFF_REQUESTED':
+            operation = 'handoff'
+            monitor_state(stage='handoff')
+            handoff(batch)
+        else:
+            raise ValueError('Server returned an unsupported batch state')
+        record_operation(operation)
+        return True
+    except Exception:
+        monitor_state(stage='error')
+        record_operation(operation, 'api_unreachable' if operation == 'poll' else 'batch_operation_failed')
+        raise
 
 
 def configure_logging():
@@ -376,7 +546,46 @@ def configure_logging():
 
 def main():
     global STOP
-    integrity()
+    arguments = sys.argv[1:]
+    if len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose'} for arg in arguments):
+        print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
+        raise SystemExit(2)
+    arguments = sys.argv[1:]
+    if len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose'} for arg in arguments):
+        print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
+        raise SystemExit(2)
+    if '--health' in sys.argv or '--diagnose' in sys.argv:
+        try:
+            health = monitor_request('GET', '/factory/health')
+            if health.get('authenticated') is not True:
+                raise ValueError('Unexpected health response')
+            print('Factory API authentication: PASSED (read-only; no batches requested)')
+            if not health.get('monitoring_ready'):
+                print('Monitoring migration is required on the server.')
+            if '--diagnose' in sys.argv:
+                monitor_state(process_status='checking', stage='idle', batch_id=None)
+                result = explicit_diagnostics()
+                send_heartbeat()
+                print('Diagnostic report sent. View Admin Settings > Factory Agent.')
+                if result['error_code']:
+                    print('Some checks need attention: ' + result['error_code'])
+                    raise SystemExit(1)
+        except Exception:
+            print('Connection/diagnostic check failed. Check the API URL, matching key, server migration and clock. No print action was requested.')
+            raise SystemExit(1)
+        return
+    try:
+        integrity()
+    except Exception:
+        if '--check' not in sys.argv:
+            monitor_state(process_status='error', stage='error', batch_id=None)
+            record_operation('configuration', 'configuration')
+            try:
+                send_heartbeat()
+            except Exception:
+                pass
+        print('Configuration check failed. Check the local .env, credentials and folder settings.')
+        raise SystemExit(1)
     OUT.mkdir(parents=True, exist_ok=True)
     configure_logging()
     # OS file lock prevents two local instances claiming/copying the same jobs.
@@ -396,6 +605,9 @@ def main():
     if '--check' in sys.argv:
         log.info('Configuration check passed; no API requests or print jobs sent')
         return
+    MONITOR_STOP.clear()
+    monitor = threading.Thread(target=heartbeat_loop, name='factory-heartbeat', daemon=True)
+    monitor.start()
     while not STOP:
         try:
             worked = once()
@@ -403,14 +615,19 @@ def main():
             # Do not log URLs, headers, tokens, service-account content or remote response bodies.
             log.error('Agent action failed (%s). Inspect batch state and configuration before retry.', type(exc).__name__)
             if '--once' in sys.argv:
+                finish_monitor(monitor)
                 raise SystemExit(1)
             worked = False
         if '--once' in sys.argv:
+            finish_monitor(monitor)
             break
         for _ in range(2 if worked else POLL):
             if STOP:
                 break
             time.sleep(1)
+    MONITOR_STOP.set()
+    if '--once' not in sys.argv:
+        finish_monitor(monitor)
 
 
 if __name__ == '__main__':

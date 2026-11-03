@@ -1,0 +1,1 @@
+<div class="factory-connection" data-factory-connection data-status-url="{{route('workspace.factory-status')}}" data-state="checking" role="status" aria-live="polite" aria-label="Factory connection"><span aria-hidden="true"></span><b>Factory: checking…</b></div>

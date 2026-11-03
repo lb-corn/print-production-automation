@@ -129,6 +129,9 @@ jobs:
           php tests/artwork-standardization.php
           php tests/filename-cleanup.php
           php tests/backlog-refresh.php
+          php tests/factory-monitoring.php
+          node tests/factory-monitor-controls.cjs
+          php tests/factory-monitoring.php
           node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php

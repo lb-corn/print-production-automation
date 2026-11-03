@@ -1,6 +1,6 @@
 # Factory Agent security review
 
-Review date: 2 November 2026. Current release: 1.2.2. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+Review date: 3 November 2026. Current release: 1.3.0. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
 
 ## 1.2.1 follow-up
 
@@ -72,3 +72,7 @@ Use a disposable test database and temporary artwork/hot directories. No live pr
 ## 1.2.2 private installation packaging
 
 The default make-release.ps1 now intentionally includes the local .env and service-account.json in a separately named PrivateInstall ZIP. Both inputs and automation/dist remain excluded from Git. This archive contains real secrets and is not encrypted: transfer only to the trusted Print PC and keep it private. The existing web credential was copied locally at the owner's request; its Drive permissions are not reduced by copying it. Prefer replacing it with a dedicated Viewer credential before distribution. No credentials or private archive are committed. -PublicRelease retains the original credential-free update allowlist; update-agent.ps1 rejects installer secrets and never replaces installed configuration. Relative configuration paths resolve against the agent installation, not the caller's working directory. Packaging tests use fake credentials and no network, Google or printer activity. The previous Defender scan applies only to the earlier 1.2.1 credential-free ZIP, not these new archives.
+
+## 1.3.0 monitoring review
+
+Authenticated health/heartbeat routes are separate from batch endpoints and the production write lock. Heartbeats use a separate outbound HTTPS session with certificate verification, no ambient proxy/.netrc, no redirects, bounded reads/timeouts and no automatic batch retry. The server allowlists telemetry fields and error codes, rejects unknown/nested secret fields, caps activity and agent records, checks client timestamps and rejects non-increasing samples. Server receipt time controls Online status. Public header responses contain only connection state/count/expiry. Details require an active authenticated admin. No paths, customer text or secret values are sent or logged. Printer readiness and Epson state remain Unknown. Diagnostics only list one Drive file ID for connectivity (not transmitted), test empty owned directories, and scan a benign local file. They do not download or publish artwork. PC telemetry is self-reported, not independent attestation. New archives require their own client antivirus checks; no physical-PC/print test or external penetration test was performed. See docs/factory-agent-monitoring.md for deployment and the v1.2.2 updater compatibility step.
