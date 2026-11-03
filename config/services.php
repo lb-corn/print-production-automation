@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'factory' => ['api_key' => env('FACTORY_API_KEY')],
+    'factory' => ['api_key' => env('FACTORY_API_KEY'),'offline_after_seconds'=>(int)env('FACTORY_AGENT_OFFLINE_SECONDS',120)],
 
     'shopify' => [
         'artwork_collection' => 'All Bags',

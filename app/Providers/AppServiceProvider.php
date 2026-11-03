@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\ProductionService::class);}
  public function boot():void {
+  RateLimiter::for('factory-health',fn(Request $request)=>Limit::perMinute(30)->by('factory-health:'.$request->ip()));
+  RateLimiter::for('factory-heartbeat',fn(Request $request)=>Limit::perMinute(60)->by('factory-heartbeat:'.$request->ip()));
   RateLimiter::for('filename-cleanup',function(Request $request){
    return Limit::perMinute(10)->by('filename-cleanup:'.($request->user()?->getAuthIdentifier()??$request->ip()))
     ->response(function(Request $request,array $headers){
