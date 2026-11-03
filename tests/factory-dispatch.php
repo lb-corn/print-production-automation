@@ -57,4 +57,7 @@ $normal=new User(['role'=>'operator']);$r=Request::create('/admin/control','POST
 $reject(fn()=>$monitor->processing($r,$agent,$dispatch),403);
 $reject(fn()=>$monitor->portalPackage($r),403);$reject(fn()=>$monitor->portalSetup($r),403);
 $check(!str_contains(json_encode($dispatch->progress($batch)),$handoff['token']),'Public batch progress never exposes worker operation tokens');
+$blocked=PrintBatch::create(['batch_id'=>'BLOCKED-PROGRESS','status'=>'QUEUED','order_count'=>1,'artwork_file_count'=>1,'payload'=>[],'automation_requested_at'=>now(),'factory_agent_id'=>$id]);
+$agent->refresh()->update(['last_seen_at'=>now(),'telemetry'=>['reporter_mode'=>'listener','process_status'=>'running','stage'=>'error','batch_id'=>$blocked->id,'last_failure'=>['error_code'=>'manual_inspection_required']]]);
+$check($dispatch->progress($blocked)['severity']==='danger' && str_contains($dispatch->progress($blocked)['title'],'restart blocked'),'A locally blocked uncertain attempt is visible on the batch page instead of silently waiting forever');
 echo "$checks factory dispatch checks passed.\n";

@@ -674,6 +674,7 @@ def listen_for_portal():
                         raise ValueError('Invalid operation journal')
                     previous = json.loads(journal.read_text(encoding='utf-8'))
                 if previous.get('batch_id') == batch_id and previous.get('phase') == phase:
+                    monitor_state(stage='error', batch_id=batch_id)
                     record_operation('poll', 'manual_inspection_required')
                 else:
                     write_json(journal, {'batch_id': batch_id, 'phase': phase, 'state': 'requesting'})
