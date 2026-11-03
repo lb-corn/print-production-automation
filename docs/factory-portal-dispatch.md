@@ -31,3 +31,11 @@ Paused PC: enable portal jobs in Admin when ready. Pause blocks new phases, whil
 Interrupted claim or delivery: no automatic relaunch. Inspect the local source workspace, logs, portal operation journal, handoff journal and Epson queue before deciding recovery. Never delete a journal or reset a batch to force another copy. Existing selected-item return works only before claim and preserves remaining locked queue contents.
 
 The portal authorizes fixed prepare/handoff operations only. It cannot execute arbitrary commands, download executable job content, change PC configuration or remotely delete files. Server-side phase tokens, atomic transitions, immutable payloads, local locks and journals prevent normal duplicate processing. Tokens are not exposed through batch-progress responses. All connections are outbound authenticated HTTPS; no inbound PC port is opened.
+
+## Repair for a listener that stops when terminal windows close
+
+Use Admin > Factory Agent > Repair background startup to download repair-background-startup.ps1 into the existing PC installation. Pause portal jobs, allow active work to finish, stop the old scheduled task and close any manual listener. Run the repair once from the standard operator account. The repair refuses a running agent, validates configuration and replaces only the scheduled-task definition. It preserves the existing agent identity, credentials, workspace and journals.
+
+The task directly launches the built-in Windows conhost.exe --headless with the existing Python console interpreter and fixed --listen mode. This avoids reliance on pythonw/PowerShell hidden-window behavior with Windows Terminal. A logon trigger and one-minute recovery trigger keep the listener available; IgnoreNew and local locks prevent overlap. Recovery starts the listener only, never replays a claimed phase. Portal pause is the supported way to stop new jobs; stopping a task manually is not a persistent pause because recovery can restart the listener.
+
+Verify Online with continuously fresh reports for five minutes after closing every terminal, then after operator sign-out/sign-in. Only then enable jobs and test one quantity-one product. Real PC behavior is not certified by unit tests. The source change addresses the observed launch pattern; actual startup failure still requires task and log evidence if the connection drops again.

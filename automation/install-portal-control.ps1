@@ -10,7 +10,7 @@ $Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
 if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Use the standard printer operator account, without elevation.' }
 $ZipPath = (Resolve-Path -LiteralPath $ZipPath).Path
 if ((Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Package checksum mismatch. No update or task was started.' }
-$Allowed = @('factory_agent.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md','test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1')
+$Allowed = @('factory_agent.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md','test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1','repair-background-startup.ps1')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $Archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
@@ -33,10 +33,4 @@ if (!(Test-Path -LiteralPath $Pythonw -PathType Leaf)) { throw 'Existing Python 
 Assert-NativeExit 'Dependency check'
 & $Python -I (Join-Path $Root 'factory_agent.py') --check
 Assert-NativeExit 'Configuration check'
-$Action = New-ScheduledTaskAction -Execute $Pythonw -Argument ('-I "' + (Join-Path $Root 'factory_agent.py') + '" --listen') -WorkingDirectory $Root
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Identity.Name
-$TaskPrincipal = New-ScheduledTaskPrincipal -UserId $Identity.Name -LogonType Interactive -RunLevel Limited
-$Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-Register-ScheduledTask -TaskName 'LuckyBagsFactoryAgent' -Action $Action -Trigger $Trigger -Principal $TaskPrincipal -Settings $Settings -Force | Out-Null
-Start-ScheduledTask -TaskName 'LuckyBagsFactoryAgent'
-Write-Host 'Portal listener installed and started. In Admin Settings > Factory Agent, enable portal jobs for this PC. Keep this PC on and the operator signed in. Epson setup/physical printing remain separate.' -ForegroundColor Green
+& (Join-Path $Root 'repair-background-startup.ps1')

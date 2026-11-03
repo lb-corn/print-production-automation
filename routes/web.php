@@ -24,6 +24,7 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroy'])->name('users.destroy');
     Route::post('/factory-agent/{agent:agent_id}/processing',[\App\Http\Controllers\FactoryMonitoringController::class,'processing'])->middleware('throttle:10,1')->name('factory-agent.processing');
     Route::get('/factory-agent/package',[\App\Http\Controllers\FactoryMonitoringController::class,'portalPackage'])->middleware('throttle:10,1')->name('factory-agent.package');
+    Route::get('/factory-agent/repair-startup',[\App\Http\Controllers\FactoryMonitoringController::class,'repairStartup'])->middleware('throttle:10,1')->name('factory-agent.repair-startup');
     Route::get('/factory-agent/setup',[\App\Http\Controllers\FactoryMonitoringController::class,'portalSetup'])->middleware('throttle:10,1')->name('factory-agent.setup');
     Route::get('/factory-agent/status',[\App\Http\Controllers\FactoryMonitoringController::class,'status'])->middleware('throttle:factory-status')->name('factory-agent.status');
     Route::get('/factory-agent/connection-reporter',[\App\Http\Controllers\FactoryMonitoringController::class,'connectionReporter'])->middleware('throttle:10,1')->name('factory-agent.connection-reporter');

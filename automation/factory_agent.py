@@ -758,6 +758,7 @@ def main():
         raise SystemExit(1)
     OUT.mkdir(parents=True, exist_ok=True)
     configure_logging()
+    log.info('Factory process started: mode=%s version=%s', 'listener' if '--listen' in arguments else 'managed_worker' if managed else 'manual', VERSION)
     # OS file lock prevents two local instances claiming/copying the same jobs.
     lock = acquire_lock('.listener.lock' if '--listen' in arguments else '.agent.lock')
     def stop(*_):
