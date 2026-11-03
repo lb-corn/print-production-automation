@@ -30,6 +30,7 @@ $check(FactoryAgent::first()->last_seen_at->toIso8601String()===$beforeReplay,'R
 $reject(fn()=>$monitor->accept([...$sample,'sampled_at_ms'=>now()->getTimestampMs()-61000]),422);
 $reject(fn()=>$monitor->accept([...$sample,'sampled_at_ms'=>now()->getTimestampMs()+16000]),422);
 $reject(fn()=>$monitor->accept([...$sample,'api_key'=>'do-not-store-secret']),422);
+$reject(fn()=>$monitor->accept([...$sample,'source_sha256'=>str_repeat('a',64)]),422);
 $reject(fn()=>$monitor->accept([...$sample,'agent_version'=>'secret-token']),422);
 $reject(fn()=>$monitor->accept([...$sample,'stage'=>'PRINTED']),422);
 $reject(fn()=>$monitor->accept([...$sample,'diagnostics'=>['private_key'=>'do-not-store-secret']]),422);

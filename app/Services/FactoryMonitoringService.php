@@ -34,6 +34,9 @@ class FactoryMonitoringService {
         foreach(['last_success','last_failure'] as $key){$rules[$key.'.kind']=['required_with:'.$key,Rule::in(self::OPERATIONS)];$rules[$key.'.at_ms']='required_with:'.$key.'|integer|min:1';}
         $rules['last_failure.error_code']=['required_with:last_failure',Rule::in(self::ERRORS)];
         $data=Validator::make($input,$rules)->validate();$data['agent_id']=strtolower($data['agent_id']);$data['sampled_at_ms']=(int)$data['sampled_at_ms'];
+        // Even a well-shaped hash/UUID must never be used to smuggle the actual bearer key.
+        $secret=(string)config('services.factory.api_key');
+        if(strlen($secret)>=32)foreach([$data['source_sha256'],$data['agent_id']] as $value)abort_if(strcasecmp($value,$secret)===0,422,'Telemetry must not contain credentials.');
         foreach(['workspace_exists','hot_folder_exists','credentials_present'] as $key)$data[$key]=(bool)$data[$key];
         foreach(['workspace_writable','hot_folder_writable','defender_enabled','defender_realtime','defender_scan','drive_connected'] as $key)if(isset($data['diagnostics'][$key]))$data['diagnostics'][$key]=(bool)$data['diagnostics'][$key];
         $now=now();$nowMs=(int)$now->getTimestampMs();
