@@ -29,6 +29,10 @@ class FactoryMonitoringController extends Controller {
         abort_unless($request->user()?->role==='admin',403);
         return response()->download(resource_path('factory-agent-report-connection.ps1'),'report-connection.ps1',['Cache-Control'=>'no-store']);
     }
+    public function repairStartup(Request $request){
+        abort_unless($request->user()?->role==='admin',403);
+        return response()->download(resource_path('factory-agent-repair-startup.ps1'),'repair-background-startup.ps1',['Cache-Control'=>'no-store']);
+    }
     public function processing(Request $request,\App\Models\FactoryAgent $agent,\App\Services\FactoryDispatchService $dispatch){
         abort_unless($request->user()?->role==='admin',403);
         $data=$request->validate(['enabled'=>'required|boolean','confirm_control'=>'required|accepted']);
