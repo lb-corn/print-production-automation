@@ -11,6 +11,7 @@ class FactoryController extends Controller
     {
         $query=PrintBatch::whereIn('status', ['QUEUED','HANDOFF_REQUESTED']);
         if(app(\App\Services\FactoryDispatchService::class)->ready())$query->whereNull('automation_requested_at');
+        if(app(\App\Services\FactoryDispatchService::class)->consentReady() && \App\Models\FactoryAgent::where('handoff_blocked',true)->exists())$query->where('status','QUEUED');
         $batch = $query->oldest()->first();
         if ($batch) {
             $batch->setAttribute('handoff_authorized', $batch->confirmations()->where('action','HANDOFF')->exists());
@@ -23,8 +24,13 @@ class FactoryController extends Controller
         // Physical completion is exclusively a signed-in human action in the app.
         $data=$request->validate(['status'=>'required|in:CLAIMED,DOWNLOADING,PREPARED,DELIVERING,SENT_TO_RIP,FAILED','error_code'=>['nullable',\Illuminate\Validation\Rule::in(\App\Services\FactoryMonitoringService::ERRORS)]]);$state=$data['status'];
         return DB::transaction(function () use ($request,$batch,$state,$data) {
+            if($state==='DELIVERING'){
+                $gate=\App\Models\FactoryAgent::where('agent_id',$batch->factory_agent_id)->lockForUpdate()->first();
+                abort_if($gate?->handoff_blocked,423,'Handoff is blocked by an administrator.');
+            }
             $locked = PrintBatch::lockForUpdate()->findOrFail($batch->id);
             $dispatch=app(\App\Services\FactoryDispatchService::class);$dispatch->assertOperation($request,$locked);
+            if($state==='DELIVERING')$dispatch->assertHandoffAllowed($locked);
             if($state==='DELIVERING')abort_unless($dispatch->ready() && $locked->automation_requested_at && $locked->agent_operation_phase==='handoff',422,'A managed handoff operation is required.');
             if($dispatch->ready() && $locked->automation_requested_at && $state==='SENT_TO_RIP')abort_unless($locked->status==='DELIVERING',409,'The managed handoff phase has not started.');
             $allowed = [

@@ -22,6 +22,7 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::patch('/users/{user}/status', [\App\Http\Controllers\AdminController::class, 'status'])->name('users.status');
     Route::get('/users/{user}/delete', [\App\Http\Controllers\AdminController::class, 'deletePage'])->name('users.delete');
     Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroy'])->name('users.destroy');
+    Route::post('/factory-agent/{agent:agent_id}/handoff-control',[\App\Http\Controllers\FactoryMonitoringController::class,'handoffControl'])->middleware('throttle:10,1')->name('factory-agent.handoff-control');
     Route::post('/factory-agent/{agent:agent_id}/processing',[\App\Http\Controllers\FactoryMonitoringController::class,'processing'])->middleware('throttle:10,1')->name('factory-agent.processing');
     Route::get('/factory-agent/package',[\App\Http\Controllers\FactoryMonitoringController::class,'portalPackage'])->middleware('throttle:10,1')->name('factory-agent.package');
     Route::get('/factory-agent/repair-startup',[\App\Http\Controllers\FactoryMonitoringController::class,'repairStartup'])->middleware('throttle:10,1')->name('factory-agent.repair-startup');

@@ -33,6 +33,12 @@ class FactoryMonitoringController extends Controller {
         abort_unless($request->user()?->role==='admin',403);
         return response()->download(resource_path('factory-agent-repair-startup.ps1'),'repair-background-startup.ps1',['Cache-Control'=>'no-store']);
     }
+    public function handoffControl(Request $request,\App\Models\FactoryAgent $agent,\App\Services\FactoryDispatchService $dispatch){
+        abort_unless($request->user()?->role==='admin',403);
+        $data=$request->validate(['blocked'=>'required|boolean','confirm_control'=>'required|accepted']);
+        $dispatch->setHandoffBlocked($agent,(bool)$data['blocked'],$request->user()->id);
+        return redirect()->route('admin.settings',['section'=>'agent'])->with('ok',$data['blocked']?'New handoffs blocked for all users. A delivery already started may finish safely; this does not stop a physical print.':'Handoff allowed. Previously signed waiting handoffs may now proceed.');
+    }
     public function processing(Request $request,\App\Models\FactoryAgent $agent,\App\Services\FactoryDispatchService $dispatch){
         abort_unless($request->user()?->role==='admin',403);
         $data=$request->validate(['enabled'=>'required|boolean','confirm_control'=>'required|accepted']);

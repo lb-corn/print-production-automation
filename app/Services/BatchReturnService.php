@@ -36,7 +36,7 @@ class BatchReturnService
                 $payload=[...$locked->payload,'batch_id'=>$newId,'status'=>'QUEUED','created_at'=>now('UTC')->toIso8601String(),'order_count'=>count($remaining),'artwork_file_count'=>$files,'orders'=>$remaining,'replaces_batch_id'=>$locked->batch_id];
                 $replacement=PrintBatch::create(['batch_id'=>$newId,'status'=>'QUEUED','order_count'=>count($remaining),'artwork_file_count'=>$files,'total_yards'=>$summary['total_yards'],'payload'=>$payload,'created_by'=>$locked->created_by]);
             }
-            if($replacement && $locked->automation_requested_at)$replacement->update(['automation_requested_at'=>$locked->automation_requested_at,'factory_agent_id'=>$locked->factory_agent_id]);
+            if($replacement && $locked->automation_requested_at)$replacement->update(['automation_requested_at'=>$locked->automation_requested_at,'factory_agent_id'=>$locked->factory_agent_id,...(\Illuminate\Support\Facades\Schema::hasColumn('print_batches','operator_dispatch_enabled')?['operator_dispatch_enabled'=>(bool)$locked->operator_dispatch_enabled]:[])]);
             VerificationDecision::whereIn('line_item_id',$ids)->delete();
             $clear=['matches'=>[],'match_status'=>'MISSING','confidence'=>null];
             if(ArtworkRematchService::schemaReady())$clear['artwork_review']=null;
