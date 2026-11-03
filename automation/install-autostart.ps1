@@ -1,11 +1,11 @@
 . (Join-Path $PSScriptRoot 'agent-common.ps1')
 $Root = Assert-AgentRoot $PSScriptRoot
-$Python = Join-Path $Root '.venv\Scripts\python.exe'
+$Python = Join-Path $Root '.venv\Scripts\pythonw.exe'
 if (!(Test-Path -LiteralPath $Python)) { throw 'Install and test the agent first.' }
 $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
 if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Register this task from a dedicated standard operator account, not an elevated Administrator session.' }
-$Action = New-ScheduledTaskAction -Execute $Python -Argument ('-I "' + (Join-Path $Root 'factory_agent.py') + '"') -WorkingDirectory $Root
+$Action = New-ScheduledTaskAction -Execute $Python -Argument ('-I "' + (Join-Path $Root 'factory_agent.py') + '" --listen') -WorkingDirectory $Root
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Identity.Name
 $TaskPrincipal = New-ScheduledTaskPrincipal -UserId $Identity.Name -LogonType Interactive -RunLevel Limited
 $Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable

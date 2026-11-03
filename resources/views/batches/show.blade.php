@@ -21,7 +21,7 @@
     <div class="stats compact">
         <div class="stat">
             <span>Status</span>
-            <b class="smallb">{{ $batch->status }}</b>
+            <b class="smallb" data-batch-status>{{ $batch->status }}</b>
         </div>
 
         <div class="stat">
@@ -47,117 +47,7 @@
 @if($batch->payload['returned_to_review']['replacement_batch_id']??null)<a href="{{route('batch.show',$batch->payload['returned_to_review']['replacement_batch_id'])}}">View replacement batch →</a>@endif</p>
     @endif
     @if($status!=='CANCELLED')
-    <section class="panel">
-        <div class="panel-head">
-            <div>
-                <h2>Factory Print Progress</h2>
-                <p>
-                    Track this batch from the cloud application
-                    through the Factory PC and Epson Edge Print.
-                </p>
-            </div>
-        </div>
-
-        @php
-            $stepLabels = ['Batch created', 'Factory PC claimed', 'Downloading artwork', 'Artwork prepared', 'Handoff requested', 'Sent to Edge Print', 'Print completed'];
-            $stepColors = ['#d9f4df', '#b6e8c3', '#8ed5a4', '#65bd84', '#3da367', '#23834e', '#166534'];
-        @endphp
-        @if($status === 'FAILED')
-            <p class="progress-failure" role="status">Processing failed · Check the Factory Agent log. Printing is not complete.</p>
-        @endif
-        <ol class="print-progress" aria-label="Factory print progress">
-            @foreach($steps as $index=>$step)
-                @php
-                    $reached = $currentIndex !== false && $index <= $currentIndex;
-                    $current = $currentIndex !== false && $index === $currentIndex;
-                @endphp
-                <li class="print-step {{$reached?'is-reached':''}} {{$current?'is-current':''}} {{$step === 'PRINTED' && $reached?'is-complete':''}}"
-                    style="--step-green:{{$stepColors[$index]}}" @if($current) aria-current="step" @endif>
-                    <span class="print-step-marker" aria-hidden="true">@if($reached)<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>@else{{$index+1}}@endif</span>
-                    <span class="print-step-copy"><strong>{{$stepLabels[$index]}}</strong><small>{{$current ? ($step === 'PRINTED' ? 'Success' : 'Current stage') : ($reached ? 'Done' : 'Pending')}}</small></span>
-                </li>
-            @endforeach
-        </ol>
-
-        @if($status === 'PREPARED')
-            <div style="margin-top:22px;">
-                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="HANDOFF" data-confirm-url="{{route('batch.edge-print',$batch)}}">Review &amp; sign handoff →</button>@endif
-            </div>
-
-        @elseif($status === 'HANDOFF_REQUESTED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #e5e7eb;
-                    border-radius:10px;
-                "
-            >
-                <strong>Waiting for Factory PC...</strong>
-
-                <div style="margin-top:4px;">
-                    The Factory Agent will detect this request
-                    and hand the prepared artwork to Epson Edge Print.
-                </div>
-            </div>
-
-        @elseif($status === 'SENT_TO_RIP')
-            <div style="margin-top:22px;">
-                <div
-                    style="
-                        margin-bottom:14px;
-                        padding:14px 16px;
-                        border:1px solid #e5e7eb;
-                        border-radius:10px;
-                    "
-                >
-                    <strong>Artwork sent to Epson Edge Print.</strong>
-
-                    <div style="margin-top:4px;">
-                        Review the jobs in Edge Print, RIP them,
-                        and physically print the batch.
-                    </div>
-                </div>
-
-                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="PRINTED" data-confirm-url="{{route('batch.printed',$batch)}}">Confirm physical print completion →</button>@endif
-            </div>
-
-        @elseif($status === 'PRINTED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #d1fae5;
-                    border-radius:10px;
-                "
-            >
-                <strong>✓ PRINT COMPLETE</strong>
-
-                @if($batch->completed_at)
-                    <div style="margin-top:4px;">
-                        Completed:
-                        {{ $batch->completed_at->format('M d, Y · g:i A') }}
-                    </div>
-                @endif
-            </div>
-
-        @elseif($status === 'FAILED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #fecaca;
-                    border-radius:10px;
-                "
-            >
-                <strong>Factory processing failed.</strong>
-
-                <div style="margin-top:4px;">
-                    Check the Factory Agent log before retrying this batch.
-                </div>
-            </div>
-        @endif
-    </section>
+    @include('partials.factory-progress')
 
     @endif
     @if($status==='CANCELLED')<details class="panel cancelled-batch-history"><summary>Original batch contents · history only</summary>@endif

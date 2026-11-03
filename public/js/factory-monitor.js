@@ -66,13 +66,25 @@
             const row = (label, value, mono = false) => { const item = node('div');item.append(node('dt', label), node('dd', value, mono ? 'agent-monospace' : undefined));table.append(item); };
             row('Last connection report', date(agent.last_seen_at));
             row('Installed agent version', t.agent_version);
-            row('Report source', t.reporter_mode === 'connection_only' ? 'Connection monitor only — no production worker started' : 'Production agent');
+            row('Report source', t.reporter_mode === 'connection_only' ? 'Connection monitor only — no production worker started' : t.reporter_mode === 'listener' ? 'Portal listener — temporary workers start only for authorized jobs' : t.reporter_mode === 'managed_worker' ? 'Temporary production worker' : 'Production agent');
             row('Installed source SHA256', t.source_sha256, true);
             row('Python / Windows', `${t.python_version} / ${t.windows_version}`);
             row('API authentication', online ? 'Authenticated at this heartbeat' : 'Last authenticated at the reported heartbeat; not current');
             row('Agent process / stage', `${online ? t.process_status : 'Last reported: ' + t.process_status} / ${t.stage.replaceAll('_', ' ')}`);
             row('Current batch', t.reporter_mode === 'connection_only' ? 'Not checked by the connection monitor' : online && t.batch_id ? `Database batch #${t.batch_id}` : 'None currently reported');
             card.append(table);
+            if (monitor.dataset.controlUrl && /^[a-f0-9-]{36}$/.test(agent.agent_id)) {
+                const controls = node('div', undefined, 'agent-control');
+                controls.append(node('p', !agent.portal_control_supported ? 'One-time portal listener setup is required before this PC can process portal jobs.' : agent.processing_enabled ? 'Portal jobs enabled. Authorized queue requests and signed handoffs can launch a worker.' : 'Portal jobs paused. Queued requests wait until an administrator enables them.'));
+                const form = node('form');form.method = 'post';form.action = monitor.dataset.controlUrl.replace('AGENT_ID', agent.agent_id);
+                for (const [name,value] of [['_token',monitor.dataset.csrf],['enabled',agent.processing_enabled ? '0' : '1'],['confirm_control','1']]) {
+                    const input = node('input');input.type = 'hidden';input.name = name;input.value = value;form.append(input);
+                }
+                const button = node('button', agent.processing_enabled ? 'Pause new jobs' : 'Enable portal jobs', 'primary');button.type = 'submit';
+                button.disabled = unavailable || (!agent.processing_enabled && (!online || !agent.portal_control_supported));
+                form.addEventListener('submit', event => { if (!confirm(agent.processing_enabled ? 'Pause new job phases? An operation already running may finish safely. This does not stop the printer.' : 'Enable this PC? Existing authorized queue requests and signed handoffs may start processing immediately.')) event.preventDefault(); });
+                form.append(button);controls.append(form);card.append(controls);
+            }
             const diagnostics = node('details', undefined, 'agent-activity');diagnostics.append(node('summary', 'Reported diagnostics'));
             const checks = node('dl', undefined, 'agent-checks');
             for (const [label,value] of [['Google Drive',check(t.diagnostics?.drive_connected,diagnostic)],['Defender scan',check(t.diagnostics?.defender_scan,diagnostic)],['Workspace write test',check(t.diagnostics?.workspace_writable,diagnostic)],['Hot-folder write test',check(t.diagnostics?.hot_folder_writable,diagnostic)],['Printer readiness','Unknown — operator verification required']]) {

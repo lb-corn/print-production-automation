@@ -1,6 +1,11 @@
 # Lucky Bags Factory Agent guide
 
-Release 1.3.2 | Reviewed 3 November 2026 | Windows x64 and Python 3.13
+
+Portal-controlled operation: complete **Admin Settings → Factory Agent → One-time PC setup for portal jobs** once on the existing PC, then enable portal jobs in Admin. A limited operator-logon listener remains idle; approved Queue & prepare requests and signed HANDOFF requests launch a temporary worker for one phase. That worker exits after PREPARED or SENT_TO_RIP. Pause prevents new phases; it does not interrupt a current copy or stop the physical printer. PC power, operator sign-in, configured Epson hot folder and manual Epson printing remain required.
+
+Select one approved item for the first pilot. The batch page refreshes automatically and shows real download/file progress, waiting reasons and failures. Delivery to Epson does not confirm physical printing. Never blindly retry interrupted delivery. See [portal dispatch details](../docs/factory-portal-dispatch.md). The older manual commands below remain for legacy batches and diagnostics; a connection-only reporter cannot process portal-managed batches.
+
+Release 1.4.0 | Reviewed 3 November 2026 | Windows x64 and Python 3.13
 
 ## Printable guide and release ZIP
 
@@ -13,13 +18,13 @@ cd D:\LuckyBags\Automation\print-production-automation
 .\automation\make-release.ps1
 ```
 
-Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.3.2-PrivateInstall.zip` and its matching `.sha256.txt`. This ZIP intentionally includes `.env` and `service-account.json`. Transfer it only to the trusted Print PC; ZIP compression is not encryption. Never upload it to GitHub, a public download link or the website. Logs, virtual environments and downloaded artwork remain excluded. The private bundle must remain under `automation/dist`, which Git ignores.
+Change the project path if needed. The script creates `automation/dist/LuckyBags-Factory-Agent-v1.4.0-PrivateInstall.zip` and its matching `.sha256.txt`. This ZIP intentionally includes `.env` and `service-account.json`. Transfer it only to the trusted Print PC; ZIP compression is not encryption. Never upload it to GitHub, a public download link or the website. Logs, virtual environments and downloaded artwork remain excluded. The private bundle must remain under `automation/dist`, which Git ignores.
 
 Transfer both generated files to the Print PC using a trusted method. Before extraction, compare the ZIP hash with the accompanying trusted checksum:
 
 ```powershell
-Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.3.2-PrivateInstall.zip" -Algorithm SHA256
-Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.3.2-PrivateInstall.sha256.txt"
+Get-FileHash "C:\Downloads\LuckyBags-Factory-Agent-v1.4.0-PrivateInstall.zip" -Algorithm SHA256
+Get-Content "C:\Downloads\LuckyBags-Factory-Agent-v1.4.0-PrivateInstall.sha256.txt"
 ```
 
 Use the actual download/transfer directory. Stop if the hashes differ; letter case does not matter. Scan the ZIP with Defender, extract to `C:\LuckyBagsFactory`, and follow the guide. Rebuilding a ZIP can change its checksum, so always use the checksum generated with that exact ZIP. A matching checksum is not a publisher signature.
@@ -153,7 +158,7 @@ Install only after the factory owner or IT accepts the remaining Print PC checks
 
 ## Public updates (no credentials)
 
-Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.3.2.zip with 19 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.4.0.zip with 20 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
 
 Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).
 

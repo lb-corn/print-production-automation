@@ -60,13 +60,13 @@ cd D:\LuckyBags\Automation\print-production-automation
 .\automation\make-release.ps1 -PublicRelease
 ```
 
-The public ZIP contains 19 approved code/documentation files and no .env, credentials, agent-id, workspace or logs. Transfer the ZIP and its paired checksum through a trusted channel. Compare `Get-FileHash -Algorithm SHA256` against that checksum; scan the ZIP locally. ZIP rebuilds change hashes.
+The public ZIP contains 20 approved code/documentation files and no .env, credentials, agent-id, workspace or logs. Transfer the ZIP and its paired checksum through a trusted channel. Compare `Get-FileHash -Algorithm SHA256` against that checksum; scan the ZIP locally. ZIP rebuilds change hashes.
 
 **v1.2.2 updater compatibility:** its old allowlist rejects the new `test-connectivity.ps1` entry. After verifying the public ZIP, extract **only** its reviewed `update-agent.ps1` into the existing installation first (with the agent stopped), then use that updated script:
 
 ```powershell
 cd C:\LuckyBagsFactory
-.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.3.2.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
+.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.4.0.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
 .\install.ps1 -PythonExe "C:\Actual\Path\To\Python313\python.exe"
 .\protect-agent.ps1
 .\run-once.ps1 -CheckOnly

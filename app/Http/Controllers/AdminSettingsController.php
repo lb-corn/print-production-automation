@@ -11,7 +11,7 @@ class AdminSettingsController extends Controller
         abort_unless($request->user()?->role==='admin',403);
         $section=$request->query('section','artwork');
         abort_unless(in_array($section,['artwork','filenames','sync','users','reset','agent'],true),404);
-        if($section==='agent')return view('admin.settings',['section'=>'agent','monitoring'=>app(\App\Services\FactoryMonitoringService::class)->snapshot()]);
+        if($section==='agent')return view('admin.settings',['section'=>'agent','monitoring'=>app(\App\Services\FactoryMonitoringService::class)->snapshot(),'portalPackage'=>is_file(resource_path('factory-agent-release.json'))?json_decode(file_get_contents(resource_path('factory-agent-release.json')),true):[]]);
         if($section==='users')return app(AdminController::class)->index();
         if($section==='filenames')return app(FilenameCleanupController::class)->index($request);
         if($section==='sync') {

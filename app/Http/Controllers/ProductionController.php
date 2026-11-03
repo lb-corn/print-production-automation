@@ -177,17 +177,20 @@ class ProductionController extends Controller
             'items' => $items,
             'summary' => $this->svc->summary($items),
             'materials' => ProductionService::MATERIALS,
+            'factoryReadiness'=>app(\App\Services\FactoryDispatchService::class)->readiness(),
         ]);
     }
 
     public function batch(Request $request)
     {
-        $batch = $this->svc->batch(
-            $request->user()->id
-        );
+        $data=$request->validate(['items'=>'required|array|min:1|max:1000','items.*'=>'required|integer|distinct','dispatch_confirmed'=>'required|accepted']);
+        $batch=\Illuminate\Support\Facades\DB::transaction(function()use($request,$data){
+            $batch=$this->svc->batch($request->user()->id,$data['items']);
+            app(\App\Services\FactoryDispatchService::class)->request($batch);return $batch;
+        });
 
         return redirect('/batches/'.$batch->id)
-            ->with('ok', 'Production batch created.');
+            ->with('ok', 'Queue request recorded. Track preparation and waiting reasons here. This is not a physical-print confirmation.');
     }
 
     public function workspaceStatus()
@@ -198,7 +201,7 @@ class ProductionController extends Controller
     public function batches()
     {
         $query=PrintBatch::latest();
-        if (request('stage') === 'active') $query->whereIn('status',['QUEUED','CLAIMED','DOWNLOADING','PREPARED','HANDOFF_REQUESTED','SENT_TO_RIP']);
+        if (request('stage') === 'active') $query->whereIn('status',['QUEUED','CLAIMED','DOWNLOADING','PREPARED','HANDOFF_REQUESTED','DELIVERING','SENT_TO_RIP']);
         if (request('stage') === 'completed') $query->where('status','PRINTED');
         if (request('stage') === 'failed') $query->where('status','FAILED');
         return view('batches.index',['batches'=>$query->get()]);
@@ -207,7 +210,14 @@ class ProductionController extends Controller
     public function showBatch(PrintBatch $batch)
     {
         $itemIds=ProductionItem::whereIn('line_item_id',array_column($batch->payload['orders']??[],'line_item_id'))->pluck('id','line_item_id')->all();
-        return view('batches.show', compact('batch','itemIds'));
+        $factoryProgress=app(\App\Services\FactoryDispatchService::class)->progress($batch);
+        return view('batches.show', compact('batch','itemIds','factoryProgress'));
+    }
+    public function batchProgress(PrintBatch $batch){return response()->json(app(\App\Services\FactoryDispatchService::class)->progress($batch))->header('Cache-Control','no-store');}
+    public function requestPreparation(Request $request,PrintBatch $batch){
+        $request->validate(['dispatch_confirmed'=>'required|accepted']);
+        \Illuminate\Support\Facades\DB::transaction(fn()=>app(\App\Services\FactoryDispatchService::class)->request($batch));
+        return redirect()->route('batch.show',$batch)->with('ok','Automatic preparation requested. The batch stays pending until an enabled listener can process it.');
     }
 
     /**
@@ -231,6 +241,7 @@ class ProductionController extends Controller
 
     public function requestEdgePrint(Request $request, PrintBatch $batch)
     {
+        if(app(\App\Services\FactoryDispatchService::class)->ready() && $batch->automation_requested_at)abort_if(collect($batch->payload['orders']??[])->contains(fn($row)=>(int)($row['quantity']??0)!==1),422,'Automatic hot-folder delivery supports quantity one only. Manual quantity handling is required.');
         return $this->confirmPrintAction($request, $batch, 'HANDOFF', 'PREPARED', 'HANDOFF_REQUESTED');
     }
 

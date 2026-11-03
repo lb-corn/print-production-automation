@@ -523,3 +523,24 @@ select[data-naming-source][hidden],select[data-naming-catalog][hidden]{display:n
 @media(max-width:700px){.content>header{flex-wrap:wrap;gap:12px}.header-account-tools{flex-basis:100%;width:100%;justify-content:space-between}.factory-connection{font-size:11px}.agent-monitor-heading{align-items:flex-start;flex-direction:column;gap:10px}.agent-monitor-heading button{width:100%}.agent-report-heading{padding:14px}.agent-checks{padding:0 14px}.agent-checks>div{grid-template-columns:1fr;gap:5px;padding:10px 0}.agent-activity,.agent-install-guide{padding:14px}.agent-install-guide pre{font-size:11px}}@media(max-width:700px){.admin-settings-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.admin-settings-nav>a{min-width:0;gap:7px;padding:9px 8px}.admin-settings-nav b{font-size:11px;line-height:1.4}.admin-settings-nav .admin-settings-tab-icon svg{width:16px;height:16px}}
 /* Match the Account control; only the icon/status color changes with connectivity. */
 .factory-connection[data-state]{min-height:44px;border-radius:9px;padding:6px 11px;background:#fff;border-color:var(--line);gap:9px;color:var(--ink)}.factory-connection[data-state]>.factory-connection-icon{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:#edf3f6;color:#68818f;flex:none}.factory-connection-icon svg{width:17px;height:17px}.factory-connection[data-state]>.factory-connection-label{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:auto;height:auto;border-radius:0;background:transparent;min-width:72px}.factory-connection-label small{font-size:9px;font-weight:500;line-height:1.2;color:var(--muted)}.factory-connection-label b{font-size:11px;line-height:1.4}.factory-connection[data-state=online]>.factory-connection-icon{background:#e8f6f0;color:#1a8157}.factory-connection[data-state=offline]>.factory-connection-icon,.factory-connection[data-state=unavailable]>.factory-connection-icon{background:#fff0f2;color:#b44353}.agent-connect-action{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 18px;border:1px solid var(--line);border-radius:9px;background:#fff;margin-top:16px}.agent-connect-action strong{font-size:12px}.agent-connect-action p{font-size:11px;line-height:1.6;color:var(--muted);margin:5px 0 0}.agent-connect-action>a{flex:none;min-height:42px;display:flex;align-items:center}@media(max-width:700px){.agent-connect-action{flex-direction:column;align-items:stretch;padding:14px}.agent-connect-action>a{justify-content:center}.factory-connection[data-state]{padding:6px 9px}}
+:where(.factory-progress, .agent-control, .queue-cards) [hidden] { display:none!important; }
+.factory-progress progress { width:100%;height:18px;accent-color:#087f83;margin-top:16px; }
+.factory-progress-message { padding:16px;border-radius:12px;background:#edf8f8;border:1px solid #cbe9e9; }
+.factory-progress-message h3 { margin:0 0 8px; }
+.factory-progress-message p { margin:0;line-height:1.6; }
+.factory-progress[data-state="warning"] .factory-progress-message { background:#fff8e8;border-color:#efcf8d; }
+.factory-progress[data-state="danger"] .factory-progress-message { background:#fff0f2;border-color:#eaa6b1;color:#a8233c; }
+.factory-progress[data-state="success"] .factory-progress-message { background:#edfbf2;border-color:#b0e3c4; }
+.factory-stages { display:flex;gap:8px;flex-wrap:wrap;padding:0;list-style:none;margin:20px 0; }
+.factory-stages li { padding:8px 12px;background:#f2f6f8;border-radius:8px;font-size:12px;color:#627c8d; }
+.factory-stages li.is-reached { background:#e2f3eb;color:#176e49; }
+.factory-stages li.is-current { outline:2px solid #087f83;color:#076b70;font-weight:700; }
+.queue-select { display:flex;gap:10px;align-items:center;padding:12px 0;font-weight:600; }
+.agent-control { padding:18px;border-top:1px solid #dce8ee;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap; }
+.agent-control p { margin:0;flex:1 1 220px; }
+.portal-setup { margin-top:20px; }
+.portal-setup pre { white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f7f9;padding:14px;border-radius:10px;font-size:12px; }
+@media(max-width:600px) { [data-queue-selection] { width:100%; } [data-queue-selection] .primary,.factory-progress .primary { width:100%; } .factory-stages li { flex:1 1 40%;text-align:center; } }
+
+.batch-state.state-delivering { background:#e4f2ff;color:#1b5fa0; }
+[data-return-batch][hidden] { display:none!important; }
