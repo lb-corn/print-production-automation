@@ -76,7 +76,7 @@ class FactoryDispatchService {
         $id=$this->identity($request);abort_unless($this->ready(),503,'Portal dispatch setup is required.');
         return DB::transaction(function()use($id,$batch,$phase){
             $agent=FactoryAgent::where('agent_id',$id)->lockForUpdate()->first();
-            abort_unless($agent && $this->capable($agent) && $this->online($agent),409,'Factory processing is paused or the listener is offline.');
+            abort_unless($agent && $this->capable($agent) && $this->online($agent),409,'The Factory listener is offline or does not support portal jobs.');
             abort_if(PrintBatch::where('factory_agent_id',$id)->where('id','!=',$batch->id)->where(function($q){$q->whereIn('status',['CLAIMED','DOWNLOADING','DELIVERING'])->orWhere(fn($q)=>$q->where('status','HANDOFF_REQUESTED')->where('agent_operation_phase','handoff')->whereNotNull('agent_operation_token'));})->exists(),409,'Another operation for this Factory PC is still active.');
             $locked=PrintBatch::lockForUpdate()->findOrFail($batch->id);
             abort_unless($agent->processing_enabled || ($this->consentReady() && $locked->operator_dispatch_enabled),409,'This batch needs user authorization from the print screen.');
@@ -101,7 +101,7 @@ class FactoryDispatchService {
         if(!$agent){
             $connected=FactoryAgent::orderByDesc('last_seen_at')->get()->first(fn($a)=>$this->online($a));
             if($connected && !$this->capable($connected))return ['state'=>'connection_only','message'=>'The PC connection monitor is online, but no portal listener is installed. It cannot process this queue. One-time PC setup is required.'];
-            return ['state'=>'not_enabled','message'=>'No Factory PC is enabled for portal jobs. An administrator must enable a connected listener.'];
+            return ['state'=>'not_configured','message'=>'No Factory listener has reported yet. Ask an administrator to complete the PC setup.'];
         }
         if(!$this->online($agent))return ['state'=>'offline','message'=>'Waiting for the Factory PC. It may be switched off, signed out, disconnected, or its background listener may be stopped. Nothing is confirmed as processing.'];
         if(!$this->capable($agent))return ['state'=>'connection_only','message'=>'Only a connection reporter is running. It cannot prepare or hand off this batch. Start the installed portal listener through the one-time PC setup.'];
