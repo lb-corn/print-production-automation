@@ -242,7 +242,12 @@ $check(!$matcher->match($finger)['matches'],'Nonstandard PNS-ELT spelling requir
 $drive->tree['pse']=[$file('wrong-series','PSN-GOLDEN FINGER-WHITE.jpg')];
 $check(!$matcher->match($finger)['matches'],'PSN alone never substitutes for PSE even in the PSE folder');
 $ui=$controller->verification()->render();
-$check(str_contains($ui,'artwork-rematch-toolbar') && !str_contains($ui,'Fetch current Drive artwork for unbatched stock items'),'Global rematch uses the compact toolbar');
+$document=new DOMDocument();@$document->loadHTML($ui);$xpath=new DOMXPath($document);
+$toolbar=$xpath->query('//section[@aria-labelledby="production-refresh-heading"]')->item(0);
+$rematchForm=$toolbar?$xpath->query('.//form[@data-rematch-form][@method="post"]',$toolbar)->item(0):null;
+$backlogForm=$toolbar?$xpath->query('.//form[@data-backlog-form][@method="post"]',$toolbar)->item(0):null;
+$check($rematchForm && $rematchForm->getAttribute('action')===route('production.rematch') && $xpath->query('.//input[@name="_token"]',$rematchForm)->length===1 && $xpath->query('.//input[@name="confirm_rematch"][@value="1"]',$rematchForm)->length===1,'Orders and artwork section retains the protected global rematch action');
+$check($backlogForm && $backlogForm->getAttribute('action')===route('production.sync-backlog') && $xpath->query('.//input[@name="_token"]',$backlogForm)->length===1 && $xpath->query('.//input[@name="return_to"][@value="production"]',$backlogForm)->length===1,'Backlog refresh shares the same section and returns to Artwork Verification');
 $check(str_contains($ui,'Matching details') && !str_contains($ui,'<div class="artwork-filename-row">') && !str_contains($ui,'data-copy-filename'),'Missing-artwork UI retains diagnostics and removes filename suggestions');
 echo "$checks total artwork checks passed.\n";
 // A future design follows the same grammar; no image-specific configuration or alias is needed.
