@@ -13,6 +13,10 @@ SPEC.loader.exec_module(agent)
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_monitor_form_preserves_false_null_and_nested_diagnostics(self):
+        result = agent.monitoring_form({'batch_id':None,'workspace_exists':False,'diagnostics':{'drive_connected':True,'error_code':None}})
+        self.assertEqual(result, {'batch_id':'','workspace_exists':'0','diagnostics[drive_connected]':'1','diagnostics[error_code]':''})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='lb-monitor-')
         self.root = Path(self.temp.name)

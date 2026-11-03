@@ -22,16 +22,18 @@ class FactoryMonitoringService {
             'reporter_mode'=>['sometimes',Rule::in(['worker','connection_only'])],
             'workspace_exists'=>'required|boolean','hot_folder_exists'=>'required|boolean','credentials_present'=>'required|boolean',
             'batch_id'=>'nullable|integer|min:1','stage'=>['required',Rule::in(['idle','validating','downloading','prepared','handoff','sent_to_rip','error','stopped'])],
-            'diagnostics'=>'sometimes|array:checked_at_ms,workspace_writable,hot_folder_writable,defender_enabled,defender_realtime,defender_scan,drive_connected,error_code',
+            'diagnostics'=>'sometimes|array:checked_at_ms,workspace_writable,hot_folder_writable,defender_enabled,defender_realtime,defender_scan,drive_connected,error_code|min:7',
             'diagnostics.checked_at_ms'=>'required_with:diagnostics|integer|min:1',
             'diagnostics.error_code'=>['nullable',Rule::in(self::ERRORS)],
-            'last_success'=>'sometimes|array:kind,at_ms','last_failure'=>'sometimes|array:kind,at_ms,error_code',
+            'last_success'=>'sometimes|array:kind,at_ms|min:2','last_failure'=>'sometimes|array:kind,at_ms,error_code|min:3',
         ];
-        foreach(['workspace_writable','hot_folder_writable','defender_enabled','defender_realtime','defender_scan','drive_connected'] as $key)$rules['diagnostics.'.$key]='required_with:diagnostics|nullable|boolean';
+        foreach(['workspace_writable','hot_folder_writable','defender_enabled','defender_realtime','defender_scan','drive_connected'] as $key)$rules['diagnostics.'.$key]='present_with:diagnostics|nullable|boolean';
         foreach(['last_success','last_failure'] as $key){$rules[$key.'.kind']=['required_with:'.$key,Rule::in(self::OPERATIONS)];$rules[$key.'.at_ms']='required_with:'.$key.'|integer|min:1';}
         $rules['last_failure.error_code']=['required_with:last_failure',Rule::in(self::ERRORS)];
         $data=Validator::make($input,$rules)->validate();$data['agent_id']=strtolower($data['agent_id']);$data['sampled_at_ms']=(int)$data['sampled_at_ms'];
         $data['reporter_mode']=$data['reporter_mode']??'worker';
+        if(isset($data['batch_id']))$data['batch_id']=(int)$data['batch_id'];
+        foreach(['diagnostics'=>'checked_at_ms','last_success'=>'at_ms','last_failure'=>'at_ms'] as $key=>$clock)if(isset($data[$key]))$data[$key][$clock]=(int)$data[$key][$clock];
         // Even a well-shaped hash/UUID must never be used to smuggle the actual bearer key.
         $secret=(string)config('services.factory.api_key');
         if(strlen($secret)>=32)foreach([$data['source_sha256'],$data['agent_id']] as $value)abort_if(strcasecmp($value,$secret)===0,422,'Telemetry must not contain credentials.');

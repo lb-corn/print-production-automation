@@ -66,7 +66,7 @@ The public ZIP contains 19 approved code/documentation files and no .env, creden
 
 ```powershell
 cd C:\LuckyBagsFactory
-.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.3.1.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
+.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.3.2.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
 .\install.ps1 -PythonExe "C:\Actual\Path\To\Python313\python.exe"
 .\protect-agent.ps1
 .\run-once.ps1 -CheckOnly
@@ -91,3 +91,7 @@ All Epson registration, application-running, Auto Print and printer-readiness fi
 The shared app-header badge exposes only connection state/count. Detailed reports and the helper download are admin-only. No Windows paths, API keys, private keys, access tokens, customer/order names or artwork bytes are collected. Telemetry rejects unknown fields and unbounded strings, stale/future timestamps and duplicate/replayed samples. Server receipt time determines freshness. Diagnostics older than 10 minutes or from an offline PC are marked historical; failed dashboard refreshes never keep a healthy indicator current. Activity retains the last 20 changes per agent; registration is capped at 20 identifiers. Run only one processing PC against this queue.
 
 Health is authenticated/rate-limited and read-only; heartbeat is authenticated/rate-limited and has its own monitoring writes. Neither uses the production PortalWriteLock or a batch state transition. There is no remote shell, remote updater, printer-setting change or arbitrary deletion endpoint.
+
+## HTTP 406 from hosting
+
+A 406 is not one of the portal heartbeat validation responses. Deploy the latest portal update, then replace report-connection.ps1 on the PC and test with .\report-connection.ps1 -Once. The updated reporter uses ordinary form-encoded telemetry and a branded client identifier while keeping verified HTTPS and bearer authentication. The portal accepts both JSON and form clients under the same security rules. If 406 persists, ask hosting support to inspect the ModSecurity/WAF audit entry for POST /api/factory/heartbeat at the UTC time printed by the reporter and review the specific false-positive rule. Do not disable ModSecurity globally or paste bearer keys into support messages. A host-side policy rejection cannot be confirmed or repaired from a screenshot alone.

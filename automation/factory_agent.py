@@ -53,6 +53,17 @@ MONITOR_LOCK = threading.Lock()
 MONITOR_STATE = {'process_status': 'running', 'stage': 'idle', 'batch_id': None}
 
 
+def monitoring_form(payload, prefix=''):
+    result = {}
+    for key, value in payload.items():
+        name = f'{prefix}[{key}]' if prefix else key
+        if isinstance(value, dict):
+            result.update(monitoring_form(value, name))
+        else:
+            result[name] = '' if value is None else ('1' if value else '0') if isinstance(value, bool) else str(value)
+    return result
+
+
 def monitor_request(method, path, payload=None):
     """Separate, bounded outbound connection: never calls a batch endpoint or follows redirects."""
     url = urlsplit(BASE)
@@ -62,8 +73,8 @@ def monitor_request(method, path, payload=None):
         raise ValueError('Factory API key is not configured')
     if path not in {'/factory/heartbeat', '/factory/health'}:
         raise ValueError('Unsupported monitoring endpoint')
-    with MONITOR_SESSION.request(method, BASE + path, json=payload,
-                                 headers={'Authorization': f'Bearer {KEY}', 'Accept': 'application/json'},
+    with MONITOR_SESSION.request(method, BASE + path, data=monitoring_form(payload) if payload is not None else None,
+                                 headers={'Authorization': f'Bearer {KEY}', 'Accept': 'application/json, */*;q=0.5', 'User-Agent': 'LuckyBags-Factory-Monitor/1'},
                                  timeout=(5, 10), allow_redirects=False, verify=True, stream=True) as response:
         if response.status_code != 200:
             raise RuntimeError(f'Monitoring HTTP {response.status_code}')

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
+import requests
 
 SCRIPT = (Path(__file__).resolve().parents[1] / 'report-connection.ps1').read_text(encoding='utf-8-sig')
 SOURCE = re.search(r"\$Reporter = @'\r?\n([\s\S]*?)\r?\n'@", SCRIPT).group(1)
@@ -21,8 +22,7 @@ class ConnectionReporterTests(unittest.TestCase):
             (root / 'VERSION').write_text('2.9.7')
             (root / 'factory_agent.py').write_bytes(b'installed PC source')
             (root / 'service-account.json').write_text('PRIVATE-CREDENTIAL-DO-NOT-TRANSMIT')
-            response = MagicMock(status_code=status);response.__enter__.return_value = response
-            response.iter_content.return_value = [b'{"ok":true}']
+            response = requests.Response();response.status_code=status;response.raw=io.BytesIO(b'{"ok":true}')
             session = MagicMock();session.post.return_value = response
             with (patch('requests.Session', return_value=session), patch.object(sys, 'argv', ['reporter', folder, 'once']),
                   contextlib.redirect_stdout(io.StringIO()) as output):
@@ -35,11 +35,13 @@ class ConnectionReporterTests(unittest.TestCase):
         self.assertEqual(code, 0)
         session.post.assert_called_once()
         self.assertEqual(session.post.call_args.args[0], 'https://example.invalid/api/factory/heartbeat')
-        data = session.post.call_args.kwargs['json']
+        data = session.post.call_args.kwargs['data']
         self.assertEqual(data['agent_version'], '2.9.7')
         self.assertEqual(data['source_sha256'], hashlib.sha256(b'installed PC source').hexdigest())
         self.assertEqual(data['reporter_mode'], 'connection_only')
-        self.assertIsNone(data['batch_id'])
+        self.assertEqual(data['batch_id'], '')
+        self.assertEqual(data['credentials_present'], '1')
+        self.assertEqual(session.post.call_args.kwargs['headers']['User-Agent'],'LuckyBags-Factory-Connection/1')
         self.assertTrue(session.post.call_args.kwargs['verify'])
         self.assertFalse(session.post.call_args.kwargs['allow_redirects'])
         session.get.assert_not_called()
@@ -51,6 +53,11 @@ class ConnectionReporterTests(unittest.TestCase):
         self.assertEqual(code, 1)
         session.post.assert_called_once();session.get.assert_not_called()
         self.assertIn('401', output)
+
+    def test_host_rejection_has_safe_guidance_without_batch_retry_or_secrets(self):
+        session, code, output = self.run_report(406)
+        self.assertEqual(code,1);session.post.assert_called_once();session.get.assert_not_called()
+        self.assertIn('WAF/ModSecurity',output);self.assertIn('UTC',output);self.assertNotIn('f'*64,output)
 
 
 if __name__ == '__main__': unittest.main()

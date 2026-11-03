@@ -19,7 +19,7 @@ try:
         raise ValueError('API key must be configured')
     session = requests.Session()
     session.trust_env = False
-    with session.get(base + '/factory/health', headers={'Authorization': 'Bearer ' + key, 'Accept': 'application/json'}, timeout=(5, 15), allow_redirects=False, stream=True) as response:
+    with session.get(base + '/factory/health', headers={'Authorization': 'Bearer ' + key, 'Accept': 'application/json, */*;q=0.5','User-Agent':'LuckyBags-Factory-Health/1'}, timeout=(5, 15), allow_redirects=False, stream=True) as response:
         print('Factory health HTTP status:', response.status_code)
         if response.status_code == 404:
             print('Deploy the portal monitoring update first. The endpoint is /api/factory/health, not /api/health.')
