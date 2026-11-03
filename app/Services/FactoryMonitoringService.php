@@ -10,12 +10,8 @@ class FactoryMonitoringService {
     public const ERRORS=['configuration','api_authentication','api_unreachable','drive_unreachable','defender_unavailable','workspace_unavailable','handoff_unavailable','batch_operation_failed','diagnostic_failed','unknown'];
     public const ERROR_LABELS=['configuration'=>'Local configuration check failed.','api_authentication'=>'Factory API authentication failed. Verify the same key on server and PC.','api_unreachable'=>'Factory API could not be reached.','drive_unreachable'=>'Read-only Drive diagnostic did not connect.','defender_unavailable'=>'Defender diagnostic did not pass.','workspace_unavailable'=>'Workspace access check did not pass.','handoff_unavailable'=>'Hot-folder access check did not pass.','batch_operation_failed'=>'Batch operation failed. Inspect the batch and local logs before retrying.','diagnostic_failed'=>'A local diagnostic failed.','unknown'=>'Agent reported an error; inspect the local logs.'];
     public function ready():bool{return Schema::hasTable('factory_agents');}
-    public function release():array {
-        $path=resource_path('factory-agent-release.json');
-        return is_file($path)?json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR):['version'=>null,'factory_agent_sha256'=>null];
-    }
     public function accept(array $input):FactoryAgent {
-        $allowed=['agent_id','agent_version','source_sha256','python_version','windows_version','sampled_at_ms','process_status','workspace_exists','hot_folder_exists','credentials_present','diagnostics','last_success','last_failure','batch_id','stage'];
+        $allowed=['agent_id','agent_version','source_sha256','python_version','windows_version','sampled_at_ms','process_status','workspace_exists','hot_folder_exists','credentials_present','diagnostics','last_success','last_failure','batch_id','stage','reporter_mode'];
         abort_if(array_diff(array_keys($input),$allowed),422,'Unsupported telemetry fields. Do not send secrets, paths or customer data.');
         $rules=[
             'agent_id'=>'required|uuid','agent_version'=>['required','string','regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}$/D'],
@@ -23,6 +19,7 @@ class FactoryMonitoringService {
             'python_version'=>['required','string','regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}$/D'],
             'windows_version'=>['required','string','regex:/^\d{1,6}(?:\.\d{1,6}){1,3}$/D'],
             'sampled_at_ms'=>'required|integer|min:1','process_status'=>['required',Rule::in(['running','checking','stopping','error'])],
+            'reporter_mode'=>['sometimes',Rule::in(['worker','connection_only'])],
             'workspace_exists'=>'required|boolean','hot_folder_exists'=>'required|boolean','credentials_present'=>'required|boolean',
             'batch_id'=>'nullable|integer|min:1','stage'=>['required',Rule::in(['idle','validating','downloading','prepared','handoff','sent_to_rip','error','stopped'])],
             'diagnostics'=>'sometimes|array:checked_at_ms,workspace_writable,hot_folder_writable,defender_enabled,defender_realtime,defender_scan,drive_connected,error_code',
@@ -34,6 +31,7 @@ class FactoryMonitoringService {
         foreach(['last_success','last_failure'] as $key){$rules[$key.'.kind']=['required_with:'.$key,Rule::in(self::OPERATIONS)];$rules[$key.'.at_ms']='required_with:'.$key.'|integer|min:1';}
         $rules['last_failure.error_code']=['required_with:last_failure',Rule::in(self::ERRORS)];
         $data=Validator::make($input,$rules)->validate();$data['agent_id']=strtolower($data['agent_id']);$data['sampled_at_ms']=(int)$data['sampled_at_ms'];
+        $data['reporter_mode']=$data['reporter_mode']??'worker';
         // Even a well-shaped hash/UUID must never be used to smuggle the actual bearer key.
         $secret=(string)config('services.factory.api_key');
         if(strlen($secret)>=32)foreach([$data['source_sha256'],$data['agent_id']] as $value)abort_if(strcasecmp($value,$secret)===0,422,'Telemetry must not contain credentials.');
@@ -61,15 +59,14 @@ class FactoryMonitoringService {
         });
     }
     public function snapshot():array {
-        $release=$this->release();$ready=$this->ready();$threshold=max(30,min(600,(int)config('services.factory.offline_after_seconds',120)));
-        $agents=$ready?FactoryAgent::orderByDesc('last_seen_at')->limit(20)->get()->map(function($agent)use($threshold,$release){
+        $ready=$this->ready();$threshold=max(30,min(600,(int)config('services.factory.offline_after_seconds',120)));
+        $agents=$ready?FactoryAgent::orderByDesc('last_seen_at')->limit(20)->get()->map(function($agent)use($threshold){
             $t=$agent->telemetry;$online=$agent->last_seen_at->getTimestamp()>now()->timestamp-$threshold && ($t['process_status']??'')!=='stopping';
             $diagnosticFresh=$online && (int)($t['diagnostics']['checked_at_ms']??0)>=now()->getTimestampMs()-600000;
             return ['agent_id'=>$agent->agent_id,'online'=>$online,'last_seen_at'=>$agent->last_seen_at->toIso8601String(),'telemetry'=>$t,'diagnostics_fresh'=>$diagnosticFresh,
-                'hash_matches_release'=>($t['agent_version']??null)===$release['version']?hash_equals((string)$release['factory_agent_sha256'],(string)($t['source_sha256']??'')):null,
                 'activity'=>array_reverse($agent->activity)];
         })->values()->all():[];
-        return ['ready'=>$ready,'agents'=>$agents,'release'=>$release,'offline_after_seconds'=>$threshold,'server_time'=>now()->toIso8601String(),'errors'=>self::ERROR_LABELS];
+        return ['ready'=>$ready,'agents'=>$agents,'offline_after_seconds'=>$threshold,'server_time'=>now()->toIso8601String(),'errors'=>self::ERROR_LABELS];
     }
     public function connection():array {
         if(!$this->ready())return ['state'=>'unavailable','online'=>0];

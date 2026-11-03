@@ -1,21 +1,8 @@
-<div data-agent-monitor data-status-url="{{route('admin.factory-agent.status')}}">
-<div class="agent-monitor-heading"><p>Live reports from the Printer PC. Monitoring never claims a batch or sends artwork to the printer.</p><button type="button" class="chip" data-agent-refresh>Refresh status</button></div>
-<p class="agent-monitor-notice" data-agent-notice role="status" aria-live="polite">Loading agent reports…</p>
+<div data-agent-monitor data-status-url="{{route('admin.factory-agent.status',[],false)}}">
+<div class="agent-monitor-heading"><p>Connection and information reported by the Factory PC.</p><button type="button" class="chip" data-agent-refresh>Refresh status</button></div>
+<p class="agent-monitor-notice" data-agent-notice role="status" aria-live="polite">Loading connection status…</p>
 <div data-agent-cards class="agent-monitor-cards"></div>
-<p class="agent-monitor-footnote">Online means a recent authenticated heartbeat, not printer readiness or enabled batch processing. Reports expire after {{$monitoring['offline_after_seconds']}} seconds; local diagnostic results expire after 10 minutes. Run only one processing agent for this print queue.</p>
-<details class="panel agent-install-guide" @if(empty($monitoring['agents'])) open @endif>
-<summary>Installation &amp; connection test</summary>
-<ol>
-<li><strong>Activate the server update first.</strong><p>Deploy the latest main release, then run <code>bash deployment/post-deploy.sh</code> in the existing production directory. This applies the additive monitoring migration and refreshes configuration. Preserve the database, credentials and batches.</p></li>
-<li><strong>Test the API key without starting a job.</strong><p>Download <a href="{{route('admin.factory-agent.connectivity-script')}}">test-connectivity.ps1</a>, place it beside the installed agent scripts on the Print PC, then run:</p><pre><code>cd C:\LuckyBagsFactory
-.\test-connectivity.ps1</code></pre><p>This works with your installed v1.2.2 and reads its local .env. It calls <code>GET /api/factory/health</code> with the bearer key. It never calls the batch API. A successful test prints HTTP 200 and authentication PASSED; it does not create a heartbeat. If Windows blocks the downloaded script, have IT review and approve that file; do not bypass execution policy.</p></li>
-<li><strong>Install the monitoring agent.</strong><p>Recommended release: <b>{{$monitoring['release']['version']??'not available'}}</b>. Existing v1.2.2 batch processing remains compatible, but v1.2.2 cannot send heartbeat reports. Stop the agent before updating. Build a trusted public update using <code>.\automation\make-release.ps1 -PublicRelease</code> on the development PC. For a v1.2.2 installation, first obtain the updated <code>update-agent.ps1</code> from that verified release; the old updater rejects new release entries. Follow the update instructions and verify the ZIP checksum. Keep the installed .env, credentials, workspace and handoff journals. Never extract a private installer over an existing installation.</p></li>
-<li><strong>Run explicit diagnostics after the v1.3.0 upgrade.</strong><p>Do not pass -Health or -Diagnose to the old v1.2.2 run-once script: it does not support those flags. Use test-connectivity.ps1 for the old installation.</p><pre><code>.\run-once.ps1 -CheckOnly
-.\run-once.ps1 -Health
-.\run-once.ps1 -Diagnose</code></pre><p>Diagnostics test read-only Drive connectivity, Defender with a benign local file, and folder access using temporary empty directories. No artwork is downloaded and nothing is published into the Epson hot folder. Drive connectivity alone does not prove access to every approved artwork folder.</p></li>
-<li><strong>Verify Epson at the PC.</strong><p>Confirm that the hot folder is registered, Epson Edge Print is running, Auto Print is OFF, and the printer is connected and ready. The portal cannot verify these settings through a folder check. Complete a controlled quantity-one pilot with the normal HANDOFF and PRINTED confirmations before enabling processing.</p></li>
-</ol>
-<p class="agent-monitor-footnote">404: deploy the route; use /api/factory/health, not /api/health. 401: bearer key missing or different. 503: insecure server key or missing monitoring migration. After changing the server .env, run <code>php artisan optimize:clear</code> using the server's PHP 8.3 executable. Synchronize the PC clock if a heartbeat is rejected as stale. Never paste keys or .env contents into screenshots or support messages.</p>
-</details>
+<div class="agent-connect-action"><div><strong>Connect this installation</strong><p>Run the connection-only reporter on the PC. It reports status without processing orders or printing.</p></div><a class="chip" href="{{route('admin.factory-agent.connection-reporter',[],false)}}">Download connection reporter</a></div>
+<p class="agent-monitor-footnote">Copy the reporter beside the existing agent scripts, run .\report-connection.ps1 and keep its window open for live status. Connection status does not verify printer readiness.</p>
 <script type="application/json" data-agent-initial>@json($monitoring)</script>
 </div>

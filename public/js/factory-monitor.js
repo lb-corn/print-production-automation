@@ -1,12 +1,12 @@
 (() => {
     const badge = document.querySelector('[data-factory-connection]');
     const monitor = document.querySelector('[data-agent-monitor]');
-    const labels = {online: 'Factory: online', offline: 'Factory: offline', never_connected: 'Factory: not connected', unavailable: 'Factory: unavailable', checking: 'Factory: checking…'};
+    const labels = {online: 'Connected', offline: 'Offline', never_connected: 'Not connected', unavailable: 'Unavailable', checking: 'Checking…'};
     let badgeExpiry;
     function setBadge(state, count = 0) {
         if (!badge) return;
         badge.dataset.state = state;
-        badge.querySelector('b').textContent = state === 'online' && count > 1 ? `Factory: ${count} online` : labels[state] || labels.unavailable;
+        badge.querySelector('b').textContent = state === 'online' && count > 1 ? `${count} connected` : labels[state] || labels.unavailable;
         badge.title = state === 'online' ? 'Recent authenticated heartbeat. This does not verify printer readiness.' : 'Connection status only. Installation and diagnostics are available to administrators.';
     }
     async function read(url) {
@@ -14,7 +14,11 @@
         const timeout = setTimeout(() => controller.abort(), 8000);
         try {
             const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal});
-            if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Status unavailable');
+            if (!response.ok) {
+                const error = new Error(response.status === 401 ? 'Your session expired. Sign in again.' : response.status === 403 ? 'Administrator access is required.' : response.status === 429 ? 'Status requests are temporarily limited. Please wait and retry.' : `Status service returned HTTP ${response.status}. Please retry.`);
+                throw error;
+            }
+            if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Status response was not JSON. Refresh the page and sign in again if needed.');
             return await response.json();
         } finally { clearTimeout(timeout); }
     }
@@ -40,10 +44,10 @@
     function date(value) { return value ? new Date(value).toLocaleString() : 'Never reported'; }
     function check(value, current) { return !current || value === null || value === undefined ? 'Unknown — run diagnostics' : value ? 'Passed' : 'Needs attention'; }
     let snapshot, receivedAt, monitorPending = false;
-    function render(data, unavailable = false) {
+    function render(data, unavailable = false, message = '') {
         if (!monitor) return;
         const notice = monitor.querySelector('[data-agent-notice]');
-        notice.textContent = unavailable ? 'Monitoring is unavailable. Displayed reports are historical; readiness is unknown. Retry Refresh status.' : !data.ready ? 'Server setup required: apply the factory_agents migration and refresh configuration.' : !data.agents.length ? 'Never connected. v1.2.2 does not send heartbeats. Use the read-only API test below, then install the monitoring agent.' : `Updated ${date(data.server_time)} · refreshes every 15 seconds. Reports are from the PC, not independent security attestation.`;
+        notice.textContent = unavailable ? (message || monitor.dataset.error || 'Status could not refresh. Check the connection and retry.') + ' Displayed reports are historical.' : !data.ready ? 'Connection monitoring is not activated on the server yet.' : !data.agents.length ? 'No connection report has been received from a Factory PC.' : `Last checked ${date(data.server_time)}`;
         notice.dataset.state = unavailable || !data.ready ? 'warning' : 'info';
         const cards = monitor.querySelector('[data-agent-cards]');
         const expanded = new Set([...cards.querySelectorAll('.agent-report')].filter(card => card.querySelector('details')?.open).map(card => card.dataset.agentId));
@@ -60,29 +64,25 @@
             heading.append(identity, node('span', unavailable ? 'Status unknown' : online ? 'Online' : 'Offline', `agent-state ${unavailable ? 'unknown' : online ? 'online' : 'offline'}`));card.append(heading);
             const table = node('dl', undefined, 'agent-checks');
             const row = (label, value, mono = false) => { const item = node('div');item.append(node('dt', label), node('dd', value, mono ? 'agent-monospace' : undefined));table.append(item); };
-            row('Last heartbeat (local time)', date(agent.last_seen_at));
-            row('Installed version · reported by PC', t.agent_version);
-            row('Source SHA256 · reported by PC', t.source_sha256, true);
-            row('Release integrity comparison', agent.hash_matches_release === true ? 'Matches the recommended release' : agent.hash_matches_release === false ? 'Mismatch — inspect the installed source before processing' : 'Different/older release — compare with its trusted manifest');
+            row('Last connection report', date(agent.last_seen_at));
+            row('Installed agent version', t.agent_version);
+            row('Report source', t.reporter_mode === 'connection_only' ? 'Connection monitor only — no production worker started' : 'Production agent');
+            row('Installed source SHA256', t.source_sha256, true);
             row('Python / Windows', `${t.python_version} / ${t.windows_version}`);
             row('API authentication', online ? 'Authenticated at this heartbeat' : 'Last authenticated at the reported heartbeat; not current');
             row('Agent process / stage', `${online ? t.process_status : 'Last reported: ' + t.process_status} / ${t.stage.replaceAll('_', ' ')}`);
-            row('Workspace directory', online ? t.workspace_exists ? 'Exists' : 'Missing' : 'Unknown — PC not currently connected');
-            row('Workspace write test', check(t.diagnostics?.workspace_writable, diagnostic));
-            row('Google credential file', online ? t.credentials_present ? 'Present (access not implied)' : 'Missing' : 'Unknown — PC not currently connected');
-            row('Google Drive read-only connectivity', check(t.diagnostics?.drive_connected, diagnostic));
-            row('Defender antivirus / real-time protection', `${check(t.diagnostics?.defender_enabled, diagnostic)} / ${check(t.diagnostics?.defender_realtime, diagnostic)}`);
-            row('Defender benign-file scan', check(t.diagnostics?.defender_scan, diagnostic));
-            row('Epson hot-folder directory', online ? t.hot_folder_exists ? 'Exists (registration not implied)' : 'Missing / not configured' : 'Unknown — PC not currently connected');
-            row('Hot-folder directory write test', check(t.diagnostics?.hot_folder_writable, diagnostic));
-            for (const label of ['Hot folder registered in Epson', 'Epson Edge Print running', 'Epson Auto Print OFF', 'Printer connected and ready']) row(label, 'Unknown — operator verification required');
-            row('Last local diagnostic', t.diagnostics ? `${date(t.diagnostics.checked_at_ms)}${diagnostic ? '' : ' · historical / not current'}` : 'Not run');
-            row('Current batch', online && t.batch_id ? `Database batch #${t.batch_id}` : 'None currently reported');
+            row('Current batch', t.reporter_mode === 'connection_only' ? 'Not checked by the connection monitor' : online && t.batch_id ? `Database batch #${t.batch_id}` : 'None currently reported');
+            card.append(table);
+            const diagnostics = node('details', undefined, 'agent-activity');diagnostics.append(node('summary', 'Reported diagnostics'));
+            const checks = node('dl', undefined, 'agent-checks');
+            for (const [label,value] of [['Google Drive',check(t.diagnostics?.drive_connected,diagnostic)],['Defender scan',check(t.diagnostics?.defender_scan,diagnostic)],['Workspace write test',check(t.diagnostics?.workspace_writable,diagnostic)],['Hot-folder write test',check(t.diagnostics?.hot_folder_writable,diagnostic)],['Printer readiness','Unknown — operator verification required']]) {
+                const item=node('div');item.append(node('dt',label),node('dd',value));checks.append(item);
+            }
+            diagnostics.append(checks);card.append(diagnostics);
             for (const [key, label] of [['last_success', 'Last successful operation'], ['last_failure', 'Last failed operation']]) {
                 const op = t[key];row(label, op ? `${op.kind} · ${date(op.at_ms)}${op.error_code ? ' · ' + (data.errors[op.error_code] || 'Inspect local logs.') : ''}` : 'None reported');
             }
             if (t.diagnostics?.error_code) row('Last diagnostic issue', data.errors[t.diagnostics.error_code] || 'Inspect local logs.');
-            card.append(table);
             const details = node('details', undefined, 'agent-activity');details.append(node('summary', 'Recent activity'));
             details.open = expanded.has(agent.agent_id);
             const list = node('ol');
@@ -99,7 +99,7 @@
         const startedAt = Date.now();
         const button = monitor.querySelector('[data-agent-refresh]');button.disabled = true;button.textContent = 'Checking…';
         try { snapshot = await read(monitor.dataset.statusUrl); receivedAt = startedAt;monitor.dataset.stale = '0';render(snapshot); }
-        catch { monitor.dataset.stale = '1';if (snapshot) render(snapshot, true);else monitor.querySelector('[data-agent-notice]').textContent = 'Monitoring unavailable. Refresh status to retry.'; }
+        catch (error) { monitor.dataset.stale = '1';monitor.dataset.error = error.name === 'AbortError' ? 'Status request timed out. Retry Refresh status.' : error.message === 'Failed to fetch' ? 'The status service could not be reached. Refresh the page and retry.' : error.message;if (snapshot) render(snapshot, true,monitor.dataset.error);else monitor.querySelector('[data-agent-notice]').textContent = monitor.dataset.error; }
         finally { monitorPending = false;button.disabled = false;button.textContent = 'Refresh status'; }
     }
     if (monitor) {

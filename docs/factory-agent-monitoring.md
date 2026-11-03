@@ -19,7 +19,20 @@ This applies the additive `2026_11_03_000006_create_factory_agents` migration. P
 
 `FACTORY_API_KEY` must match the PC key, contain at least 32 characters and not be a placeholder. Config-cache refresh is required after editing the server .env. Optional server setting `FACTORY_AGENT_OFFLINE_SECONDS=120` controls expiry (bounded to 30–600 seconds).
 
-## Existing v1.2.2 Print PC: safe key test
+## Connection-only reporting without upgrading the existing agent
+
+Installed version and SHA are read from the PC's own VERSION and factory_agent.py files. The admin tab is a compact connection summary; it does not assume an installed version. The test-connectivity.ps1 helper only tests authentication and does not keep the portal connected.
+
+Download report-connection.ps1 from Admin Settings → Factory Agent and copy it beside the existing agent scripts. Run in ordinary PowerShell:
+
+```powershell
+cd C:\LuckyBagsFactory
+.\report-connection.ps1
+```
+
+Keep that window open. It posts connection reports every 30 seconds without reading/claiming batches, downloading artwork, calling Google Drive or publishing anything to Epson. Reports are labeled Connection monitor only, not an active production worker. Ctrl+C stops reports; no startup task is installed. Optional -Once sends one report, which naturally expires. Existing .env and credentials stay in place. The reporter is bundled in new releases and can be copied by itself; upgrading the main agent is not required for connection status. If Windows blocks the script, have IT approve the reviewed file rather than bypassing execution policy.
+
+## Existing installation: safe key test
 
 Your v1.2.2 SHA256 `828f4e58f4139583be879021389db95bd92a7297b411e5f813e51d69a3928b6f` identifies the previous reviewed source, not the new monitoring source.
 
@@ -38,7 +51,7 @@ It reads the key directly from the local .env and calls **GET `/api/factory/heal
 
 ## Upgrade for PC telemetry
 
-v1.2.2 continues using the unchanged batch API but has no heartbeat feature. **Install v1.3.0 to report version, source hash and local diagnostics.** The health helper alone does not create a heartbeat.
+v1.2.2 continues using the unchanged batch API but has no heartbeat feature. **Install the updated worker for integrated heartbeats and local diagnostics, or use the connection-only reporter above without upgrading.** The health helper alone does not create a heartbeat.
 
 Stop the scheduled agent and all agent processes before updating. Build and verify the public update on the development PC:
 
@@ -47,13 +60,13 @@ cd D:\LuckyBags\Automation\print-production-automation
 .\automation\make-release.ps1 -PublicRelease
 ```
 
-The public ZIP contains 18 approved code/documentation files and no .env, credentials, agent-id, workspace or logs. Transfer the ZIP and its paired checksum through a trusted channel. Compare `Get-FileHash -Algorithm SHA256` against that checksum; scan the ZIP locally. ZIP rebuilds change hashes.
+The public ZIP contains 19 approved code/documentation files and no .env, credentials, agent-id, workspace or logs. Transfer the ZIP and its paired checksum through a trusted channel. Compare `Get-FileHash -Algorithm SHA256` against that checksum; scan the ZIP locally. ZIP rebuilds change hashes.
 
 **v1.2.2 updater compatibility:** its old allowlist rejects the new `test-connectivity.ps1` entry. After verifying the public ZIP, extract **only** its reviewed `update-agent.ps1` into the existing installation first (with the agent stopped), then use that updated script:
 
 ```powershell
 cd C:\LuckyBagsFactory
-.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.3.0.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
+.\update-agent.ps1 -ZipPath "C:\Downloads\LuckyBags-Factory-Agent-v1.3.1.zip" -ExpectedSha256 "PASTE_THE_TRUSTED_64_CHARACTER_ZIP_SHA256"
 .\install.ps1 -PythonExe "C:\Actual\Path\To\Python313\python.exe"
 .\protect-agent.ps1
 .\run-once.ps1 -CheckOnly
@@ -71,7 +84,7 @@ Only after the factory pilot is approved should the operator start the usual wor
 
 ## What monitoring proves
 
-The admin tab shows self-reported installed version/SHA256, Python/Windows versions, server receipt time, existence of credential/workspace/hot folders, explicit diagnostic results, current database batch ID/stage, and bounded recent activity. It compares the source hash to the recommended release manifest. This is not independent remote attestation of a compromised PC.
+The admin tab shows self-reported installed version/SHA256, Python/Windows versions, server receipt time, existence of credential/workspace/hot folders, explicit diagnostic results, current database batch ID/stage, and bounded recent activity. Installed version and SHA are presented directly from each PC report. This is not independent remote attestation of a compromised PC.
 
 All Epson registration, application-running, Auto Print and printer-readiness fields remain **Unknown — operator verification required**. Directory existence/write access does not prove these settings. Google read-only API connectivity does not prove access to every approved artwork folder. Do not mark them ready based on heartbeat alone.
 

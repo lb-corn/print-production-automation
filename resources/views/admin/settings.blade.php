@@ -16,7 +16,7 @@
 </a>
 
 </nav>
-@php($sectionTitle=['artwork'=>'Artwork matching','filenames'=>'Filename cleanup','sync'=>'Data sync','users'=>'Manage Users','agent'=>'Agent installation & health','reset'=>'Reset portal data'][$section])
+@php($sectionTitle=['artwork'=>'Artwork matching','filenames'=>'Filename cleanup','sync'=>'Data sync','users'=>'Manage Users','agent'=>'Factory connection','reset'=>'Reset portal data'][$section])
 <section class="admin-settings-content" aria-label="{{$sectionTitle}}">
 <div class="admin-settings-section-title"><div>@if($section==='reset')<span>DANGER ZONE</span>@endif<h2>{{$sectionTitle}}</h2></div></div>
 @if($section==='artwork')
