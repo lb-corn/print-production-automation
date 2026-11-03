@@ -13,7 +13,9 @@ class ArtworkNamingController extends Controller
         $catalogSearch=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
         $loadError=null;
         $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);
-        if(!$plan && !$request->query('plan')) {
+        $stalePlan=!empty($plan['catalog_stale']);
+        if($stalePlan)$plan=$store->latestPreview($actor);
+        if(!$plan && (!$request->query('plan') || $stalePlan)) {
             try{$plan=app(ArtworkNamingService::class)->scan($actor);}
             catch(\Throwable $e){report($e);$loadError='Artwork could not load automatically. Check Drive access and the Active All Bags collection, then retry Check files.';}
         }

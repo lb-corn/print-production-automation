@@ -34,15 +34,17 @@ class ProductionController extends Controller
 
     public function syncBacklog()
     {
+        // Only named local destinations are accepted; Overview keeps its existing behavior.
+        $destination = request('return_to') === 'production' ? 'production' : 'dashboard';
         try {
             $r = app(BacklogSyncService::class)->sync();
-            $response=redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
+            $response=redirect()->route($destination)->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
             if(!($r['artwork_schema_ready']??true))$response->with('warning','Orders synced and artwork checked. The server still needs the artwork_review database migration before artwork approval and printing. You do not need to fix the whole catalog.');
             return $response;
         } catch (\Throwable $e) {
             if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
             report($e);
-            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
+            return redirect()->route($destination)->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
         }
     }
 

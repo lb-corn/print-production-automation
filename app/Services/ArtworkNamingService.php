@@ -181,16 +181,31 @@ class ArtworkNamingService
                 $this->store->save($plan); // Durable before any metadata mutation; failures stop the operation.
                 $after=app(GoogleDriveRenameService::class)->rename($current[$id],$entry['proposal']['target']);
                 $renamed=[...$current[$id],...$after,'parent_id'=>$after['parents'][0]??$current[$id]['parent_id']];
+                $path=$current[$id]['path']??$current[$id]['name'];$slash=strrpos($path,'/');
+                $renamed['path']=($slash===false?'':substr($path,0,$slash+1)).$renamed['name'];
                 $this->store->refreshRenamedSelection($current[$id],$renamed);$this->matcher->refreshReviewedSelections();$plan['selections_digest']=$this->selectionsDigest();
                 if(isset($plan['target_overrides'][$id]))$this->store->rememberFilename($renamed,$actor);
                 $event=array_key_last($plan['events']);$plan['events'][$event]['status']='renamed';$plan['events'][$event]['after']=$after;
                 $plan['renamed']++;array_shift($plan['pending']);foreach($plan['entries'] as &$updated)if($updated['id']===$id)$updated['status']='renamed';unset($updated);$this->store->save($plan);
+                foreach($plan['index'] as &$file)if(($file['id']??null)===$id)$file=$renamed;unset($file);
+                $this->store->invalidateCatalogPreviews($id);
             }
             if(!$plan['pending']) {
                 $plan['status']='complete';$plan['match_counts']=null;
                 if($plan['refresh']) {
                     try{$plan['match_counts']=app(ArtworkRematchService::class)->rematch();}
                     catch(\Throwable $e){report($e);$plan['warning']='Names changed, but unbatched matches could not be refreshed. Run Rematch Artwork.';}
+                }
+                try {
+                    // Publish only verified filename metadata using the catalog checked before rename.
+                    // No order import, print-queue mutation or extra Shopify/Drive scan is needed.
+                    $rules=$this->store->rules();
+                    $preview=$this->store->create($actor,['naming_policy'=>self::POLICY,'selections_digest'=>$this->selectionsDigest(),'rules'=>$rules,'rules_digest'=>$this->rulesDigest($rules),
+                        'index'=>$plan['index'],'catalog'=>$plan['catalog'],'catalog_digest'=>$plan['catalog_digest'],'standardize'=>false,
+                        'entries'=>$this->build($plan['index'],$plan['catalog'],[],$this->lockedFiles(),$rules),'mappings'=>[]]);
+                    $plan['catalog_preview_token']=$preview['token'];
+                } catch(\Throwable $e) {
+                    report($e);$plan['warning']=trim(($plan['warning']??'').' Names changed, but the catalog preview could not refresh. Refresh Artwork matching to retry.');
                 }
             }
         } catch(\Throwable $e) {

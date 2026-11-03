@@ -1,13 +1,20 @@
 <x-layouts.app heading="Production Verification" subheading="Compare Shopify order artwork against factory Drive artwork">
 @if(auth()->user()?->role !== 'demo')
-<form method="post" action="{{route('production.rematch')}}" data-rematch-form class="artwork-rematch-toolbar">
-
-@csrf
-<input type="hidden" name="confirm_rematch" value="1">
-<div><strong>Artwork matching</strong><span>Refresh unbatched items · changed artwork needs approval · batches stay locked</span></div>
+<section class="production-refresh" aria-labelledby="production-refresh-heading">
+<div class="production-refresh-heading"><h2 id="production-refresh-heading">Orders &amp; artwork</h2><p>Print batches stay locked. Changed artwork needs approval again.</p></div>
+<div class="production-refresh-actions">
+<form method="post" action="{{route('production.sync-backlog')}}" data-backlog-form>
+@csrf<input type="hidden" name="return_to" value="production">
+<div><strong>Shopify backlog</strong><p>Pull current orders and match their Drive artwork.</p></div>
+<button type="submit" class="primary">Refresh backlog</button>
+</form>
+<form method="post" action="{{route('production.rematch')}}" data-rematch-form>
+@csrf<input type="hidden" name="confirm_rematch" value="1">
+<div><strong>Drive artwork</strong><p>Recheck artwork for orders already in this portal.</p></div>
 <button type="submit" class="chip">Rematch Artwork</button>
 </form>
-
+</div>
+</section>
 @endif
 <div class="review-filter-heading">
 <strong>Review status</strong>

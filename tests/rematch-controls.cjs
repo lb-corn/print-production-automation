@@ -26,7 +26,7 @@ const vm = require('node:vm');
  const source=fs.readFileSync('public/js/app.js','utf8');const events={};
  const forms=[0,1].map(()=>({attributes:{},addEventListener(name,handler){this[name]=handler;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}}));
  const buttons=[{textContent:'Sync catalog',dataset:{},disabled:false},{textContent:'Refresh files',dataset:{},disabled:false}];
- vm.runInNewContext(source.slice(source.indexOf('const catalogSyncForms ='),source.indexOf('const rematchForms =')),{document:{querySelectorAll:selector=>selector==='[data-catalog-sync]'?forms:buttons},window:{addEventListener:(name,fn)=>events[name]=fn}});
+ vm.runInNewContext(source.slice(source.indexOf('const catalogSyncForms ='),source.indexOf('const backlogForms =')),{document:{querySelectorAll:selector=>selector==='[data-catalog-sync]'?forms:buttons},window:{addEventListener:(name,fn)=>events[name]=fn}});
  const first={preventDefault(){this.prevented=true;}};forms[0].submit(first);
  assert(!first.prevented&&buttons.every(b=>b.disabled)&&forms.every(f=>f.attributes['aria-busy']==='true'));
  const duplicate={preventDefault(){this.prevented=true;}};forms[1].submit(duplicate);assert(duplicate.prevented);

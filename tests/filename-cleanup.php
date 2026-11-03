@@ -17,6 +17,7 @@ $shopify->rows=[$cleanupRow,$canonicalRow,$lockedRow];$drive->index=[$cleanupFol
 $guard=PrintBatch::create(['batch_id'=>'cleanup-guard','status'=>'QUEUED','order_count'=>1,'artwork_file_count'=>1,'payload'=>['orders'=>[['line_item_id'=>'cleanup-guard-only','artworks'=>[['drive_file_id'=>$locked['id']]]]]]]);
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'filenames']);$request->setUserResolver(fn()=>$admin);
 $writesBefore=$writer->writes;$page=$cleanup->index($request);$data=$page->getData();$html=$page->render();
+$cachedCatalog=$service->scan($admin->id); // Simulate an Artwork matching page opened before rename.
 $check(array_column($data['filenameEntries'],'id')===[$work['id'],$locked['id']] && $writer->writes===$writesBefore,'Cleanup lists only nonstandard files with suggestions, excluding canonical and unidentified files');
 $dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//form[@data-filename-process]')->length===1 && str_contains($html,'Process suggested name') && str_contains($html,'In print batch') && !str_contains($html,'type="password"') && !str_contains($html,'name="ids[]"'),'Cleanup has one-click row actions, clear batch protection and no password/bulk preview UI');
@@ -26,6 +27,13 @@ $processRequest=function($token,$id,$user) { $r=Illuminate\Http\Request::create(
 $response=$cleanup->process($processRequest($data['plan']['token'],$work['id'],$admin));$item=$item->fresh('decision');
 $check($response->isRedirect(route('admin.settings',['section'=>'filenames'])) && $writer->writes===$writesBefore+1 && $item->matches[0]['name']===$standardName('LB-PSE-DUC-RED-SINGLE',$work['id']) && !$item->decision && str_contains(session('ok'),'Renamed PSE-DUC-RED.jpg'),'One-click action updates Drive and the order with a clear success result and fresh approval requirement');
 $check(PrintBatch::all()->toJson()===$batchesBefore,'One-click cleanup never changes existing queues or batch snapshots');
+$refreshedCatalog=$store->latestPreview($admin->id);
+$refreshedFile=collect($refreshedCatalog['index'])->firstWhere('id',$work['id']);
+$check($refreshedCatalog['token']!==$cachedCatalog['token'] && $refreshedFile['name']===$item->matches[0]['name'] && str_ends_with($refreshedFile['path'],$refreshedFile['name']) && str_contains(session('ok'),'No Data sync is needed'),'Confirmed rename automatically publishes the changed file in the catalog without manual Data sync');
+try{$store->load($cachedCatalog['token'],$admin->id);throw new LogicException('Stale preview accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Pre-rename preview tokens cannot perform further writes');}
+$oldLink=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'artwork','plan'=>$cachedCatalog['token']]);$oldLink->setUserResolver(fn()=>$admin);
+$oldPage=(new App\Http\Controllers\ArtworkNamingController())->index($oldLink,$store)->getData();
+$check($oldPage['plan']['token']===$refreshedCatalog['token'] && collect($oldPage['plan']['index'])->firstWhere('id',$work['id'])['name']===$refreshedFile['name'],'Bookmarked pre-rename Artwork matching pages automatically use the refreshed catalog');
 $newPage=$cleanup->index($request);$check(!in_array($work['id'],array_column($newPage->getData()['filenameEntries'],'id'),true),'Successfully renamed file disappears from the nonstandard list');
 $cleanup->process($processRequest($data['plan']['token'],$work['id'],$admin));$check($writer->writes===$writesBefore+1 && str_contains(session('error'),'No files were renamed'),'Replayed row actions cannot rename again');
 $cleanup->process($processRequest($newPage->getData()['plan']['token'],$locked['id'],$admin));$check($writer->writes===$writesBefore+1 && PrintBatch::all()->toJson()===$batchesBefore,'Direct submission cannot bypass a protected row');
