@@ -74,7 +74,7 @@ class FactoryMonitoringService {
             $t=$agent->telemetry;$online=$agent->last_seen_at->getTimestamp()>now()->timestamp-$threshold && ($t['process_status']??'')!=='stopping';
             $diagnosticFresh=$online && (int)($t['diagnostics']['checked_at_ms']??0)>=now()->getTimestampMs()-600000;
             return ['agent_id'=>$agent->agent_id,'online'=>$online,'last_seen_at'=>$agent->last_seen_at->toIso8601String(),'telemetry'=>$t,'diagnostics_fresh'=>$diagnosticFresh,
-                'activity'=>array_reverse($agent->activity),'portal_control_supported'=>app(FactoryDispatchService::class)->ready() && in_array($t['reporter_mode']??'',['listener','managed_worker'],true),'processing_enabled'=>(bool)$agent->processing_enabled,'control_audit'=>$agent->control_audit??[]];
+                'handoff_blocked'=>(bool)$agent->handoff_blocked,'handoff_control_ready'=>app(FactoryDispatchService::class)->consentReady(),'activity'=>array_reverse($agent->activity),'portal_control_supported'=>app(FactoryDispatchService::class)->ready() && in_array($t['reporter_mode']??'',['listener','managed_worker'],true),'processing_enabled'=>(bool)$agent->processing_enabled,'control_audit'=>$agent->control_audit??[]];
         })->values()->all():[];
         return ['ready'=>$ready,'agents'=>$agents,'offline_after_seconds'=>$threshold,'server_time'=>now()->toIso8601String(),'errors'=>self::ERROR_LABELS];
     }

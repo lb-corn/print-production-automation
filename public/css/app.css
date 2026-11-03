@@ -544,3 +544,5 @@ select[data-naming-source][hidden],select[data-naming-catalog][hidden]{display:n
 
 .batch-state.state-delivering { background:#e4f2ff;color:#1b5fa0; }
 [data-return-batch][hidden] { display:none!important; }
+
+.agent-summary-heading{align-items:center;margin-bottom:16px;gap:16px}.agent-summary-heading h2{margin:0 0 6px}.agent-summary-heading p{margin:0}.agent-summary-heading>button{flex:none;min-height:42px}.agent-report>.agent-activity>.agent-checks{padding:12px 0 0}@media(max-width:600px){.agent-summary-heading{flex-wrap:wrap}.agent-summary-heading>button{width:100%}}

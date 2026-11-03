@@ -1,3 +1,15 @@
+# Current daily print flow
+
+Operators and admins select approved items in Ready for Print and confirm Queue & prepare. This grants permission only to that batch and does not enable older paused queue entries. Prepared batches require the existing named, counted, payload-checked signed HANDOFF before delivery. Physical PRINTED remains a separate human confirmation. The connected existing agent needs no PC update for this server/UI change.
+
+Admin > Factory Agent shows connection, last report, installed version and current activity. Technical metadata and actual diagnostic reports are collapsed under Technical details; repair and setup instructions are omitted from the daily page. Admin can Block handoff for every user on that PC while preparation continues. It blocks authorization, work offers, phase assignment and the transition into delivery. A delivery already in progress may finish; a physical printer is not remotely stopped. Allow handoff explicitly warns that previously signed waiting jobs can proceed. Actions are audited. Ordinary users cannot change this block.
+
+Deploy main and run deployment/post-deploy.sh to apply the additive batch-consent/handoff-control migration. Existing paused entries are not granted new batch permissions by migration. Explicitly authorize an untouched old queued batch from its batch page. Authentication and demo write protection remain required; final human confirmation and duplicate-delivery safeguards remain intact.
+
+---
+
+The following installation and recovery reference describes the earlier setup screens; it is retained for maintenance, not the daily Admin page.
+
 # Portal-controlled Factory PC jobs
 
 Deploy main and run `bash deployment/post-deploy.sh` in the existing production directory. The additive dispatch migration defaults all PCs to processing disabled. Existing orders, approvals, batches, credentials and manifests remain intact.

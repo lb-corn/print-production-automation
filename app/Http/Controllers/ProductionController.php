@@ -268,6 +268,8 @@ class ProductionController extends Controller
                 (int)$data['confirmed_order_count'] === $locked->order_count &&
                 (int)$data['confirmed_artwork_file_count'] === $locked->artwork_file_count,
                 422,'Batch contents changed. Refresh and review the updated quantities.');
+            if($action==='HANDOFF' && $locked->automation_requested_at)app(\App\Services\FactoryDispatchService::class)->authorizeJob($locked);
+            if($action==='HANDOFF')app(\App\Services\FactoryDispatchService::class)->assertHandoffAllowed($locked);
             \App\Models\BatchConfirmation::create([
                 'print_batch_id'=>$locked->id,'user_id'=>$request->user()->id,
                 'account_name'=>$request->user()->name,'signer_name'=>trim($data['signer_name']),

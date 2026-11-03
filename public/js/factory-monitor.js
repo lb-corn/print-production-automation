@@ -60,49 +60,39 @@
             const card = node('section', undefined, 'panel agent-report');
             card.dataset.agentId = agent.agent_id;
             const heading = node('div', undefined, 'agent-report-heading');
-            const identity = node('div');identity.append(node('h3', 'Factory PC'), node('small', agent.agent_id));
+            const identity = node('div');identity.append(node('h3', 'Printer PC'));
             heading.append(identity, node('span', unavailable ? 'Status unknown' : online ? 'Online' : 'Offline', `agent-state ${unavailable ? 'unknown' : online ? 'online' : 'offline'}`));card.append(heading);
             const table = node('dl', undefined, 'agent-checks');
-            const row = (label, value, mono = false) => { const item = node('div');item.append(node('dt', label), node('dd', value, mono ? 'agent-monospace' : undefined));table.append(item); };
-            row('Last connection report', date(agent.last_seen_at));
-            row('Installed agent version', t.agent_version);
-            row('Report source', t.reporter_mode === 'connection_only' ? 'Connection monitor only — no production worker started' : t.reporter_mode === 'listener' ? 'Portal listener — temporary workers start only for authorized jobs' : t.reporter_mode === 'managed_worker' ? 'Temporary production worker' : 'Production agent');
-            row('Installed source SHA256', t.source_sha256, true);
-            row('Python / Windows', `${t.python_version} / ${t.windows_version}`);
-            row('API authentication', online ? 'Authenticated at this heartbeat' : 'Last authenticated at the reported heartbeat; not current');
-            row('Agent process / stage', `${online ? t.process_status : 'Last reported: ' + t.process_status} / ${t.stage.replaceAll('_', ' ')}`);
-            row('Current batch', t.reporter_mode === 'connection_only' ? 'Not checked by the connection monitor' : online && t.batch_id ? `Database batch #${t.batch_id}` : 'None currently reported');
+            const row = (target,label,value,mono=false) => { const item=node('div');item.append(node('dt',label),node('dd',value,mono?'agent-monospace':undefined));target.append(item); };
+            row(table,'Last report',date(agent.last_seen_at));row(table,'Agent version',t.agent_version);
+            row(table,'Activity',!online?'Not currently reporting':t.reporter_mode==='connection_only'?'Connection monitor only — worker setup required':t.batch_id?`Batch #${t.batch_id} · ${t.stage.replaceAll('_',' ')}`:'Ready for authorized jobs');
             card.append(table);
-            if (monitor.dataset.controlUrl && /^[a-f0-9-]{36}$/.test(agent.agent_id)) {
-                const controls = node('div', undefined, 'agent-control');
-                controls.append(node('p', !agent.portal_control_supported ? 'One-time portal listener setup is required before this PC can process portal jobs.' : agent.processing_enabled ? 'Portal jobs enabled. Authorized queue requests and signed handoffs can launch a worker.' : 'Portal jobs paused. Queued requests wait until an administrator enables them.'));
-                const form = node('form');form.method = 'post';form.action = monitor.dataset.controlUrl.replace('AGENT_ID', agent.agent_id);
-                for (const [name,value] of [['_token',monitor.dataset.csrf],['enabled',agent.processing_enabled ? '0' : '1'],['confirm_control','1']]) {
-                    const input = node('input');input.type = 'hidden';input.name = name;input.value = value;form.append(input);
-                }
-                const button = node('button', agent.processing_enabled ? 'Pause new jobs' : 'Enable portal jobs', 'primary');button.type = 'submit';
-                button.disabled = unavailable || (!agent.processing_enabled && (!online || !agent.portal_control_supported));
-                form.addEventListener('submit', event => { if (!confirm(agent.processing_enabled ? 'Pause new job phases? An operation already running may finish safely. This does not stop the printer.' : 'Enable this PC? Existing authorized queue requests and signed handoffs may start processing immediately.')) event.preventDefault(); });
+            if(monitor.dataset.handoffUrl && /^[a-f0-9-]{36}$/.test(agent.agent_id)) {
+                const controls=node('div',undefined,'agent-control');controls.append(node('p',!agent.handoff_control_ready?'Apply the server database update to use handoff control.':agent.handoff_blocked?'Handoff blocked for all users. Preparation can continue.':'Handoff allowed. Every delivery still requires signed user approval.'));
+                const form=node('form');form.method='post';form.action=monitor.dataset.handoffUrl.replace('AGENT_ID',agent.agent_id);
+                for(const [name,value] of [['_token',monitor.dataset.csrf],['blocked',agent.handoff_blocked?'0':'1'],['confirm_control','1']]){const input=node('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}
+                const button=node('button',agent.handoff_blocked?'Allow handoff':'Block handoff',agent.handoff_blocked?'primary':'chip');button.type='submit';button.disabled=unavailable||!agent.handoff_control_ready;
+                form.addEventListener('submit',event=>{if(!confirm(agent.handoff_blocked?'Allow handoff for this PC? Previously signed waiting handoffs may proceed.':'Block new handoffs for everyone? A delivery already started may finish safely. This does not stop a physical print.'))event.preventDefault();});
                 form.append(button);controls.append(form);card.append(controls);
             }
-            const diagnostics = node('details', undefined, 'agent-activity');diagnostics.append(node('summary', 'Reported diagnostics'));
-            const checks = node('dl', undefined, 'agent-checks');
-            for (const [label,value] of [['Google Drive',check(t.diagnostics?.drive_connected,diagnostic)],['Defender scan',check(t.diagnostics?.defender_scan,diagnostic)],['Workspace write test',check(t.diagnostics?.workspace_writable,diagnostic)],['Hot-folder write test',check(t.diagnostics?.hot_folder_writable,diagnostic)],['Printer readiness','Unknown — operator verification required']]) {
-                const item=node('div');item.append(node('dt',label),node('dd',value));checks.append(item);
+
+            const details=node('details',undefined,'agent-activity');details.open=expanded.has(agent.agent_id);details.append(node('summary','Technical details'));
+            const technical=node('dl',undefined,'agent-checks');
+            row(technical,'Agent ID',agent.agent_id,true);
+            row(technical,'Report source',t.reporter_mode==='connection_only'?'Connection monitor only — no production worker started':t.reporter_mode==='listener'?'Background listener':t.reporter_mode==='managed_worker'?'Temporary production worker':'Production agent');
+            row(technical,'Source SHA256',t.source_sha256,true);row(technical,'Python / Windows',`${t.python_version} / ${t.windows_version}`);
+            row(technical,'API authentication',online?'Authenticated at this report':'Last report only; not current');
+            for(const [key,label] of [['last_success','Last successful operation'],['last_failure','Last failed operation']]) {
+                const op=t[key];if(op)row(technical,label,`${op.kind} · ${date(op.at_ms)}${op.error_code?' · '+(data.errors[op.error_code]||'Inspect local logs.'):''}`);
             }
-            diagnostics.append(checks);card.append(diagnostics);
-            for (const [key, label] of [['last_success', 'Last successful operation'], ['last_failure', 'Last failed operation']]) {
-                const op = t[key];row(label, op ? `${op.kind} · ${date(op.at_ms)}${op.error_code ? ' · ' + (data.errors[op.error_code] || 'Inspect local logs.') : ''}` : 'None reported');
+            if(t.diagnostics) {
+                row(technical,'Diagnostic report',date(t.diagnostics.checked_at_ms)+(diagnostic?'':' · historical'));
+                for(const [key,label] of [['drive_connected','Google Drive'],['defender_scan','Defender scan'],['workspace_writable','Workspace write test'],['hot_folder_writable','Hot-folder write test']]) {
+                    if(t.diagnostics[key]!==null && t.diagnostics[key]!==undefined)row(technical,label,check(t.diagnostics[key],diagnostic));
+                }
             }
-            if (t.diagnostics?.error_code) row('Last diagnostic issue', data.errors[t.diagnostics.error_code] || 'Inspect local logs.');
-            const details = node('details', undefined, 'agent-activity');details.append(node('summary', 'Recent activity'));
-            details.open = expanded.has(agent.agent_id);
-            const list = node('ol');
-            for (const event of agent.activity) {
-                const failure = event.last_failure?.error_code;
-                list.append(node('li', `${date(event.at)} · ${event.stage.replaceAll('_', ' ')}${event.diagnostic ? ' · diagnostic report' : ''}${failure ? ' · ' + (data.errors[failure] || 'Inspect local logs.') : ''}`));
-            }
-            details.append(list);card.append(details);cards.append(card);
+            details.append(technical);card.append(details);cards.append(card);
+
         }
     }
     async function refreshMonitor() {

@@ -67,7 +67,7 @@ $check(hash_file('sha256',resource_path('factory-agent-test-connectivity.ps1'))=
 // Render the actual admin page with disposable data for responsive/browser checks.
 auth()->setUser($admin);view()->share('errors',new Illuminate\Support\ViewErrorBag());$app->instance('request',Request::create('/admin/settings?section=agent'));
 $html=view('admin.settings',['section'=>'agent','monitoring'=>$monitor->snapshot()])->render();
-$check(str_contains($html,'Factory connection') && str_contains($html,'data-factory-connection') && str_contains($html,'One-time PC setup for portal jobs') && !str_contains($html,'Installation &amp; connection test'),'Admin page shows a compact connection summary with optional one-time setup and without fixed installed-version claims');
+$check(str_contains($html,'Factory connection') && str_contains($html,'data-factory-connection') && !str_contains($html,'Repair background startup') && str_contains($html,'Authorize preparation from Ready for Print') && !str_contains($html,'Installation &amp; connection test'),'Admin page shows a compact connection summary without setup clutter or a global processing switch');
 $check(str_contains($html,'data-status-url="/admin/factory-agent/status"') && str_contains($html,'data-status-url="/workspace/factory-status"'),'Polling URLs stay on the current origin behind HTTPS proxies');
 $sample['sampled_at_ms']+=100;$monitor->accept([...$sample,'reporter_mode'=>'connection_only']);
 $check(FactoryAgent::where('agent_id',$sample['agent_id'])->first()->telemetry['reporter_mode']==='connection_only','Connection-only reports are clearly distinguished from the production worker');
