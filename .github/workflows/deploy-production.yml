@@ -128,6 +128,8 @@ jobs:
           php tests/artwork-naming.php
           php tests/artwork-standardization.php
           php tests/filename-cleanup.php
+          php tests/backlog-refresh.php
+          node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php
           node tests/rematch-controls.cjs

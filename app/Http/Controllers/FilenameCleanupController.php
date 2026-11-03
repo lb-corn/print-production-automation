@@ -43,6 +43,6 @@ class FilenameCleanupController extends Controller
         catch(\Throwable $e) { report($e);return $back->with('warning','The rename result could not be confirmed. Check the file in Drive before trying again.'); }
         if($result['status']!=='complete')return $back->with('warning',$result['warning']??'The rename was not confirmed. Check Drive and refresh the list before trying again.');
         if(!empty($result['warning']))return $back->with('warning',$result['warning']);
-        return $back->with('ok','Renamed '.$entry['source']['name'].' → '.$entry['proposal']['target'].'. Artwork matches refreshed. Affected unbatched orders need artwork approval again.');
+        return $back->with('ok','Renamed '.$entry['source']['name'].' → '.$entry['proposal']['target'].'. Catalog and artwork matches refreshed automatically. No Data sync is needed. Affected unbatched orders need artwork approval again.');
     }
 }

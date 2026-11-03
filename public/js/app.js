@@ -308,6 +308,37 @@ window.addEventListener('pageshow', () => {
     });
 });
 
+const backlogForms = [...document.querySelectorAll('[data-backlog-form]')];
+let backlogPending = false;
+backlogForms.forEach(form => form.addEventListener('submit', event => {
+    if (event.defaultPrevented) return;
+    if (backlogPending) { event.preventDefault(); return; }
+    if (!window.confirm('Get the latest production backlog from Shopify and match its artwork from Google Drive? Print batches stay locked. Changed artwork needs approval again.')) {
+        event.preventDefault();
+        return;
+    }
+    backlogPending = true;
+    backlogForms.forEach(other => {
+        other.setAttribute('aria-busy', 'true');
+        other.querySelectorAll('button[type="submit"]').forEach(button => {
+            button.dataset.backlogLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Refreshing…';
+        });
+    });
+}));
+window.addEventListener('pageshow', () => {
+    backlogPending = false;
+    backlogForms.forEach(form => {
+        form.removeAttribute('aria-busy');
+        form.querySelectorAll('button[data-backlog-label]').forEach(button => {
+            button.disabled = false;
+            button.textContent = button.dataset.backlogLabel;
+            delete button.dataset.backlogLabel;
+        });
+    });
+});
+
 const rematchForms = [...document.querySelectorAll('[data-rematch-form]')];
 let rematchPending = false;
 rematchForms.forEach((form) => {
