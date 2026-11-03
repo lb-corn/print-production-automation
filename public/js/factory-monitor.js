@@ -13,7 +13,7 @@
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
         try {
-            const response = await fetch(url, {headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal});
+            const response = await fetch(url, {headers: {Accept: 'application/json, */*;q=0.5'}, credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal});
             if (!response.ok) {
                 const error = new Error(response.status === 401 ? 'Your session expired. Sign in again.' : response.status === 403 ? 'Administrator access is required.' : response.status === 429 ? 'Status requests are temporarily limited. Please wait and retry.' : `Status service returned HTTP ${response.status}. Please retry.`);
                 throw error;

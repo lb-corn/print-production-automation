@@ -1,6 +1,6 @@
 # Factory Agent security review
 
-Review date: 3 November 2026. Current release: 1.3.1. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
+Review date: 3 November 2026. Current release: 1.3.2. Scope: automation source, installation/update scripts, Factory API and named batch confirmations. This is a source and local regression review, not a penetration test, malware certification, physical printer test or client-device inspection.
 
 ## 1.2.1 follow-up
 
@@ -80,3 +80,7 @@ Authenticated health/heartbeat routes are separate from batch endpoints and the 
 ## 1.3.1 connection-only reporter
 
 report-connection.ps1 reads installed version/source metadata, never batches or artwork. It sends only allowlisted telemetry over verified HTTPS and cannot start the worker, print, call Drive or change credentials. Its mode is distinguished from production-agent reports. Monitoring URLs are same-origin paths and their rate-limit buckets are isolated. The admin page omits release/version installation instructions; installed data comes solely from PC reports.
+
+## 1.3.2 monitoring transport
+
+Monitoring heartbeats use standard URL-encoded fields with an identifiable client User-Agent and JSON-compatible Accept header. The server still accepts existing JSON clients and applies the same bearer authentication, body-size bound, telemetry allowlist and replay checks to both representations. No WAF rules, TLS verification or key requirements are disabled. Successful response bodies are consumed only once; tests use a real streaming Response. HTTP 406 messages provide the endpoint and UTC time for hosting audit investigation without exposing secrets or raw response bodies.

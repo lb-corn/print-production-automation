@@ -7,6 +7,7 @@ $Python = Join-Path $Root '.venv\Scripts\python.exe'
 if (!(Test-Path -LiteralPath $Python)) { throw 'The agent Python environment is missing.' }
 $Reporter = @'
 import hashlib, json, os, platform, re, sys, time, uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 import requests
@@ -42,16 +43,15 @@ def report(stopping=False):
         'batch_id':None, 'workspace_exists':local_path('FACTORY_PRINT_DIR','factory_print').is_dir(),
         'hot_folder_exists':bool(env.get('EDGE_PRINT_HOT_FOLDER') and local_path('EDGE_PRINT_HOT_FOLDER','').is_dir()),
         'credentials_present':local_path('GOOGLE_SERVICE_ACCOUNT_FILE','service-account.json').is_file()}
-    with session.post(base + '/factory/heartbeat', json=payload, headers={'Authorization':'Bearer '+key,'Accept':'application/json'},
+    fields = {name: '' if value is None else ('1' if value else '0') if isinstance(value,bool) else str(value) for name,value in payload.items()}
+    with session.post(base + '/factory/heartbeat', data=fields, headers={'Authorization':'Bearer '+key,'Accept':'application/json, */*;q=0.5','User-Agent':'LuckyBags-Factory-Connection/1'},
                       timeout=(5,10), allow_redirects=False, verify=True, stream=True) as response:
         if response.status_code != 200:
-            print('Connection report rejected: HTTP', response.status_code, '(check deployment, key, migration and PC clock).')
+            if response.status_code == 406:
+                print('HTTP 406: request was rejected before portal confirmation. Ask hosting support to inspect the WAF/ModSecurity audit for POST /api/factory/heartbeat at', datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'))
+            else:
+                print('Connection report rejected: HTTP', response.status_code, '(check deployment, key, migration and PC clock).')
             return False
-        body = bytearray()
-        for chunk in response.iter_content(8192):
-            body.extend(chunk)
-            if len(body) > 65536: raise ValueError('Unexpected response size')
-        if json.loads(body).get('ok') is not True: raise ValueError('Unexpected heartbeat response')
         body = bytearray()
         for chunk in response.iter_content(8192):
             body.extend(chunk)

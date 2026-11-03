@@ -73,6 +73,23 @@ $sample['sampled_at_ms']+=100;$monitor->accept([...$sample,'reporter_mode'=>'con
 $check(FactoryAgent::where('agent_id',$sample['agent_id'])->first()->telemetry['reporter_mode']==='connection_only','Connection-only reports are clearly distinguished from the production worker');
 $check(hash_file('sha256',resource_path('factory-agent-report-connection.ps1'))===hash_file('sha256',base_path('automation/report-connection.ps1')),'Downloadable connection reporter matches the bundled reviewed script');
 if(in_array('--preview',$argv,true))file_put_contents(__DIR__.'/../tmp/agent-preview.html',$html);
+// JSON remains compatible; form clients use the same field validation, replay checks and no batch actions.
+$formData=[...$sample,'agent_id'=>'03a63ddd-3a79-4a3c-9477-85ceaf920f1d','sampled_at_ms'=>(string)now()->getTimestampMs(),'workspace_exists'=>'0','hot_folder_exists'=>'1','credentials_present'=>'0','batch_id'=>'','reporter_mode'=>'connection_only','diagnostics'=>[...$diag,'checked_at_ms'=>(string)$diag['checked_at_ms'],'defender_enabled'=>'0','error_code'=>''],'last_success'=>['kind'=>'diagnostic','at_ms'=>(string)now()->getTimestampMs()]];
+$formRequest=Request::create('/api/factory/heartbeat','POST',$formData,[],[],['CONTENT_TYPE'=>'application/x-www-form-urlencoded']);
+$formResponse=$controller->heartbeat($formRequest,$monitor);$formAgent=FactoryAgent::where('agent_id',$formData['agent_id'])->first();
+$check($formResponse->getData(true)['ok'] && $formAgent->telemetry['workspace_exists']===false && $formAgent->telemetry['batch_id']===null && $formAgent->telemetry['diagnostics']['defender_enabled']===false && $formAgent->telemetry['diagnostics']['error_code']===null,'URL-encoded telemetry preserves false/null/nested values and runs normal validation');
+$check($formResponse->headers->get('X-LuckyBags-Portal')==='factory-monitor','Portal acknowledgements carry a non-secret origin marker');
+$check(is_int($formAgent->telemetry['diagnostics']['checked_at_ms']) && is_int($formAgent->telemetry['last_success']['at_ms']),'Form timestamps are normalized to numbers for valid browser dates');
+foreach(['diagnostics','last_success','last_failure'] as $field)$reject(fn()=>$monitor->accept([...$sample,$field=>[]]),422);
+$unknown=[...$diag,'checked_at_ms'=>now()->getTimestampMs()];foreach(['workspace_writable','hot_folder_writable','defender_enabled','defender_realtime','defender_scan','drive_connected'] as $key)$unknown[$key]=null;
+$unknownAgent=$monitor->accept([...$sample,'agent_id'=>'75e06346-b94b-4d22-a5df-5b3975d4c20c','sampled_at_ms'=>now()->getTimestampMs(),'diagnostics'=>$unknown]);
+$check($unknownAgent->telemetry['diagnostics']['drive_connected']===null,'Unknown diagnostic results stay null rather than being rejected or marked healthy');
+$jsonData=[...$sample,'agent_id'=>'d805203a-9b26-4e05-a351-d7289e5b5817','sampled_at_ms'=>now()->getTimestampMs()];
+$jsonRequest=Request::create('/api/factory/heartbeat','POST',[],[],[],['CONTENT_TYPE'=>'application/json'],json_encode($jsonData));
+$check($controller->heartbeat($jsonRequest,$monitor)->getData(true)['ok']===true,'Existing JSON heartbeat clients remain compatible');
+$formRequest->request->set('api_key','not-allowed');$reject(fn()=>$controller->heartbeat($formRequest,$monitor),422);
+$textRequest=Request::create('/api/factory/heartbeat','POST',[],[],[],['CONTENT_TYPE'=>'text/plain'],'unsupported');$reject(fn()=>$controller->heartbeat($textRequest,$monitor),415);
+$check($batch->fresh()->toJson()===$before,'Neither heartbeat representation modifies a batch or starts a download/print');
 Illuminate\Support\Facades\Schema::drop('factory_agents');
 $check(!$controller->health($monitor)->getData(true)['monitoring_ready'] && $monitor->connection()['state']==='unavailable','Health remains read-only and usable before the monitoring migration');
 echo "$checks factory monitoring checks passed.\n";
