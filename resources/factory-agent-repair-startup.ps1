@@ -30,6 +30,10 @@ if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
 $Python = Join-Path $Root '.venv\Scripts\python.exe'
 $ConsoleHost = Join-Path $env:SystemRoot 'System32\conhost.exe'
 if (!(Test-Path -LiteralPath $Python -PathType Leaf) -or !(Test-Path -LiteralPath $ConsoleHost -PathType Leaf)) { throw 'The existing Python environment and Windows console host are required.' }
+# Disable only future triggers during maintenance; never terminate a running job.
+$ExistingTask = Get-ScheduledTask -TaskName LuckyBagsFactoryAgent -ErrorAction SilentlyContinue
+if ($ExistingTask) { Disable-ScheduledTask -TaskName LuckyBagsFactoryAgent | Out-Null }
+Assert-AgentStopped $Root
 & $Python -I (Join-Path $Root 'factory_agent.py') --check
 Assert-NativeExit 'Configuration check'
 # Explicit headless console host prevents Windows Terminal from opening/owning the listener.

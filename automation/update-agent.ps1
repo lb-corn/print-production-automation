@@ -25,6 +25,10 @@ try {
         $Target = Join-Path $Root $Name
         if ((Test-Path -LiteralPath $Target) -and ((Get-Item -LiteralPath $Target).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'UPDATE BLOCKED: destination is a link.' }
     }
+    # Recovery triggers must not launch the listener while code is being replaced.
+    $ExistingTask = Get-ScheduledTask -TaskName LuckyBagsFactoryAgent -ErrorAction SilentlyContinue
+    if ($ExistingTask) { Disable-ScheduledTask -TaskName LuckyBagsFactoryAgent | Out-Null }
+    Assert-AgentStopped $Root
     # Keep a source-only rollback copy; never copy credentials or runtime state into backups.
     $Backup = Join-Path $Root ('backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path $Backup | Out-Null
