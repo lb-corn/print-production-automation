@@ -7,9 +7,11 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 
 class AppServiceProvider extends ServiceProvider {
- public function register():void {$this->app->scoped(\App\Services\ProductionService::class);}
+ public function register():void {$this->app->scoped(\App\Services\ProductionService::class);$this->app->scoped(\App\Services\FactoryDispatchService::class);}
  public function boot():void {
   RateLimiter::for('factory-health',fn(Request $request)=>Limit::perMinute(30)->by('factory-health:'.$request->ip()));
+  RateLimiter::for('factory-work',fn(Request $request)=>Limit::perMinute(60)->by('factory-work:'.$request->ip()));
+  RateLimiter::for('factory-progress',fn(Request $request)=>Limit::perMinute(60)->by('factory-progress:'.($request->user()?->id??$request->ip())));
   RateLimiter::for('factory-status',fn(Request $request)=>Limit::perMinute(60)->by('factory-status:'.($request->user()?->id??$request->ip())));
   RateLimiter::for('factory-connection',fn(Request $request)=>Limit::perMinute(60)->by('factory-connection:'.($request->user()?->id??$request->ip())));
   RateLimiter::for('factory-heartbeat',fn(Request $request)=>Limit::perMinute(60)->by('factory-heartbeat:'.$request->ip()));

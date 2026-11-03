@@ -29,4 +29,19 @@ class FactoryMonitoringController extends Controller {
         abort_unless($request->user()?->role==='admin',403);
         return response()->download(resource_path('factory-agent-report-connection.ps1'),'report-connection.ps1',['Cache-Control'=>'no-store']);
     }
+    public function processing(Request $request,\App\Models\FactoryAgent $agent,\App\Services\FactoryDispatchService $dispatch){
+        abort_unless($request->user()?->role==='admin',403);
+        $data=$request->validate(['enabled'=>'required|boolean','confirm_control'=>'required|accepted']);
+        $dispatch->configure($agent,(bool)$data['enabled'],$request->user()->id);
+        return redirect()->route('admin.settings',['section'=>'agent'])->with('ok',$data['enabled']?'Portal jobs enabled for this Factory PC. Only authorized queue requests and signed handoffs can launch work.':'New jobs paused. An operation already running may finish safely; this does not stop a physical print.');
+    }
+    public function portalPackage(Request $request){
+        abort_unless($request->user()?->role==='admin',403);
+        abort_unless(is_file(resource_path('factory-agent-install.zip')),404,'Managed agent package is not available.');
+        return response()->download(resource_path('factory-agent-install.zip'),'LuckyBags-Factory-Agent.zip',['Cache-Control'=>'no-store']);
+    }
+    public function portalSetup(Request $request){
+        abort_unless($request->user()?->role==='admin',403);
+        return response()->download(resource_path('factory-agent-install-portal-control.ps1'),'install-portal-control.ps1',['Cache-Control'=>'no-store']);
+    }
 }

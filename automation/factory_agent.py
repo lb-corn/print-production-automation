@@ -42,6 +42,8 @@ REQ_VER = os.getenv('REQUIRED_AGENT_VERSION', '').strip()
 MIME_TYPES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
               '.tif': 'image/tiff', '.tiff': 'image/tiff', '.pdf': 'application/pdf'}
 STOP = False
+PORTAL_MODE = False
+ACTIVE_OPERATION = None
 log = logging.getLogger('factory-agent')
 SESSION = requests.Session()
 # Never obtain credentials/proxies from .netrc or ambient proxy environment settings.
@@ -247,7 +249,14 @@ def safe(value):
 
 def api(method, path, **kwargs):
     # No redirects: a remote service cannot redirect the shared API key elsewhere.
-    with SESSION.request(method, BASE + path, headers={'Authorization': f'Bearer {KEY}', 'Accept': 'application/json'},
+    headers = {'Authorization': f'Bearer {KEY}', 'Accept': 'application/json, */*;q=0.5', 'User-Agent': 'LuckyBags-Factory-Agent/1'}
+    if PORTAL_MODE:
+        headers['X-Factory-Agent-ID'] = stable_agent_id()
+        if ACTIVE_OPERATION:
+            headers['X-Factory-Operation'] = ACTIVE_OPERATION['token']
+    if 'json' in kwargs:
+        kwargs['data'] = monitoring_form(kwargs.pop('json'))
+    with SESSION.request(method, BASE + path, headers=headers,
                          timeout=(10, 60), allow_redirects=False, stream=True, **kwargs) as response:
         if response.status_code in range(300, 400):
             raise RuntimeError('API redirect blocked; configure the final HTTPS API URL')
@@ -261,11 +270,11 @@ def api(method, path, **kwargs):
         return json.loads(body) if body else {}
 
 
-def status(batch_id, state):
+def status(batch_id, state, error_code=None):
     if not isinstance(batch_id, int) or batch_id <= 0:
         raise ValueError('Invalid batch database ID')
-    result = api('POST', f'/factory/batches/{batch_id}/status', json={'status': state})
-    monitor_state(batch_id=batch_id, stage={'CLAIMED': 'validating', 'DOWNLOADING': 'downloading', 'PREPARED': 'prepared', 'SENT_TO_RIP': 'sent_to_rip', 'FAILED': 'error'}[state])
+    result = api('POST', f'/factory/batches/{batch_id}/status', json={'status': state, **({'error_code': error_code} if error_code else {})})
+    monitor_state(batch_id=batch_id, stage={'CLAIMED': 'validating', 'DOWNLOADING': 'downloading', 'PREPARED': 'prepared', 'DELIVERING': 'handoff', 'SENT_TO_RIP': 'sent_to_rip', 'FAILED': 'error'}[state])
     return result
 
 
@@ -404,21 +413,32 @@ def download(service, file, destination):
             done = False
             while not done:
                 _, done = downloader.next_chunk(num_retries=2)
+                with MONITOR_LOCK:
+                    progress = dict(MONITOR_STATE.get('progress', {}))
+                if progress:
+                    monitor_state(progress={**progress, 'phase': 'downloading', 'bytes_done': handle.tell(), 'bytes_total': size})
                 if handle.tell() > MAX_FILE_BYTES:
                     raise ValueError('Artwork exceeds download limit')
         if temporary.stat().st_size != size or digest(temporary, 'md5') != metadata['md5Checksum']:
             raise ValueError('Drive download integrity mismatch')
         temporary.replace(destination)
         check_magic(destination)
+        if progress:
+            monitor_state(progress={**progress, 'phase': 'scanning', 'bytes_done': size, 'bytes_total': size})
         scan_file(destination)
     finally:
         if temporary.exists():
             temporary.unlink()
 
 
-def prepare(batch):
+def prepare(batch, already_claimed=False):
     files = validate_batch(batch)
-    status(batch['id'], 'CLAIMED')  # Server performs an atomic QUEUED -> CLAIMED transition.
+    if already_claimed:
+        if not PORTAL_MODE or not ACTIVE_OPERATION or batch['status'] != 'CLAIMED':
+            raise ValueError('Assigned worker requires a bound claim')
+    else:
+        status(batch['id'], 'CLAIMED')  # Server performs an atomic QUEUED -> CLAIMED transition.
+    monitor_state(progress={'completed': 0, 'total': len(files), 'phase': 'downloading'})
     folder = batch_folder(batch)
     try:
         if folder.exists():
@@ -426,16 +446,17 @@ def prepare(batch):
         folder.mkdir(parents=True)
         status(batch['id'], 'DOWNLOADING')
         service = drive()
-        for file in files:
+        for index, file in enumerate(files):
             destination = contained(folder, file['relative'])
             download(service, file, destination)
             file['sha256'] = digest(destination)
             file['bytes'] = destination.stat().st_size
+            monitor_state(progress={'completed': index + 1, 'total': len(files), 'phase': 'scanning'})
         write_json(folder / 'batch.json', {'agent_version': VERSION, 'payload_sha256': payload_hash(batch), 'files': files})
         status(batch['id'], 'PREPARED')
         log.info('Batch %s prepared: %s artwork files', batch['id'], len(files))
-    except Exception:
-        mark_failed(batch)
+    except Exception as exc:
+        mark_failed(batch, failure_code(exc))
         raise
 
 
@@ -467,9 +488,28 @@ def verify_prepared_batch(batch, with_hashes=False):
     return folder, result
 
 
-def mark_failed(batch):
+def failure_code(exc):
+    # Classify locally; raw paths, remote responses and exception text never enter telemetry.
+    text = str(exc).lower()
+    if 'defender' in text or isinstance(exc, subprocess.TimeoutExpired):
+        return 'defender_unavailable'
+    if 'multi-set' in text:
+        return 'quantity_unsupported'
+    if any(word in text for word in ('interrupted', 'inspection', 'already exists', 'existing batch')):
+        return 'manual_inspection_required'
+    if any(word in text for word in ('checksum', 'hash mismatch', 'differs', 'changed', 'substituted')):
+        return 'artwork_changed'
+    if 'hot folder' in text or 'hot-folder' in text:
+        return 'handoff_unavailable'
+    return 'batch_operation_failed'
+
+
+def mark_failed(batch, error_code=None):
     try:
-        status(batch['id'], 'FAILED')
+        if error_code:
+            status(batch['id'], 'FAILED', error_code)
+        else:
+            status(batch['id'], 'FAILED')
     except Exception:
         log.error('Could not report failure for batch %s; operator must inspect server state', batch['id'])
 
@@ -482,6 +522,7 @@ def handoff(batch):
             raise ValueError('Recorded human handoff confirmation is required')
         folder, verified = verify_prepared_batch(batch, with_hashes=True)
         sources = [source for source, _ in verified]
+        monitor_state(progress={'completed': 0, 'total': len(sources), 'phase': 'publishing'})
         journal = contained(folder, 'handoff.json')
         # Once publication starts, never automatically republish even if Edge Print consumes files.
         if journal.exists():
@@ -498,7 +539,7 @@ def handoff(batch):
             if digest(no_reparse(source)) != approved_hash:
                 raise ValueError('Prepared artwork changed during scanning')
         write_json(journal, {'state': 'publishing', 'payload_sha256': payload_hash(batch)})
-        for source, approved_hash in verified:
+        for index, (source, approved_hash) in enumerate(verified):
             destination = contained(Path(HOT), safe(batch['batch_id'][:50] + '_' + source.parent.name[:20] + '_' + source.stem[:40]) + source.suffix)
             if destination.exists():
                 raise ValueError('Hot-folder destination already exists; operator review required')
@@ -510,11 +551,12 @@ def handoff(batch):
             if digest(temporary) != approved_hash:
                 raise ValueError('Hot-folder copy hash mismatch')
             temporary.rename(destination)
+            monitor_state(progress={'completed': index + 1, 'total': len(sources), 'phase': 'publishing'})
         write_json(journal, {'state': 'published', 'payload_sha256': payload_hash(batch)})
         status(batch['id'], 'SENT_TO_RIP')
         log.info('Batch %s handed to Edge Print; operator must start physical printing', batch['id'])
-    except Exception:
-        mark_failed(batch)
+    except Exception as exc:
+        mark_failed(batch, failure_code(exc))
         raise
 
 
@@ -549,22 +591,139 @@ def once():
 def configure_logging():
     path = no_reparse(HERE / 'logs')
     path.mkdir(exist_ok=True)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', handlers=[
-        RotatingFileHandler(path / 'factory-agent.log', maxBytes=2 * 1024 * 1024, backupCount=5, encoding='utf-8'),
-        logging.StreamHandler(),
-    ])
+    handlers = [RotatingFileHandler(path / 'factory-agent.log', maxBytes=2 * 1024 * 1024, backupCount=5, encoding='utf-8')]
+    if sys.stderr is not None:
+        handlers.append(logging.StreamHandler())
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s', handlers=handlers)
+
+
+def launch_assigned_worker(operation):
+    batch_id = operation.get('batch_id')
+    if type(batch_id) is not int or not 0 < batch_id <= 2147483647 or operation.get('phase') not in {'prepare', 'handoff'}:
+        raise ValueError('Invalid assigned operation')
+    token = str(uuid.UUID(operation['token']))
+    return subprocess.Popen([sys.executable, '-I', str(HERE / 'factory_agent.py'), '--managed-job', str(batch_id), token],
+                            shell=False, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+
+
+def acquire_lock(name):
+    handle = open(contained(OUT, name), 'a+b')
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            handle.seek(0); handle.write(b'0'); handle.flush(); handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return handle
+    except Exception:
+        handle.close()
+        raise
+
+
+def worker_available():
+    try:
+        handle = acquire_lock('.agent.lock')
+        handle.close()
+        return True
+    except (OSError, IOError):
+        return False
+
+
+def report_interrupted(operation):
+    global ACTIVE_OPERATION
+    ACTIVE_OPERATION = operation
+    try:
+        status(operation['batch_id'], 'FAILED', 'manual_inspection_required')
+    except Exception:
+        log.error('Worker outcome uncertain; inspection required before any retry')
+    finally:
+        ACTIVE_OPERATION = None
+
+
+def listen_for_portal():
+    # One local journal prevents relaunch after an uncertain HTTP response or process crash.
+    journal = contained(OUT, 'portal-operation.json')
+    child = None
+    operation = None
+    while not STOP:
+        try:
+            if child is not None:
+                if child.poll() is None:
+                    time.sleep(1)
+                    continue
+                if child.returncode:
+                    report_interrupted(operation)
+                child = None
+                monitor_state(reporter_mode='listener', process_status='running', stage='idle', batch_id=None)
+                with MONITOR_LOCK:
+                    MONITOR_STATE.pop('progress', None)
+            if not worker_available():
+                time.sleep(5)
+                continue
+            send_heartbeat()
+            candidate = api('GET', '/factory/work').get('job')
+            if candidate:
+                batch_id, phase = candidate['id'], candidate['phase']
+                if type(batch_id) is not int or batch_id <= 0 or phase not in {'prepare', 'handoff'}:
+                    raise ValueError('Invalid work offer')
+                previous = {}
+                if journal.exists():
+                    if journal.stat().st_size > 4096:
+                        raise ValueError('Invalid operation journal')
+                    previous = json.loads(journal.read_text(encoding='utf-8'))
+                if previous.get('batch_id') == batch_id and previous.get('phase') == phase:
+                    monitor_state(stage='error', batch_id=batch_id)
+                    record_operation('poll', 'manual_inspection_required')
+                else:
+                    write_json(journal, {'batch_id': batch_id, 'phase': phase, 'state': 'requesting'})
+                    operation = api('POST', f'/factory/batches/{batch_id}/begin-work', json={'phase': phase})['operation']
+                    write_json(journal, {**operation, 'state': 'starting'})
+                    try:
+                        child = launch_assigned_worker(operation)
+                    except Exception:
+                        report_interrupted(operation)
+                        raise
+        except Exception as exc:
+            record_operation('poll', 'api_unreachable')
+            log.warning('Portal listener could not complete a check (%s); no automatic retry of a started phase', type(exc).__name__)
+        for _ in range(5):
+            if STOP:
+                break
+            time.sleep(1)
+
+
+def assigned_once(batch_id):
+    batch = api('GET', f'/factory/batches/{batch_id}/assigned')['batch']
+    validate_batch(batch)
+    if batch['id'] != batch_id:
+        raise ValueError('Assigned batch mismatch')
+    monitor_state(batch_id=batch_id, stage='validating')
+    if batch['status'] == 'CLAIMED':
+        prepare(batch, already_claimed=True)
+    elif batch['status'] == 'HANDOFF_REQUESTED':
+        status(batch_id, 'DELIVERING')  # Atomic phase barrier before touching the RIP.
+        handoff(batch)
+    else:
+        raise ValueError('Assigned phase is no longer eligible')
 
 
 def main():
-    global STOP
+    global STOP, PORTAL_MODE, ACTIVE_OPERATION
     arguments = sys.argv[1:]
-    if len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose'} for arg in arguments):
+    managed = len(arguments) == 3 and arguments[0] == '--managed-job' and arguments[1].isdigit() and 0 < int(arguments[1]) <= 2147483647
+    if managed:
+        try:
+            ACTIVE_OPERATION = {'batch_id': int(arguments[1]), 'token': str(uuid.UUID(arguments[2]))}
+        except ValueError:
+            raise SystemExit(2)
+    if not managed and (len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose', '--listen'} for arg in arguments)):
         print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
         raise SystemExit(2)
-    arguments = sys.argv[1:]
-    if len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose'} for arg in arguments):
-        print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
-        raise SystemExit(2)
+    PORTAL_MODE = managed or '--listen' in arguments
+    if PORTAL_MODE:
+        monitor_state(reporter_mode='managed_worker' if managed else 'listener')
     if '--health' in sys.argv or '--diagnose' in sys.argv:
         try:
             health = monitor_request('GET', '/factory/health')
@@ -600,14 +759,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     configure_logging()
     # OS file lock prevents two local instances claiming/copying the same jobs.
-    lock = open(contained(OUT, '.agent.lock'), 'a+b')
-    if os.name == 'nt':
-        import msvcrt
-        lock.seek(0); lock.write(b'0'); lock.flush(); lock.seek(0)
-        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-    else:
-        import fcntl
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lock = acquire_lock('.listener.lock' if '--listen' in arguments else '.agent.lock')
     def stop(*_):
         global STOP
         STOP = True
@@ -616,9 +768,27 @@ def main():
     if '--check' in sys.argv:
         log.info('Configuration check passed; no API requests or print jobs sent')
         return
+    if '--listen' in arguments:
+        listen_for_portal()
+        monitor_state(process_status='stopping')
+        try:
+            send_heartbeat()
+        except Exception:
+            pass
+        return
     MONITOR_STOP.clear()
     monitor = threading.Thread(target=heartbeat_loop, name='factory-heartbeat', daemon=True)
     monitor.start()
+    if managed:
+        try:
+            assigned_once(ACTIVE_OPERATION['batch_id'])
+        except Exception as exc:
+            log.error('Assigned operation failed (%s); inspection required', type(exc).__name__)
+            report_interrupted(ACTIVE_OPERATION)
+            raise SystemExit(1)
+        finally:
+            finish_monitor(monitor)
+        return
     while not STOP:
         try:
             worked = once()
