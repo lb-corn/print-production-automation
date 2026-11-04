@@ -30,7 +30,7 @@ class MaterialCatalog
     public function map():array {return array_map(fn($r)=>[$r['front'],$r['back']],$this->rows());}
     public function row(?string $code):?array {return $this->rows()[strtoupper((string)$code)]??null;}
     public function materials():array {
-        $names=[];foreach($this->rows() as $row){$names[]=$row['front'];$names[]=$row['back'];}
+        $names=[];foreach($this->rows() as $row){$names[]=$row['front'];if($row['back']!=='')$names[]=$row['back'];}
         $names=array_values(array_unique($names));natcasesort($names);return array_values($names);
     }
     public function fingerprint():string {return hash('sha256',json_encode($this->rows()));}
@@ -50,7 +50,7 @@ class MaterialCatalog
                 if(count($values)!==count($header))throw new \RuntimeException('Invalid row');
                 $row=array_combine($header,array_map(fn($v)=>trim((string)$v),$values));$code=strtoupper($row['bag code']);
                 if(!preg_match('/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/',$code) || isset($result[$code]) || !in_array(strtolower($row['type']),['single','double'],true))throw new \RuntimeException('Invalid bag code or type');
-                foreach($required as $key)if($row[$key]==='' || strlen($row[$key])>100 || preg_match('/[\x00-\x1F\x7F]/',$row[$key]))throw new \RuntimeException('Invalid cell');
+                foreach($required as $key)if(($row[$key]==='' && !($key==='back material' && strtolower($row['type'])==='single')) || strlen($row[$key])>100 || preg_match('/[\x00-\x1F\x7F]/',$row[$key]))throw new \RuntimeException('Invalid cell');
                 $result[$code]=['name'=>$row['bag name'],'front'=>$row['front material'],'back'=>$row['back material'],'type'=>strtolower($row['type']),'template_size'=>$row['template size']];
             }
             if(!$result)throw new \RuntimeException('Empty material sheet');

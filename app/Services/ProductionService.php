@@ -62,7 +62,7 @@ class ProductionService{
     if($item->design_type==='single' && !empty($item->backing_material)){$name=$item->backing_material;$nonprint[$name]['sides']=($nonprint[$name]['sides']??0)+$quantity;}
     continue;
    }
-   $materials = isset($item->artworks)?array_column($item->artworks,'material'):($this->materials()[$item->series_code] ?? null);
+   $materials = $this->materials()[$item->series_code] ?? null;
    // Never publish a partial material total for an unsupported item.
    if (!$materials || !in_array($item->design_type, ['single','double'], true) || $quantity < 1) {
     throw new \LogicException('Cannot calculate material for production item '.$item->line_item_id.'. Check series, design type and quantity.');
@@ -73,7 +73,7 @@ class ProductionService{
    $files += $single ? 1 : 2;
    $front = $materials[0]; $back = $materials[1]??($item->backing_material??null);
    $printable[$front]['sides'] = ($printable[$front]['sides'] ?? 0) + $quantity;
-   if ($single && $back) $nonprint[$back]['sides'] = ($nonprint[$back]['sides'] ?? 0) + $quantity;
+   if ($single) {if($back)$nonprint[$back]['sides'] = ($nonprint[$back]['sides'] ?? 0) + $quantity;}
    else $printable[$back]['sides'] = ($printable[$back]['sides'] ?? 0) + $quantity;
   }
   // Sum integer side counts first and round once for each material.

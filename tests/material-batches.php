@@ -4,7 +4,7 @@ use App\Services\{MaterialCatalog,PrintLabelService};
 use App\Models\{ProductionItem,PrintBatch};
 $catalog=new MaterialCatalog();$csv=file_get_contents(__DIR__.'/fixtures/lucky-bags-materials.csv');$rows=$catalog->parse($csv);
 $check($rows['PSN']['front']==='Rave9' && $rows['PSN']['back']==='Turbo6' && $rows['SRF']['type']==='double','Live sheet fixture preserves exact front/back assignments and single/double type');
-foreach([str_replace('"PSN"','"PSE"',$csv),str_replace('"Double"','"Unknown"',$csv),str_replace('"Front Material"','"Front Fabric"',$csv)] as $invalid){try{$catalog->parse($invalid);throw new LogicException('Invalid sheet accepted');}catch(RuntimeException $e){$check(!($e instanceof LogicException),'Duplicate codes, invalid type or missing required columns block material loading');}}
+foreach([str_replace('"PSN"','"PSE"',$csv),str_replace('"Double"','"Unknown"',$csv),str_replace('"Turbo6"','""',$csv),str_replace('"Front Material"','"Front Fabric"',$csv)] as $invalid){try{$catalog->parse($invalid);throw new LogicException('Invalid sheet accepted');}catch(RuntimeException $e){$check(!($e instanceof LogicException),'Duplicate codes, invalid type or missing required columns block material loading');}}
 Illuminate\Support\Facades\Http::fake(['docs.google.com/*'=>Illuminate\Support\Facades\Http::sequence()->push($csv)->push(str_replace('"Rave9"','"NewFabric"',$csv))->push('unavailable',503)]);
 $live=new MaterialCatalog();$first=$live->rows(true);$second=$live->rows(true);
 $check($first['PSN']['front']==='Rave9' && $second['PSN']['front']==='NewFabric','Processing refresh reads updated sheet data instead of a hardcoded or stale fallback');
@@ -48,5 +48,7 @@ $v2=$publicJobs->first();$check($dispatch->readiness($v2)['state']==='agent_upda
 $begin=Illuminate\Http\Request::create('/begin','POST',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);$reject(fn()=>$dispatch->begin($begin,$v2,'prepare'),409);
 $v1=clone $v2;$payload=$v1->payload;$payload['print_label_policy']='BOTTOM_WHITE_V1';$v1->payload=$payload;
 $check($dispatch->readiness($v1)['state']==='ready','Previously approved V1 batches keep their original compatible agent minimum');
+$fixture->csv=str_replace('"Vmt"','""',$csv);$optional=$svc->summary(collect([new ProductionItem(['line_item_id'=>'optional-back','series_code'=>'PSE','design_type'=>'single','quantity'=>1])]));
+$check($optional['nonprint_yards']===0.0 && $optional['printable_sides']===1 && !isset($optional['printable_materials']['']),'Single-sided bags do not require a back print material or create empty material rows');
 file_put_contents(__DIR__.'/../tmp/material-batch-payloads.json',json_encode(array_map(fn($j)=>$j->toArray(),$jobs)));
 echo "$checks combined live-material and split-batch checks passed.\n";
