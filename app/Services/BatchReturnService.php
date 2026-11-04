@@ -6,7 +6,33 @@ use Illuminate\Support\Facades\DB;
 
 class BatchReturnService
 {
-    public function returnItemToReview(PrintBatch $batch,ProductionItem $item,int $actor): int { return $this->returnItems($batch,$actor,$item->line_item_id); }
+    public function returnItemToReview(PrintBatch $batch,ProductionItem $item,int $actor): int { return ($batch->payload['dispatch_group']??null)?$this->returnMaterialItem($batch,$item,$actor):$this->returnItems($batch,$actor,$item->line_item_id); }
+
+    /** Return every material side together, only while every affected batch is untouched. */
+    private function returnMaterialItem(PrintBatch $batch,ProductionItem $item,int $actor):int {
+        return DB::transaction(function()use($batch,$item,$actor){
+            $item=ProductionItem::lockForUpdate()->findOrFail($item->id);
+            $group=$batch->payload['dispatch_group'];
+            $siblings=PrintBatch::where('payload->dispatch_group',$group)->where('status','!=','CANCELLED')->orderBy('id')->lockForUpdate()->get()->filter(fn($b)=>in_array($item->line_item_id,array_column($b->payload['orders']??[],'line_item_id'),true));
+            abort_unless($siblings->contains('id',$batch->id),409,'This item is no longer in an active material batch.');
+            foreach($siblings as $locked)abort_unless($locked->status==='QUEUED' && !$locked->claimed_at && !$locked->completed_at && !$locked->confirmations()->exists() && !$locked->agent_operation_token,409,'A material side has already started. All sides must remain untouched to return this order safely.');
+            foreach(PrintBatch::whereNotIn('id',$siblings->pluck('id'))->where('status','!=','CANCELLED')->get() as $other)abort_if(in_array($item->line_item_id,array_column($other->payload['orders']??[],'line_item_id'),true),409,'This order is also referenced outside its material group. Inspection required.');
+            foreach($siblings as $locked){
+                $remaining=array_values(array_filter($locked->payload['orders'],fn($o)=>$o['line_item_id']!==$item->line_item_id));$replacement=null;
+                if($remaining){
+                    $files=array_sum(array_map(fn($o)=>count($o['artworks']),$remaining));$sides=array_sum(array_map(fn($o)=>count($o['artworks'])*(int)$o['quantity'],$remaining));
+                    $newId='LB-BATCH-'.now('UTC')->format('Ymd-His').'-'.strtoupper(bin2hex(random_bytes(4)));
+                    $payload=[...$locked->payload,'batch_id'=>$newId,'created_at'=>now('UTC')->toIso8601String(),'order_count'=>count($remaining),'artwork_file_count'=>$files,'orders'=>$remaining,'replaces_batch_id'=>$locked->batch_id];
+                    $replacement=PrintBatch::create(['batch_id'=>$newId,'status'=>'QUEUED','order_count'=>count($remaining),'artwork_file_count'=>$files,'total_yards'=>round($sides*ProductionService::YARDS,3),'payload'=>$payload,'created_by'=>$locked->created_by,'automation_requested_at'=>$locked->automation_requested_at,'factory_agent_id'=>$locked->factory_agent_id,'operator_dispatch_enabled'=>$locked->operator_dispatch_enabled]);
+                }
+                $payload=$locked->payload;$payload['returned_to_review']=['user_id'=>$actor,'at'=>now('UTC')->toIso8601String(),'line_item_ids'=>[$item->line_item_id],'scope'=>'all-material-sides','replacement_batch_id'=>$replacement?->id];
+                $locked->update(['status'=>'CANCELLED','payload'=>$payload]);
+            }
+            VerificationDecision::where('line_item_id',$item->line_item_id)->delete();
+            $clear=['matches'=>[],'match_status'=>'MISSING','confidence'=>null];if(ArtworkRematchService::schemaReady())$clear['artwork_review']=null;$item->update($clear);
+            return 1;
+        });
+    }
 
     /** Supersede the untouched snapshot so a stale factory poll can never claim removed items. */
     private function returnItems(PrintBatch $batch,int $actor,string $selected): int

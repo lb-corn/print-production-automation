@@ -2,7 +2,7 @@
 // Run with: php tests/bulk-review.php. Uses an isolated in-memory database.
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function (Throwable $error): void { fwrite(STDERR, 'FAIL: '.$error->getMessage().PHP_EOL); exit(1); });
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
 Illuminate\Support\Facades\DB::purge('sqlite');
@@ -89,7 +89,7 @@ $check($singleSummary['printable_yards']===0.286 && $singleSummary['nonprint_yar
 $doubleSummary=$svc->summary(collect([$materialItem('double','SNP','double',3)]));
 $check($doubleSummary['total_sets']===3 && $doubleSummary['printable_sides']===6 && $doubleSummary['artwork_files']===2 && $doubleSummary['total_yards']===0.858 && $doubleSummary['nonprint_yards']===0.0, 'Three double-sided sets: 6 printed side-sets, 2 artwork files, 0.858 yd');
 $mixed=$svc->summary(collect([$materialItem('one','PSE','single',2),$materialItem('two','SNP','double',3)]));
-$check($mixed['total_yards']===1.43 && $mixed['printable_materials']['Rave 9']['sides']===5 && $mixed['nonprint_materials']['Viewmont 6']['sides']===2, 'Mixed quantities aggregate shared material and separate backing');
+$check($mixed['total_yards']===1.43 && $mixed['printable_materials']['Rave9']['sides']===5 && $mixed['nonprint_materials']['Vmt']['sides']===2, 'Mixed quantities aggregate shared material and separate backing');
 $empty=$svc->summary(collect());
 $check($empty['total_yards']===0.0 && $empty['total_sets']===0, 'Empty queue uses zero material');
 foreach ([$materialItem('bad','UNKNOWN','single',1),$materialItem('badtype','PSE','invalid',1),$materialItem('badqty','PSE','single',0)] as $bad) {

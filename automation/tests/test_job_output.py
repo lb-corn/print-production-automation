@@ -108,3 +108,11 @@ class JobOutputTests(unittest.TestCase):
         jobs=self.store.load();jobs['1']['files'][0]['relative']='../outside.txt';self.store.save(jobs)
         with self.assertRaises(ValueError):self.store.cleanup(proof)
         self.assertTrue(local.exists() and incoming.exists())
+
+    def test_v2_label_is_lower_and_v1_placement_remains_supported(self):
+        source=self.root/'placement.png';Image.new('RGB',(1000,1000),'navy').save(source)
+        old=output.render_label(source,self.root/'v1.tif','LBSH42-RAVE9-WHITE-STONE',10000000,'BOTTOM_WHITE_V1')
+        new=output.render_label(source,self.root/'v2.tif','LBSH42-RAVE9-WHITE-STONE',10000000,'BOTTOM_WHITE_V2')
+        self.assertEqual(old['label_bounds'][3],960)
+        self.assertEqual(new['label_bounds'][3],985)
+        self.assertGreater(new['label_bounds'][1],old['label_bounds'][1])

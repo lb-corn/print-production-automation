@@ -25,9 +25,10 @@ class ProductionController extends Controller
         return view('dashboard.index', [
             'total' => $items->count(),
             'ready' => $ready->count(),
-            'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && !$this->svc->approved($item))->count(),
+            'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && (!$this->svc->approved($item) || !$this->svc->materialCompatible($item)))->count(),
             'custom' => $items->where('is_custom', true)->count(),
             'summary' => $this->svc->summary($ready),
+            'materialCatalogError'=>app(\App\Services\MaterialCatalog::class)->error(),
             'batches' => PrintBatch::latest()->limit(5)->get(),
         ]);
     }
@@ -43,6 +44,7 @@ class ProductionController extends Controller
             return $response;
         } catch (\Throwable $e) {
             if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
+            if ($e instanceof \Illuminate\Validation\ValidationException && isset($e->errors()['materials']))return redirect()->route($destination??'production')->with('error',$e->errors()['materials'][0]);
             report($e);
             return redirect()->route($destination)->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
         }
@@ -59,6 +61,7 @@ class ProductionController extends Controller
                 $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
         } catch (\Throwable $e) {
             if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
+            if ($e instanceof \Illuminate\Validation\ValidationException && isset($e->errors()['materials']))return redirect()->route($destination??'production')->with('error',$e->errors()['materials'][0]);
             report($e);
             return redirect()->route('production')->with('error', 'Artwork rematch failed. No changes were saved. Check the integration logs and try again.');
         }
@@ -176,7 +179,8 @@ class ProductionController extends Controller
         return view('production.queue', [
             'items' => $items,
             'summary' => $this->svc->summary($items),
-            'materials' => ProductionService::MATERIALS,
+            'materials' => $this->svc->materials(),
+            'materialCatalogError'=>app(\App\Services\MaterialCatalog::class)->error(),
             'factoryReadiness'=>app(\App\Services\FactoryDispatchService::class)->readiness(),
             'factoryQueueAvailable'=>app(\App\Services\FactoryDispatchService::class)->consentReady(),
             'materialGroups'=>$items->groupBy(fn($item)=>\App\Services\PrintLabelService::group($item)),
@@ -188,12 +192,12 @@ class ProductionController extends Controller
         if(!app(\App\Services\FactoryDispatchService::class)->consentReady())return redirect()->route('queue')->with('error','Printing is temporarily unavailable until an administrator completes the server database update. Your approved items have not been queued.');
         $data=$request->validate(['items'=>'required|array|min:1|max:1000','items.*'=>'required|integer|distinct','dispatch_confirmed'=>'required|accepted']);
         $batch=\Illuminate\Support\Facades\DB::transaction(function()use($request,$data){
-            $batch=$this->svc->batch($request->user()->id,$data['items']);
-            app(\App\Services\FactoryDispatchService::class)->request($batch);return $batch;
+            $jobs=$this->svc->batchByMaterial($request->user()->id,$data['items']);
+            foreach($jobs as $job)app(\App\Services\FactoryDispatchService::class)->request($job);return $jobs;
         });
 
-        return redirect('/batches/'.$batch->id)
-            ->with('ok', 'Queue request recorded. Track preparation and waiting reasons here. This is not a physical-print confirmation.');
+        return redirect('/batches/'.$batch[0]->id)
+            ->with('ok', count($batch).' material batch(es) queued separately. Each requires its own signed Handoff. Queue request recorded. Track preparation and waiting reasons here. This is not a physical-print confirmation.');
     }
 
     public function workspaceStatus()
@@ -214,7 +218,8 @@ class ProductionController extends Controller
     {
         $itemIds=ProductionItem::whereIn('line_item_id',array_column($batch->payload['orders']??[],'line_item_id'))->pluck('id','line_item_id')->all();
         $factoryProgress=app(\App\Services\FactoryDispatchService::class)->progress($batch);
-        return view('batches.show', compact('batch','itemIds','factoryProgress'));
+        $relatedBatches=collect();if($batch->payload['dispatch_group']??null)$relatedBatches=PrintBatch::where('payload->dispatch_group',$batch->payload['dispatch_group'])->where('status','!=','CANCELLED')->orderBy('id')->get();
+        return view('batches.show', compact('batch','itemIds','factoryProgress','relatedBatches'));
     }
     public function batchProgress(PrintBatch $batch){return response()->json(app(\App\Services\FactoryDispatchService::class)->progress($batch))->header('Cache-Control','no-store');}
     public function requestPreparation(Request $request,PrintBatch $batch){

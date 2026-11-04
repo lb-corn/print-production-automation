@@ -348,6 +348,8 @@ def validate_batch(batch):
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', str(batch.get('batch_id', ''))):
         raise ValueError('Invalid batch name')
     payload = batch.get('payload', {})
+    if payload.get('print_label_policy') not in {None, 'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2'}:
+        raise ValueError('Unsupported print label policy')
     orders = payload.get('orders', [])
     if payload.get('batch_id') != batch['batch_id'] or not 1 <= len(orders) <= 500:
         raise ValueError('Invalid or empty batch payload')
@@ -432,7 +434,7 @@ def download(service, file, destination):
 
 
 def prepare(batch, already_claimed=False):
-    if batch.get('payload', {}).get('print_label_policy') == 'BOTTOM_WHITE_V1':
+    if batch.get('payload', {}).get('print_label_policy') in {'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2'}:
         return prepare_labelled(batch, already_claimed)
     files = validate_batch(batch)
     if already_claimed:
@@ -463,7 +465,7 @@ def prepare(batch, already_claimed=False):
 
 
 def verify_prepared_batch(batch, with_hashes=False):
-    if batch.get('payload', {}).get('print_label_policy') == 'BOTTOM_WHITE_V1':
+    if batch.get('payload', {}).get('print_label_policy') in {'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2'}:
         return verify_labelled(batch, with_hashes)
     expected = validate_batch(batch)
     folder = batch_folder(batch)
@@ -544,7 +546,7 @@ def handoff(batch):
             scan_file(source)
             if digest(no_reparse(source)) != approved_hash:
                 raise ValueError('Prepared artwork changed during scanning')
-        labels = {file['relative']: file['print_label'] for file in labelled_specs(batch)} if batch['payload'].get('print_label_policy') == 'BOTTOM_WHITE_V1' else {}
+        labels = {file['relative']: file['print_label'] for file in labelled_specs(batch)} if batch['payload'].get('print_label_policy') in {'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2'} else {}
         plan = []
         for source, approved_hash in verified:
             relative = str(source.relative_to(folder))
@@ -762,7 +764,8 @@ def labelled_specs(batch):
     for file, artwork in zip(files, artworks):
         original = file['relative']
         result.append({**file, 'source_relative': str(Path('originals') / original),
-                       'relative': str(Path(original).with_suffix('.tif')), 'print_label': artwork.get('print_label', '')})
+                       'relative': str(Path(original).with_suffix('.tif')), 'print_label': artwork.get('print_label', ''),
+                       'print_label_policy': batch['payload'].get('print_label_policy', 'BOTTOM_WHITE_V2')})
     return result
 
 
@@ -770,7 +773,7 @@ def cache_key(file):
     if not file.get('expected_md5') or not file.get('expected_version'):
         return None  # Never reuse unpinned source content.
     identity = {key: file.get(key) for key in ('drive_file_id', 'expected_md5', 'expected_version', 'mime', 'print_label')}
-    identity['policy'] = 'BOTTOM_WHITE_V1'
+    identity['policy'] = file.get('print_label_policy', 'BOTTOM_WHITE_V2')
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -811,7 +814,7 @@ def sync_cache_once():
     failures = {key: value for key, value in failures.items() if isinstance(value, (int, float)) and time.time() - value < 600}
     for order in orders:
         synthetic = {'id': 1, 'batch_id': 'SYNC', 'payload': {'batch_id': 'SYNC', 'order_count': 1,
-                     'artwork_file_count': len(order.get('artworks', [])), 'orders': [order]}}
+                     'artwork_file_count': len(order.get('artworks', [])), 'orders': [order], 'print_label_policy': response.get('print_label_policy', 'BOTTOM_WHITE_V2')}}
         for file in labelled_specs(synthetic):
             key = cache_key(file)
             if not key or key in failures:
@@ -840,7 +843,7 @@ def prepare_sync_file(file, key):
     output = contained(folder, 'print.tif')
     monitor_state(stage='downloading', batch_id=None)
     download(drive(), file, source)
-    label_output = output_module().render_label(source, output, file['print_label'], MAX_FILE_BYTES)
+    label_output = output_module().render_label(source, output, file['print_label'], MAX_FILE_BYTES, file.get('print_label_policy', 'BOTTOM_WHITE_V2'))
     check_magic(output)
     scan_file(output)
     write_json(folder / 'ready.json', {'key': key, 'source_bytes': source.stat().st_size,
@@ -895,7 +898,7 @@ def prepare_labelled(batch, already_claimed=False):
                 file['label_output'] = cached[2]['label_output']
             else:
                 download(service, file, source)
-                file['label_output'] = output_module().render_label(source, destination, file['print_label'], MAX_FILE_BYTES)
+                file['label_output'] = output_module().render_label(source, destination, file['print_label'], MAX_FILE_BYTES, file.get('print_label_policy', 'BOTTOM_WHITE_V2'))
             file['source_sha256'] = digest(source)
             file['source_bytes'] = source.stat().st_size
             check_magic(destination)
@@ -944,7 +947,7 @@ def verify_labelled(batch, with_hashes=False):
 
 def register_retention(batch, folder, verified, plan):
     paths = [source for source, _ in verified] + [folder / 'batch.json', folder / 'handoff.json']
-    if batch['payload'].get('print_label_policy') == 'BOTTOM_WHITE_V1':
+    if batch['payload'].get('print_label_policy') in {'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2'}:
         paths += [contained(folder, file['source_relative']) for file in labelled_specs(batch)]
     output_module().RetainedJobs(OUT, HOT).register(batch, paths, plan)
 

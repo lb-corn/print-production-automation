@@ -11,6 +11,7 @@ class BacklogSyncService
 
     public function sync(): array
     {
+        app(MaterialCatalog::class)->rows(true);
         $hasReview=ArtworkRematchService::schemaReady();
         $this->matcher->refreshReviewedSelections();
         $backlog = $this->shopify->getProductionBacklog();

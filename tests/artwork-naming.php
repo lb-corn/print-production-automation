@@ -1,7 +1,7 @@
 <?php
 // Full naming workflow tests: isolated SQLite, fake integrations and disposable private audit files only.
 require __DIR__.'/../vendor/autoload.php';
-$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function(Throwable $e):void{fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL);exit(1);});
 config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'naming_test','logging.channels.naming_test'=>['driver'=>'monolog','handler'=>Monolog\Handler\NullHandler::class],'services.google_drive.rename_enabled'=>true]);
 Illuminate\Support\Facades\DB::purge('sqlite');

@@ -2,7 +2,7 @@
 // Isolated in-memory database only. Never resets the configured portal database.
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $file) (require $file)->up();
