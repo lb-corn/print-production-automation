@@ -1,0 +1,37 @@
+<?php
+require __DIR__.'/print-job-consent.php';
+use App\Services\PrintLabelService;
+$sample=new App\Models\ProductionItem(['line_item_id'=>'line-9342','order_number'=>'#9342','product'=>'Lucky Bags 2027 Grey Stone','color'=>'Grey','series_code'=>'PSE','design_type'=>'single']);
+$check(PrintLabelService::label($sample,'Rave 9')==='LBSH9342-RAVE9-GREY-GREY-STONE','Print labels use LBSH, order number, printed-side material, color and bag name');
+$sample->color=null;$check(str_contains(PrintLabelService::label($sample,'Rave 9'),'-NA-'),'Missing colors are explicit rather than guessed');
+$request=Illuminate\Http\Request::create('/completion','GET',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);
+$check($factory->completion($request,$job->fresh(),$dispatch)->getData(true)['cleanup_authorized']===false,'Delivery alone never authorizes local file deletion');
+$job->update(['status'=>'PRINTED','completed_at'=>now()]);
+$check($factory->completion($request,$job->fresh(),$dispatch)->getData(true)['cleanup_authorized']===false,'PRINTED without a matching human confirmation cannot authorize deletion');
+$job->update(['status'=>'SENT_TO_RIP']);
+$signed=Illuminate\Http\Request::create('/printed','POST',['signer_name'=>'Test operator','confirmation_phrase'=>'PRINTED','review_confirmed'=>1,'confirmed_order_count'=>$job->order_count,'confirmed_artwork_file_count'=>$job->artwork_file_count,'payload_sha256'=>hash('sha256',json_encode($job->payload))]);$signed->setUserResolver(fn()=>$normal);
+$controller->markPrinted($signed,$job->fresh());$proof=$factory->completion($request,$job->fresh(),$dispatch)->getData(true);
+$check($proof['cleanup_authorized']===true && $proof['payload']===$job->payload && $proof['confirmation_id']>0,'Only a signed immutable physical-print confirmation grants exact-batch cleanup');
+$wrong=Illuminate\Http\Request::create('/completion','GET',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>'a448d851-4aba-42a0-9ba9-f3916c803975']);
+$reject(fn()=>$factory->completion($wrong,$job->fresh(),$dispatch),403);
+$confirmation=$job->confirmations()->where('action','PRINTED')->first();$confirmation->update(['payload_sha256'=>str_repeat('f',64)]);
+$check(!$factory->completion($request,$job->fresh(),$dispatch)->getData(true)['cleanup_authorized'],'Confirmation for changed content does not grant cleanup');
+$agent->refresh()->update(['handoff_blocked'=>false,'telemetry'=>['agent_version'=>'1.4.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$item=$make('requires-label-update');$new=$svc->batch($user->id,[$item->id]);Illuminate\Support\Facades\DB::transaction(fn()=>$dispatch->request($new));
+$check($dispatch->next($id)===null && $dispatch->readiness($new->fresh())['state']==='agent_update_required','Old PC agents cannot silently print jobs without their required labels');
+$r=Illuminate\Http\Request::create('/begin','POST',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);$reject(fn()=>$dispatch->begin($r,$new,'prepare'),409);
+$agent->update(['telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$first=$make('material-one');$other=$make('material-two');$other->update(['series_code'=>'LUC']);$count=App\Models\PrintBatch::count();
+$reject(fn()=>$svc->batch($user->id,[$first->id,$other->id]),422);
+$check(App\Models\PrintBatch::count()===$count,'Mixed printed-material groups cannot be queued together or partially batched');
+echo "$checks combined print-output checks passed.\n";
+
+$syncItem=$make('sync-unapproved');$match=$syncItem->matches;$match[0]['md5Checksum']=str_repeat('a',32);$match[0]['version']='7';$syncItem->update(['order_number'=>'#42','color'=>'White','matches'=>$match]);
+$syncItem->decision()->delete();
+$metadata=$factory->syncArtwork($request,$dispatch)->getData(true);
+$found=collect($metadata['orders'])->firstWhere('line_item_id','sync-unapproved');
+$check($found && $found['artworks'][0]['print_label']==='LBSH42-RAVE9-WHITE-SELECTED-ARTWORK','Synced matched orders can request private PC labels before approval, with pinned Drive metadata only');
+$check(!str_contains(json_encode($metadata),'data:image') && !isset($metadata['images']),'Sync artwork API carries no image binaries or hosted image files');
+$syncItem->update(['is_custom'=>true]);
+$check(!collect($factory->syncArtwork($request,$dispatch)->getData(true)['orders'])->firstWhere('line_item_id','sync-unapproved'),'Custom or unresolved artwork is not automatically prepared');
+echo "$checks combined metadata-only sync checks passed.\n";

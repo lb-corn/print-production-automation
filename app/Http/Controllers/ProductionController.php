@@ -179,6 +179,7 @@ class ProductionController extends Controller
             'materials' => ProductionService::MATERIALS,
             'factoryReadiness'=>app(\App\Services\FactoryDispatchService::class)->readiness(),
             'factoryQueueAvailable'=>app(\App\Services\FactoryDispatchService::class)->consentReady(),
+            'materialGroups'=>$items->groupBy(fn($item)=>\App\Services\PrintLabelService::group($item)),
         ]);
     }
 
