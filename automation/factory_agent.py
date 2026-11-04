@@ -137,9 +137,9 @@ def heartbeat_loop():
         MONITOR_STOP.wait(30)
 
 
-def finish_monitor(monitor):
+def finish_monitor(monitor, listener_alive=False):
     MONITOR_STOP.set()
-    monitor_state(process_status='stopping')
+    monitor_state(process_status='running' if listener_alive else 'stopping', **({'stage': 'idle', 'batch_id': None} if listener_alive else {}))
     monitor.join(timeout=1)
     if not monitor.is_alive():
         try:
@@ -1064,7 +1064,7 @@ def main():
         except Exception as exc:
             log.warning('Background sync artwork deferred (%s); no hot-folder files changed', type(exc).__name__)
         finally:
-            finish_monitor(monitor)
+            finish_monitor(monitor, listener_alive=True)
         return
     if managed:
         try:

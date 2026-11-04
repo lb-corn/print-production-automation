@@ -74,3 +74,16 @@ class LabelledPipelineTests(unittest.TestCase):
                 self.assertIsNone(agent.cached_artwork(changed))
                 cached[1].write_bytes(b'tampered')
                 with self.assertRaises(ValueError):agent.cached_artwork(file)
+
+    def test_failed_sync_image_backs_off_without_starving_the_next_order(self):
+        with tempfile.TemporaryDirectory(prefix='lb-sync-failure-') as temporary:
+            root=Path(temporary)
+            def order(number):
+                return {'line_item_id':str(number),'order':str(number),'quantity':1,'artworks':[{'side':'PRINT',
+                        'material':'Rave 9','filename':'source.png','drive_file_id':'drive_source_'+str(number),
+                        'md5_checksum':'a'*32,'drive_version':'1','print_label':'LBSH'+str(number)+'-RAVE9-WHITE-STONE'}]}
+            with patch.object(agent,'OUT',root),patch.object(agent,'api',return_value={'orders':[order(1),order(2)],'next_after':0}),patch.object(agent,'cached_artwork',return_value=None),patch.object(agent,'prepare_sync_file',side_effect=[ValueError('label invalid'),None]) as prepare:
+                agent.sync_cache_once()
+                agent.sync_cache_once()
+                self.assertEqual(prepare.call_count,2)
+                self.assertNotEqual(prepare.call_args_list[0].args[1],prepare.call_args_list[1].args[1])
