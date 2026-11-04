@@ -105,3 +105,13 @@ class MonitoringTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+class ApiEncodingTests(unittest.TestCase):
+    def test_custom_transfer_api_keeps_json_while_heartbeat_uses_legacy_form(self):
+        response=Mock();response.ok=True;response.status_code=200;response.iter_content.return_value=[b'{}']
+        context=Mock();context.__enter__=Mock(return_value=response);context.__exit__=Mock(return_value=False)
+        with patch.object(agent,'PORTAL_MODE',False),patch.object(agent.SESSION,'request',return_value=context) as request:
+            agent.api('POST','/factory/custom-transfers/test/report',json={'state':'READY','receipt':{'width':1000}})
+            self.assertIn('json',request.call_args.kwargs);self.assertNotIn('data',request.call_args.kwargs)
+            agent.api('POST','/factory/heartbeat',json={'workspace_exists':False})
+            self.assertIn('data',request.call_args.kwargs);self.assertNotIn('json',request.call_args.kwargs)

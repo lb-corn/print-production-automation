@@ -31,10 +31,10 @@
 <div class="toolbar design-toolbar" aria-label="Filter by design type">
 <span>Design type</span>
 <div>
-<button type="button" data-filter="all" data-filter-group="type" class="chip active">All designs</button>
-<button type="button" data-filter="single" data-filter-group="type" class="chip">Single side</button>
-<button type="button" data-filter="double" data-filter-group="type" class="chip">Double side</button>
-<button type="button" data-filter="custom" data-filter-group="type" class="chip">Custom</button>
+<button type="button" data-filter="all" data-filter-group="type" class="chip active">All designs <span class="design-count" data-design-count="all">{{$items->count()}}</span></button>
+<button type="button" data-filter="single" data-filter-group="type" class="chip">Single side <span class="design-count" data-design-count="single">{{$items->filter(fn($i)=>!$i->is_custom && $i->design_type==='single')->count()}}</span></button>
+<button type="button" data-filter="double" data-filter-group="type" class="chip">Double side <span class="design-count" data-design-count="double">{{$items->filter(fn($i)=>!$i->is_custom && $i->design_type==='double')->count()}}</span></button>
+<button type="button" data-filter="custom" data-filter-group="type" class="chip">Custom <span class="design-count" data-design-count="custom">{{$items->where('is_custom',true)->count()}}</span></button>
 </div>
 </div>
 @if(auth()->user()?->role !== 'demo')<form id="bulk-review" class="bulk-toolbar" method="post" action="{{route('production.bulk-verify')}}">
@@ -142,7 +142,8 @@
 <button class="approve">✓ Approve artwork</button>
 </form>
 </div>
-@elseif(!$item->production_batch)<span class="muted">{{$item->is_custom?'Custom artwork approval pending':'No valid production artwork selected'}}</span>
+@elseif(!$item->production_batch && $item->is_custom)<span class="muted">Confirm the uploaded artwork above.</span>
+@elseif(!$item->production_batch)<span class="muted">No valid production artwork selected</span>
 <button class="approve" disabled>Approve artwork</button>
 @endif</div>
 </details>

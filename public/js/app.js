@@ -1,5 +1,12 @@
 const filters = document.querySelectorAll('[data-filter]');
 const cards = document.querySelectorAll('.verification-cards .job-card');
+function updateDesignCounts() {
+    const state=document.querySelector('[data-filter-group="state"].active')?.dataset.filter || 'any';
+    const totals={all:0,single:0,double:0,custom:0};
+    cards.forEach(card=>{if(state!=='any' && card.dataset.workflow!==state)return;totals.all++;if(card.dataset.custom==='yes')totals.custom++;else if(card.dataset.type in totals)totals[card.dataset.type]++;});
+    document.querySelectorAll('[data-design-count]').forEach(count=>count.textContent=totals[count.dataset.designCount]??0);
+}
+updateDesignCounts();
 filters.forEach(button => {
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
     button.addEventListener('click', () => {
@@ -16,6 +23,7 @@ filters.forEach(button => {
             card.hidden = !(matchesType && (state === 'any' || card.dataset.workflow === state));
             if (!card.hidden) visible++;
         });
+        updateDesignCounts();
         const empty = document.querySelector('[data-filter-empty]');
         if (empty) empty.hidden = visible > 0 || cards.length === 0;
     });
@@ -91,6 +99,7 @@ function applyReviewResult(result) {
         const total = document.querySelector(`.review-total.${state} strong`);
         if (total) total.textContent = count;
     }
+    updateDesignCounts();
     if (result.workspace) updateWorkspaceStats(result.workspace);
     updateSelection();
 }

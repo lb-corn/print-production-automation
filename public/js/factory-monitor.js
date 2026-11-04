@@ -76,17 +76,14 @@
                 form.append(button);controls.append(form);card.append(controls);
             }
 
-            const installed=(t.agent_version||'0.0.0').split('.').map(Number);
-            const needsOutputUpdate=installed[0]<1 || (installed[0]===1 && installed[1]<6);
-            if(needsOutputUpdate && monitor.dataset.packageVersion && /^[a-f0-9]{64}$/.test(monitor.dataset.packageSha)) {
-                const update=node('details',undefined,'agent-activity portal-setup');update.append(node('summary','Agent update for direct custom artwork'));
-                update.append(node('p','Direct custom uploads require agent 1.6.0. Finish active work, disable and stop the existing listener task in Windows Task Scheduler, then save both downloads into the existing installation folder. Keep the current .env, credentials and workspaces.'));
-                const links=node('div',undefined,'confirmation-actions');for(const [label,url] of [['Download agent update',monitor.dataset.packageUrl],['Download installer',monitor.dataset.installerUrl]]){const link=node('a',label,'chip');link.href=url;links.append(link);}update.append(links);
-                update.append(node('pre',`cd C:\\LuckyBagsFactory
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-Unblock-File -LiteralPath .\\install-portal-control.ps1
-.\\install-portal-control.ps1 -ZipPath .\\LuckyBags-Factory-Agent.zip -ExpectedSha256 ${monitor.dataset.packageSha}`));
-                update.append(node('p','Run once as the normal printer operator. The installer updates pinned dependencies and restores background startup. Verify one labeled test print before bulk use.'));
+            const installed=(t.agent_version||'0.0.0').split('.').map(Number), available=(monitor.dataset.packageVersion||'0.0.0').split('.').map(Number);
+            const needsOutputUpdate=available.some((part,index)=>part>(installed[index]||0) && available.slice(0,index).every((value,i)=>value===(installed[i]||0)));
+            if(needsOutputUpdate && monitor.dataset.updaterUrl) {
+                const update=node('details',undefined,'agent-activity portal-setup');update.append(node('summary',`Update existing agent to ${monitor.dataset.packageVersion}`));
+                update.append(node('p','On the Print PC, download this one updater and open it from Downloads. It downloads the versioned package, updates C:\\LuckyBagsFactory, and restarts the background listener. No files need to be moved into the installation folder.'));
+                const link=node('a',`Download updater v${monitor.dataset.packageVersion}`,'primary');link.href=monitor.dataset.updaterUrl;update.append(link);
+                update.append(node('p','Your .env, credentials, agent identity and print workspaces are preserved. Finish active work first; the updater refuses busy or uncertain jobs. Run as the usual printer operator.'));
+                update.append(node('p','No new .env settings are required. If you explicitly pinned the old version or source hash, the updater shows only the exact manual pin changes needed. Download links expire after 48 hours.'));
                 card.append(update);
             }
             const details=node('details',undefined,'agent-activity');details.open=expanded.has(agent.agent_id);details.append(node('summary','Technical details'));

@@ -254,7 +254,7 @@ def api(method, path, **kwargs):
         headers['X-Factory-Agent-ID'] = stable_agent_id()
         if ACTIVE_OPERATION:
             headers['X-Factory-Operation'] = ACTIVE_OPERATION['token']
-    if 'json' in kwargs:
+    if 'json' in kwargs and not path.startswith('/factory/custom-transfers/'):
         kwargs['data'] = monitoring_form(kwargs.pop('json'))
     with SESSION.request(method, BASE + path, headers=headers,
                          timeout=(10, 60), allow_redirects=False, stream=True, **kwargs) as response:
