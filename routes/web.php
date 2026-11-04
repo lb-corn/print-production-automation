@@ -33,3 +33,10 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::get('/reset', fn()=>redirect()->route('admin.settings',['section'=>'reset']))->name('reset');
     Route::post('/reset', [\App\Http\Controllers\AdminController::class, 'reset'])->middleware('throttle:3,1')->name('reset.store');
 });
+
+Route::middleware(['auth','auth.session',\App\Http\Middleware\ReadOnlyDemo::class,\App\Http\Middleware\PortalWriteLock::class])->group(function(){
+ Route::post('/production/{item}/custom-transfers',[\App\Http\Controllers\CustomArtworkController::class,'create'])->middleware('throttle:12,1')->name('custom.create');
+ Route::get('/custom-transfers/{transfer}',[\App\Http\Controllers\CustomArtworkController::class,'status'])->middleware('throttle:120,1')->name('custom.status');
+ Route::post('/custom-transfers/{transfer}/cancel',[\App\Http\Controllers\CustomArtworkController::class,'cancel'])->name('custom.cancel');
+ Route::post('/production/{item}/custom-confirm',[\App\Http\Controllers\CustomArtworkController::class,'confirm'])->name('custom.confirm');
+});

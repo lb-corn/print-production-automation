@@ -11,3 +11,10 @@ use Illuminate\Support\Facades\Route;use App\Http\Controllers\FactoryController;
 \Illuminate\Support\Facades\Route::middleware(['factory.key','throttle:120,1',\App\Http\Middleware\PortalWriteLock::class])->prefix('factory')->group(function(){\Illuminate\Support\Facades\Route::post('/batches/{batch}/begin-work',[FactoryController::class,'beginWork']);\Illuminate\Support\Facades\Route::get('/batches/{batch}/assigned',[FactoryController::class,'assigned']);});
 
 \Illuminate\Support\Facades\Route::get('/factory/sync-artwork',[\App\Http\Controllers\FactoryController::class,'syncArtwork'])->middleware(['factory.key','throttle:60,1']);
+
+\Illuminate\Support\Facades\Route::middleware(['factory.key','throttle:120,1',\App\Http\Middleware\PortalWriteLock::class])->prefix('factory')->group(function(){
+ \Illuminate\Support\Facades\Route::get('/custom-transfers',[\App\Http\Controllers\CustomArtworkController::class,'pending']);
+ \Illuminate\Support\Facades\Route::post('/custom-transfers/{transfer}/begin',[\App\Http\Controllers\CustomArtworkController::class,'begin']);
+ \Illuminate\Support\Facades\Route::post('/custom-transfers/{transfer}/report',[\App\Http\Controllers\CustomArtworkController::class,'report']);
+ \Illuminate\Support\Facades\Route::get('/custom-transfers/{transfer}/completion',[\App\Http\Controllers\CustomArtworkController::class,'completion']);
+});

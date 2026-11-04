@@ -1,0 +1,78 @@
+{
+  "checked_at": "2026-11-04T16:08:14.952656+00:00",
+  "source": "https://api.osv.dev/v1/querybatch",
+  "packages": [
+    {
+      "package": {
+        "name": "aiortc",
+        "ecosystem": "PyPI"
+      },
+      "version": "1.15.0",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "aioice",
+        "ecosystem": "PyPI"
+      },
+      "version": "0.12.1",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "av",
+        "ecosystem": "PyPI"
+      },
+      "version": "17.1.0",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "google-crc32c",
+        "ecosystem": "PyPI"
+      },
+      "version": "1.9.0",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "pyee",
+        "ecosystem": "PyPI"
+      },
+      "version": "16.0.1",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "pylibsrtp",
+        "ecosystem": "PyPI"
+      },
+      "version": "1.0.0",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "pyOpenSSL",
+        "ecosystem": "PyPI"
+      },
+      "version": "26.4.0",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "dnspython",
+        "ecosystem": "PyPI"
+      },
+      "version": "2.9.2",
+      "result": {}
+    },
+    {
+      "package": {
+        "name": "ifaddr",
+        "ecosystem": "PyPI"
+      },
+      "version": "0.2.0",
+      "result": {}
+    }
+  ]
+}

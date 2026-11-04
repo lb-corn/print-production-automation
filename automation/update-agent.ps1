@@ -5,7 +5,7 @@ Assert-AgentStopped $Root
 $ZipPath = (Resolve-Path -LiteralPath $ZipPath).Path
 if ((Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'UPDATE BLOCKED: release checksum mismatch.' }
 # Explicit file list: an archive cannot replace secrets, runtime directories or arbitrary scripts.
-$Allowed = @('factory_agent.py','job_output.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md')
+$Allowed = @('factory_agent.py','job_output.py','custom_transfer.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $Allowed += @('test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1','repair-background-startup.ps1')
 $Archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)

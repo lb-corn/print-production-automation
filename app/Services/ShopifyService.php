@@ -196,6 +196,7 @@ query ProductionBacklog($first: Int!) {
                     name
                     quantity
                     unfulfilledQuantity
+                    customAttributes { key value }
                     sku
                     variantTitle
                     variant {
@@ -285,7 +286,10 @@ GRAPHQL;
                     )
                 );
 
-                if (!in_array(
+                $customSeries=CustomArtworkService::series($line['sku']??null,$productTitle);
+                $custom=$customSeries!==null;
+                $customPreview=$custom?CustomArtworkService::thumbnail($line['customAttributes']??[]):null;
+                if (!$custom && !in_array(
                     $productType,
                     [
                         'ACL Pro Stamped 2026',
@@ -293,22 +297,6 @@ GRAPHQL;
                     ],
                     true
                 )) {
-                    continue;
-                }
-
-                /*
-                 * Custom bags follow their own
-                 * artwork approval workflow.
-                 *
-                 * For now, exclude them from this
-                 * stock-print backlog.
-                 */
-                if (
-                    stripos(
-                        $productTitle,
-                        'Custom'
-                    ) !== false
-                ) {
                     continue;
                 }
 
@@ -332,6 +320,7 @@ GRAPHQL;
                     && !empty($line['product']['id'])
                     && ($currentVariant['product']['id']??null)===$line['product']['id'];
                 $items[] = [
+                    'is_custom'=>$custom,
                     'shopify_variant_id'=>$linkedVariant?$currentVariant['id']:null,
                     'order_sku'=>$line['sku']??null,
                     'order_variant'=>$line['variantTitle']??null,
@@ -367,7 +356,7 @@ GRAPHQL;
                         $unfulfilledQuantity,
 
                     'shopify_image' =>
-                        $line['image']['url']
+                        $customPreview ?? $line['image']['url']
                         ?? null,
 
                     'financial_status' =>

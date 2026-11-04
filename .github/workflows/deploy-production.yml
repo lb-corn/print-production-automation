@@ -134,6 +134,8 @@ jobs:
           php tests/queue-server-setup.php
           php tests/print-output.php
           php tests/material-batches.php
+          php tests/custom-artwork.php
+          php tests/material-settings.php
           node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php
@@ -221,7 +223,7 @@ jobs:
                       destination.parent.mkdir(parents=True,exist_ok=True)
                       shutil.copyfile(path,destination)
                       count += 1
-              for required in ['database/migrations/2026_11_03_000008_add_batch_dispatch_consent.php','public/index.php','artisan','vendor/autoload.php','vendor/google/apiclient-services/src/Drive.php','vendor/google/apiclient-services/src/Drive/DriveFile.php','deployment/post-deploy.sh']:
+              for required in ['database/migrations/2026_11_04_000009_create_custom_artwork_transfers.php','database/migrations/2026_11_03_000008_add_batch_dispatch_consent.php','public/index.php','artisan','vendor/autoload.php','vendor/google/apiclient-services/src/Drive.php','vendor/google/apiclient-services/src/Drive/DriveFile.php','deployment/post-deploy.sh']:
                   if not (TARGET / required).is_file(): raise SystemExit(f'Incomplete deployment package: {required}')
               print(f'Allowlisted web deployment package created: {count} files. No .env, credentials, runtime storage, agent, or operator documents included.')
 

@@ -21,7 +21,7 @@ $catalog=app(\App\Services\MaterialCatalog::class);$materialNames=$catalog->mate
 @php
 $side=$match['side']??'single';$material=$materials[$item->series_code][$side==='back'?1:0]??'Material';$printLabel=\App\Services\PrintLabelService::label($item,$material);
 @endphp
-<figure><div class="queue-artwork-preview"><img src="https://drive.google.com/thumbnail?id={{$match['id']}}&sz=w800" alt="Approved {{$side}} artwork"><span class="queue-label-overlay">{{$printLabel}}</span></div><figcaption>{{strtoupper($side)}} · {{$material}}</figcaption></figure>
+<figure>@if(($match['source']??null)==='pc_custom')@include('partials.custom-artwork-preview',['uploadId'=>$match['upload_id'],'side'=>$side,'previewItem'=>$item])@else<div class="queue-artwork-preview"><img src="https://drive.google.com/thumbnail?id={{$match['id']}}&sz=w800" alt="Approved {{$side}} artwork"><span class="queue-label-overlay">{{$printLabel}}</span></div>@endif<figcaption>{{strtoupper($side)}} · {{$material}}</figcaption></figure>
 @endforeach
 </div>
 <div class="queue-item-info"><div class="queue-item-heading"><div><span class="muted">{{$item->order_number}}</span><h2>{{$item->product}}</h2></div><span class="badge">{{$item->design_type==='double'?'FRONT + BACK':'SINGLE'}}</span></div><dl class="queue-item-facts"><div><dt>Variant</dt><dd>{{$item->variant?:'—'}}</dd></div><div><dt>Quantity</dt><dd>{{$item->quantity}}</dd></div><div><dt>Printed material</dt><dd>{{$groupName}}</dd></div><div><dt>Color</dt><dd>{{$item->color?:'Not specified'}}</dd></div></dl>
@@ -29,7 +29,8 @@ $side=$match['side']??'single';$material=$materials[$item->series_code][$side===
 @php $material=$materials[$item->series_code][($match['side']??'single')==='back'?1:0]??'Material'; @endphp
 <p class="queue-print-label"><span>Print label</span><code>{{\App\Services\PrintLabelService::label($item,$material)}}</code></p>
 @endforeach
-<details class="queue-source-details"><summary>Approved source files</summary>@foreach($item->matches as $match)<a href="{{$match['webViewLink']??'https://drive.google.com/file/d/'.$match['id'].'/view'}}" target="_blank" rel="noopener">{{$match['name']}} ↗</a>@endforeach</details><span class="ok">✓ Artwork approved</span></div>
+<details class="queue-source-details"><summary>Approved source files</summary>@foreach($item->matches as $match)@if(($match['source']??null)==='pc_custom')<p>{{$match['name']}} · confirmed custom file on Print PC</p>@else<a href="{{$match['webViewLink']??'https://drive.google.com/file/d/'.$match['id'].'/view'}}" target="_blank" rel="noopener">{{$match['name']}} ↗</a>@endif
+@endforeach</details><span class="ok">✓ Artwork approved</span></div>
 </article>
 @empty<div class="panel queue-empty"><strong>No approved items waiting</strong><p>Track queued jobs in Print batches, or approve artwork to prepare another job.</p><a class="primary" href="{{route('batches')}}">View print batches →</a></div>
 @endforelse
