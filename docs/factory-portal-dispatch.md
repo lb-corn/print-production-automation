@@ -1,3 +1,9 @@
+## If Queue & prepare reports a missing server update
+
+Uploading or merging code does not apply the production database migration. In the hosting terminal, open the existing production application folder and run `bash deployment/post-deploy.sh`. It applies additive migrations, verifies the queue schema and refreshes caches. Do not run migrate:fresh or change anything on the Printer PC. If activation fails, inspect its output before retrying a queue request.
+
+When schema setup is incomplete, Ready for Print disables selection and submission, displays an administrator setup notice, and preserves approved items. Direct/stale queue submissions redirect back without creating a batch. Existing batch preparation also reports the setup issue without a bare 503 page.
+
 # Current daily print flow
 
 Operators and admins select approved items in Ready for Print and confirm Queue & prepare. This grants permission only to that batch and does not enable older paused queue entries. Prepared batches require the existing named, counted, payload-checked signed HANDOFF before delivery. Physical PRINTED remains a separate human confirmation. The connected existing agent needs no PC update for this server/UI change.
