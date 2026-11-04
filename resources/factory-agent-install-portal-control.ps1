@@ -10,7 +10,7 @@ $Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
 if ($Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Use the standard printer operator account, without elevation.' }
 $ZipPath = (Resolve-Path -LiteralPath $ZipPath).Path
 if ((Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Package checksum mismatch. No update or task was started.' }
-$Allowed = @('factory_agent.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md','test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1','repair-background-startup.ps1')
+$Allowed = @('factory_agent.py','job_output.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md','test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1','repair-background-startup.ps1')
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $Archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
 try {
@@ -29,6 +29,8 @@ try {
 $Python = Join-Path $Root '.venv\Scripts\python.exe'
 $Pythonw = Join-Path $Root '.venv\Scripts\pythonw.exe'
 if (!(Test-Path -LiteralPath $Pythonw -PathType Leaf)) { throw 'Existing Python virtual environment is required. Run install.ps1 first.' }
+& $Python -I -m pip --isolated install --require-hashes --only-binary=:all: --index-url https://pypi.org/simple --disable-pip-version-check -r (Join-Path $Root 'requirements.lock')
+Assert-NativeExit 'Hash-locked dependency update'
 & $Python -I -m pip check
 Assert-NativeExit 'Dependency check'
 & $Python -I (Join-Path $Root 'factory_agent.py') --check

@@ -51,6 +51,37 @@ class FactoryController extends Controller
             return response()->json(['ok'=>true,'batch'=>$locked]);
         });
     }
+    // Metadata only: the PC downloads originals directly from Drive. Nothing is uploaded here.
+    public function syncArtwork(Request $request,\App\Services\FactoryDispatchService $dispatch){
+        $dispatch->identity($request);
+        $data=$request->validate(['after'=>'nullable|integer|min:0']);$after=(int)($data['after']??0);
+        $items=\App\Models\ProductionItem::where('id','>',$after)->orderBy('id')->limit(100)->get();
+        $processed=app(\App\Services\ProductionService::class)->batchIndex(true);
+        $orders=[];
+        foreach($items as $item){
+            if((int)$item->quantity<1 || (int)$item->quantity>10000 || isset($processed[$item->line_item_id]) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset(\App\Services\ProductionService::MATERIALS[$item->series_code]))continue;
+            $materials=\App\Services\ProductionService::MATERIALS[$item->series_code];$arts=[];
+            foreach($item->matches as $match){
+                $side=$item->design_type==='single'?'PRINT':strtoupper($match['side']);
+                $material=$materials[$side==='BACK'?1:0];
+                $art=app(\App\Services\ProductionService::class)->art($side,$material,$match);
+                if(!in_array(strtolower(pathinfo((string)$art['filename'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff'],true) || !$art['md5_checksum'] || !$art['drive_version'])continue;
+                $art['print_label']=\App\Services\PrintLabelService::label($item,$material);$arts[]=$art;
+            }
+            if($arts)$orders[]=['line_item_id'=>$item->line_item_id,'order'=>$item->order_number,'quantity'=>(int)$item->quantity,'artworks'=>$arts];
+        }
+        return response()->json(['orders'=>$orders,'next_after'=>$items->count()===100?$items->last()->id:0])->header('Cache-Control','no-store');
+    }
+    public function completion(Request $request,PrintBatch $batch,\App\Services\FactoryDispatchService $dispatch){
+        $id=$dispatch->identity($request);
+        abort_unless($batch->factory_agent_id && hash_equals($batch->factory_agent_id,$id),403);
+        $confirmation=$batch->confirmations()->where('action','PRINTED')->latest('id')->first();
+        $valid=$batch->status==='PRINTED' && $batch->completed_at && $confirmation &&
+            hash_equals($confirmation->payload_sha256,hash('sha256',json_encode($batch->payload))) &&
+            (int)$confirmation->order_count===(int)$batch->order_count && (int)$confirmation->artwork_file_count===(int)$batch->artwork_file_count;
+        if(!$valid)return response()->json(['cleanup_authorized'=>false])->header('Cache-Control','no-store');
+        return response()->json(['cleanup_authorized'=>true,'id'=>$batch->id,'batch_id'=>$batch->batch_id,'status'=>'PRINTED','confirmation_id'=>$confirmation->id,'payload'=>$batch->payload])->header('Cache-Control','no-store');
+    }
     public function work(Request $request,\App\Services\FactoryDispatchService $dispatch){
         return response()->json(['ok'=>true,'job'=>$dispatch->next($dispatch->identity($request))])->header('Cache-Control','no-store');
     }

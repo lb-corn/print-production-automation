@@ -432,6 +432,8 @@ def download(service, file, destination):
 
 
 def prepare(batch, already_claimed=False):
+    if batch.get('payload', {}).get('print_label_policy') == 'BOTTOM_WHITE_V1':
+        return prepare_labelled(batch, already_claimed)
     files = validate_batch(batch)
     if already_claimed:
         if not PORTAL_MODE or not ACTIVE_OPERATION or batch['status'] != 'CLAIMED':
@@ -461,6 +463,8 @@ def prepare(batch, already_claimed=False):
 
 
 def verify_prepared_batch(batch, with_hashes=False):
+    if batch.get('payload', {}).get('print_label_policy') == 'BOTTOM_WHITE_V1':
+        return verify_labelled(batch, with_hashes)
     expected = validate_batch(batch)
     folder = batch_folder(batch)
     manifest_path = contained(folder, 'batch.json')
@@ -491,14 +495,16 @@ def verify_prepared_batch(batch, with_hashes=False):
 def failure_code(exc):
     # Classify locally; raw paths, remote responses and exception text never enter telemetry.
     text = str(exc).lower()
+    if any(word in text for word in ('checksum', 'hash mismatch', 'differs', 'changed', 'substituted')):
+        return 'artwork_changed'
+    if 'label' in text or 'color mode' in text:
+        return 'label_render_failed'
     if 'defender' in text or isinstance(exc, subprocess.TimeoutExpired):
         return 'defender_unavailable'
     if 'multi-set' in text:
         return 'quantity_unsupported'
     if any(word in text for word in ('interrupted', 'inspection', 'already exists', 'existing batch')):
         return 'manual_inspection_required'
-    if any(word in text for word in ('checksum', 'hash mismatch', 'differs', 'changed', 'substituted')):
-        return 'artwork_changed'
     if 'hot folder' in text or 'hot-folder' in text:
         return 'handoff_unavailable'
     return 'batch_operation_failed'
@@ -538,9 +544,17 @@ def handoff(batch):
             scan_file(source)
             if digest(no_reparse(source)) != approved_hash:
                 raise ValueError('Prepared artwork changed during scanning')
+        labels = {file['relative']: file['print_label'] for file in labelled_specs(batch)} if batch['payload'].get('print_label_policy') == 'BOTTOM_WHITE_V1' else {}
+        plan = []
+        for source, approved_hash in verified:
+            relative = str(source.relative_to(folder))
+            label = safe(labels.get(relative, source.stem))[:60]
+            name = batch['batch_id'] + '_' + safe(source.parent.name)[:16] + '_' + label + '_' + hashlib.sha256(relative.encode()).hexdigest()[:12] + source.suffix
+            plan.append({'name': name, 'sha256': approved_hash, 'bytes': source.stat().st_size})
         write_json(journal, {'state': 'publishing', 'payload_sha256': payload_hash(batch)})
+        register_retention(batch, folder, verified, plan)
         for index, (source, approved_hash) in enumerate(verified):
-            destination = contained(Path(HOT), safe(batch['batch_id'][:50] + '_' + source.parent.name[:20] + '_' + source.stem[:40]) + source.suffix)
+            destination = contained(Path(HOT), plan[index]['name'])
             if destination.exists():
                 raise ValueError('Hot-folder destination already exists; operator review required')
             temporary = contained(Path(HOT), destination.name + '.lbtmp')
@@ -553,6 +567,7 @@ def handoff(batch):
             temporary.rename(destination)
             monitor_state(progress={'completed': index + 1, 'total': len(sources), 'phase': 'publishing'})
         write_json(journal, {'state': 'published', 'payload_sha256': payload_hash(batch)})
+        register_retention(batch, folder, verified, plan)
         status(batch['id'], 'SENT_TO_RIP')
         log.info('Batch %s handed to Edge Print; operator must start physical printing', batch['id'])
     except Exception as exc:
@@ -647,13 +662,14 @@ def listen_for_portal():
     journal = contained(OUT, 'portal-operation.json')
     child = None
     operation = None
+    last_cache = 0
     while not STOP:
         try:
             if child is not None:
                 if child.poll() is None:
                     time.sleep(1)
                     continue
-                if child.returncode:
+                if child.returncode and operation is not None:
                     report_interrupted(operation)
                 child = None
                 monitor_state(reporter_mode='listener', process_status='running', stage='idle', batch_id=None)
@@ -662,6 +678,7 @@ def listen_for_portal():
             if not worker_available():
                 time.sleep(5)
                 continue
+            cleanup_retained_jobs()
             send_heartbeat()
             candidate = api('GET', '/factory/work').get('job')
             if candidate:
@@ -685,6 +702,13 @@ def listen_for_portal():
                     except Exception:
                         report_interrupted(operation)
                         raise
+            elif time.monotonic() - last_cache >= 30:
+                # Fixed idle-only background operation; never opens the Epson folder.
+                last_cache = time.monotonic()
+                operation = None
+                child = subprocess.Popen([sys.executable, '-I', str(HERE / 'factory_agent.py'), '--sync-cache'],
+                                         cwd=str(HERE), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except Exception as exc:
             record_operation('poll', 'api_unreachable')
             log.warning('Portal listener could not complete a check (%s); no automatic retry of a started phase', type(exc).__name__)
@@ -709,6 +733,260 @@ def assigned_once(batch_id):
         raise ValueError('Assigned phase is no longer eligible')
 
 
+OUTPUT_MODULE = None
+LAST_RETENTION_CHECK = 0
+RETENTION_CURSOR = 0
+
+
+def output_module():
+    global OUTPUT_MODULE
+    if OUTPUT_MODULE is None:
+        import importlib.util
+        manifest_path = no_reparse(HERE / 'release.json')
+        if manifest_path.stat().st_size > 65536:
+            raise ValueError('Invalid release manifest')
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
+        path = no_reparse(HERE / 'job_output.py')
+        if not re.fullmatch(r'[a-f0-9]{64}', str(manifest.get('job_output_sha256', ''))) or digest(path) != manifest['job_output_sha256']:
+            raise ValueError('Print output module integrity check failed')
+        spec = importlib.util.spec_from_file_location('factory_job_output', path)
+        OUTPUT_MODULE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(OUTPUT_MODULE)
+    return OUTPUT_MODULE
+
+
+def labelled_specs(batch):
+    files = validate_batch(batch)
+    artworks = [art for order in batch['payload']['orders'] for art in order['artworks']]
+    result = []
+    for file, artwork in zip(files, artworks):
+        original = file['relative']
+        result.append({**file, 'source_relative': str(Path('originals') / original),
+                       'relative': str(Path(original).with_suffix('.tif')), 'print_label': artwork.get('print_label', '')})
+    return result
+
+
+def cache_key(file):
+    if not file.get('expected_md5') or not file.get('expected_version'):
+        return None  # Never reuse unpinned source content.
+    identity = {key: file.get(key) for key in ('drive_file_id', 'expected_md5', 'expected_version', 'mime', 'print_label')}
+    identity['policy'] = 'BOTTOM_WHITE_V1'
+    return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def cached_artwork(file):
+    key = cache_key(file)
+    if not key:
+        return None
+    folder = contained(OUT, 'sync-cache/' + key)
+    manifest = contained(folder, 'ready.json')
+    if not manifest.is_file():
+        return None
+    if manifest.stat().st_size > 65536:
+        raise ValueError('Oversized sync-cache manifest')
+    entry = json.loads(manifest.read_text(encoding='utf-8'))
+    source = contained(folder, 'original' + Path(file['source_relative']).suffix.lower())
+    output = contained(folder, 'print.tif')
+    if entry.get('key') != key:
+        raise ValueError('Sync cache identity changed')
+    for path, name in ((source, 'source'), (output, 'output')):
+        if not path.is_file() or path.stat().st_size != entry.get(name + '_bytes') or digest(path) != entry.get(name + '_sha256'):
+            raise ValueError('Sync cache content changed; inspection required')
+        check_magic(path)
+    return source, output, entry
+
+
+def sync_cache_once():
+    # One image per worker, so print offers have priority between images. No image API uploads.
+    cursor_path = contained(OUT, 'sync-cache-cursor.json')
+    cursor = json.loads(cursor_path.read_text(encoding='utf-8')).get('after', 0) if cursor_path.is_file() else 0
+    if type(cursor) is not int or cursor < 0:
+        raise ValueError('Invalid sync-cache cursor')
+    response = api('GET', '/factory/sync-artwork', params={'after': cursor})
+    orders = response.get('orders', [])
+    if not isinstance(orders, list) or len(orders) > 100:
+        raise ValueError('Invalid sync metadata')
+    failures_path = contained(OUT, 'sync-cache-failures.json')
+    failures = json.loads(failures_path.read_text(encoding='utf-8')) if failures_path.is_file() and failures_path.stat().st_size <= 262144 else {}
+    failures = {key: value for key, value in failures.items() if isinstance(value, (int, float)) and time.time() - value < 600}
+    for order in orders:
+        synthetic = {'id': 1, 'batch_id': 'SYNC', 'payload': {'batch_id': 'SYNC', 'order_count': 1,
+                     'artwork_file_count': len(order.get('artworks', [])), 'orders': [order]}}
+        for file in labelled_specs(synthetic):
+            key = cache_key(file)
+            if not key or key in failures:
+                continue
+            try:
+                if cached_artwork(file):
+                    continue
+                prepare_sync_file(file, key)
+            except Exception as exc:
+                # A bad original must not starve every other synced order.
+                failures[key] = time.time()
+                write_json(failures_path, dict(list(failures.items())[-2000:]))
+                record_operation('poll', failure_code(exc))
+                log.warning('Synced artwork deferred (%s); private copies retained', type(exc).__name__)
+            return
+    after = response.get('next_after', 0)
+    if type(after) is not int or after < 0 or (after and after <= cursor):
+        raise ValueError('Invalid sync metadata page')
+    write_json(cursor_path, {'after': after})
+
+
+def prepare_sync_file(file, key):
+    folder = contained(OUT, 'sync-cache/' + key)
+    folder.mkdir(parents=True, exist_ok=True)
+    source = contained(folder, 'original' + Path(file['source_relative']).suffix.lower())
+    output = contained(folder, 'print.tif')
+    monitor_state(stage='downloading', batch_id=None)
+    download(drive(), file, source)
+    label_output = output_module().render_label(source, output, file['print_label'], MAX_FILE_BYTES)
+    check_magic(output)
+    scan_file(output)
+    write_json(folder / 'ready.json', {'key': key, 'source_bytes': source.stat().st_size,
+               'source_sha256': digest(source), 'output_bytes': output.stat().st_size,
+               'output_sha256': digest(output), 'label_output': label_output})
+    monitor_state(stage='idle', batch_id=None)
+    log.info('Synced artwork labeled in private PC cache; handoff approval still required')
+
+
+def cleanup_sync_cache(proof):
+    # Called only after the exact owned batch passes PRINTED proof validation and cleanup.
+    for file in labelled_specs({'id': proof['id'], 'batch_id': proof['batch_id'], 'payload': proof['payload']}):
+        cached = cached_artwork(file)
+        if not cached:
+            continue
+        source, output, entry = cached
+        folder = source.parent
+        manifest = contained(folder, 'ready.json')
+        owned = {source, output, manifest}
+        if set(folder.iterdir()) != owned:
+            raise ValueError('Unexpected sync-cache files; retained for inspection')
+        for path in (source, output, manifest):
+            no_reparse(path)
+            path.unlink()
+        folder.rmdir()
+
+
+def prepare_labelled(batch, already_claimed=False):
+    files = labelled_specs(batch)
+    if already_claimed:
+        if not PORTAL_MODE or not ACTIVE_OPERATION or batch['status'] != 'CLAIMED':
+            raise ValueError('Assigned worker requires a bound claim')
+    else:
+        status(batch['id'], 'CLAIMED')
+    folder = batch_folder(batch)
+    try:
+        if folder.exists():
+            raise ValueError('Existing batch workspace requires inspection')
+        folder.mkdir(parents=True)
+        status(batch['id'], 'DOWNLOADING')
+        service = drive()
+        monitor_state(progress={'completed': 0, 'total': len(files), 'phase': 'downloading'})
+        for index, file in enumerate(files):
+            source = contained(folder, file['source_relative'])
+            destination = contained(folder, file['relative'])
+            cached = cached_artwork(file)
+            if cached:
+                source.parent.mkdir(parents=True, exist_ok=True)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(cached[0], source)
+                shutil.copyfile(cached[1], destination)
+                file['label_output'] = cached[2]['label_output']
+            else:
+                download(service, file, source)
+                file['label_output'] = output_module().render_label(source, destination, file['print_label'], MAX_FILE_BYTES)
+            file['source_sha256'] = digest(source)
+            file['source_bytes'] = source.stat().st_size
+            check_magic(destination)
+            scan_file(destination)
+            file['sha256'], file['bytes'] = digest(destination), destination.stat().st_size
+            monitor_state(progress={'completed': index + 1, 'total': len(files), 'phase': 'scanning'})
+        write_json(folder / 'batch.json', {'agent_version': VERSION, 'batch_db_id': batch['id'],
+                   'payload_sha256': payload_hash(batch), 'files': files})
+        status(batch['id'], 'PREPARED')
+        log.info('Batch %s prepared with labeled production copies', batch['id'])
+    except Exception as exc:
+        mark_failed(batch, failure_code(exc))
+        raise
+
+
+def verify_labelled(batch, with_hashes=False):
+    folder = batch_folder(batch)
+    manifest_path = contained(folder, 'batch.json')
+    if manifest_path.stat().st_size > 4 * 1024 * 1024:
+        raise ValueError('Oversized production manifest')
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    expected = labelled_specs(batch)
+    if manifest.get('payload_sha256') != payload_hash(batch) or len(manifest.get('files', [])) != len(expected):
+        raise ValueError('Labeled manifest differs from the locked batch')
+    recorded = {file['relative']: file for file in manifest['files']}
+    allowed = {manifest_path.resolve(), (folder / 'handoff.json').resolve()}
+    verified = []
+    for file in expected:
+        entry = recorded.get(file['relative'], {})
+        if any(entry.get(key) != file.get(key) for key in ('drive_file_id', 'source_relative', 'print_label')):
+            raise ValueError('Labeled output identity differs from the locked batch')
+        for relative, hash_key, size_key in ((file['source_relative'], 'source_sha256', 'source_bytes'), (file['relative'], 'sha256', 'bytes')):
+            path = contained(folder, relative)
+            if not path.is_file() or path.stat().st_size != entry.get(size_key) or digest(path) != entry.get(hash_key):
+                raise ValueError('Labeled artwork or retained original changed')
+            check_magic(path)
+            allowed.add(path.resolve())
+        destination = contained(folder, file['relative'])
+        verified.append((destination, entry['sha256']) if with_hashes else destination)
+    for path in folder.rglob('*'):
+        no_reparse(path)
+        if path.is_file() and path.resolve() not in allowed:
+            raise ValueError('Unexpected file in prepared label workspace')
+    return folder, verified
+
+
+def register_retention(batch, folder, verified, plan):
+    paths = [source for source, _ in verified] + [folder / 'batch.json', folder / 'handoff.json']
+    if batch['payload'].get('print_label_policy') == 'BOTTOM_WHITE_V1':
+        paths += [contained(folder, file['source_relative']) for file in labelled_specs(batch)]
+    output_module().RetainedJobs(OUT, HOT).register(batch, paths, plan)
+
+
+def cleanup_retained_jobs():
+    global LAST_RETENTION_CHECK, RETENTION_CURSOR
+    if not HOT or not (OUT / 'retained-jobs.json').is_file() or time.monotonic() - LAST_RETENTION_CHECK < 45:
+        return
+    LAST_RETENTION_CHECK = time.monotonic()
+    cleanup_lock = None
+    try:
+        cleanup_lock = acquire_lock('.agent.lock')
+        store = output_module().RetainedJobs(OUT, HOT)
+        pending = store.pending()
+        if not pending:
+            return
+        start = RETENTION_CURSOR % len(pending)
+        selected = (pending[start:] + pending[:start])[:5]
+        RETENTION_CURSOR = start + len(selected)
+        for record in selected:
+            try:
+                proof = api('GET', f"/factory/batches/{record['id']}/completion")
+                if store.cleanup(proof):
+                    cleanup_sync_cache(proof)
+                    record_operation('cleanup')
+                    log.info('Confirmed printed batch %s: owned local files cleaned', record['id'])
+            except Exception:
+                record_operation('cleanup', 'cleanup_blocked')
+                log.warning('Printed-file cleanup deferred; retained files were not broadly deleted')
+                break
+            # Keep the connection fresh even if completion checks take time.
+            try:
+                send_heartbeat()
+            except Exception:
+                break
+    except Exception:
+        record_operation('cleanup', 'cleanup_blocked')
+        log.warning('Retention index needs inspection; cleanup was not attempted')
+    finally:
+        if cleanup_lock is not None:
+            cleanup_lock.close()
+
 def main():
     global STOP, PORTAL_MODE, ACTIVE_OPERATION
     arguments = sys.argv[1:]
@@ -718,10 +996,10 @@ def main():
             ACTIVE_OPERATION = {'batch_id': int(arguments[1]), 'token': str(uuid.UUID(arguments[2]))}
         except ValueError:
             raise SystemExit(2)
-    if not managed and (len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose', '--listen'} for arg in arguments)):
+    if not managed and (len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose', '--listen', '--sync-cache'} for arg in arguments)):
         print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
         raise SystemExit(2)
-    PORTAL_MODE = managed or '--listen' in arguments
+    PORTAL_MODE = managed or '--listen' in arguments or '--sync-cache' in arguments
     if PORTAL_MODE:
         monitor_state(reporter_mode='managed_worker' if managed else 'listener')
     if '--health' in sys.argv or '--diagnose' in sys.argv:
@@ -780,6 +1058,14 @@ def main():
     MONITOR_STOP.clear()
     monitor = threading.Thread(target=heartbeat_loop, name='factory-heartbeat', daemon=True)
     monitor.start()
+    if '--sync-cache' in arguments:
+        try:
+            sync_cache_once()
+        except Exception as exc:
+            log.warning('Background sync artwork deferred (%s); no hot-folder files changed', type(exc).__name__)
+        finally:
+            finish_monitor(monitor)
+        return
     if managed:
         try:
             assigned_once(ACTIVE_OPERATION['batch_id'])

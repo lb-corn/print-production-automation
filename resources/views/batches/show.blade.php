@@ -70,7 +70,7 @@
                 @endif
                 <div class="batch-artwork-rows">
                 @foreach($order['artworks'] as $artwork)
-                    <div class="batch-artwork-row"><span class="artwork-side">{{$artwork['side']}}</span><strong>{{$artwork['material']}}</strong>@include('partials.artwork-filename',['filename'=>$artwork['filename']])</div>
+                    <div class="batch-artwork-row"><span class="artwork-side">{{$artwork['side']}}</span><strong>{{$artwork['material']}}</strong>@include('partials.artwork-filename',['filename'=>$artwork['filename']])@if($artwork['print_label']??null)<code class="batch-print-label">{{$artwork['print_label']}}</code>@endif</div>
                 @endforeach
                 </div>
             </article>

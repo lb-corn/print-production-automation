@@ -5,7 +5,7 @@
     <div class="batch-list">
     @forelse($batches as $batch)
         <article class="batch-list-item">
-            <div class="batch-identity"><a href="{{route('batch.show',$batch)}}" title="{{$batch->batch_id}}"><strong>{{$batch->batch_id}}</strong></a><small>{{$batch->status==='CANCELLED'?'History only · not queued':'Production batch'}}</small></div>
+            <div class="batch-identity"><a href="{{route('batch.show',$batch)}}" title="{{$batch->batch_id}}"><strong>{{$batch->batch_id}}</strong></a><small>{{$batch->status==='CANCELLED'?'History only · not queued':($batch->payload['material_group']??'Production batch')}}</small></div>
             <span class="batch-state state-{{strtolower($batch->status)}}"><i aria-hidden="true"></i>{{str_replace('_',' ',ucfirst(strtolower($batch->status)))}}</span>
             <div class="batch-counts"><strong>{{$batch->order_count}} <small>items</small></strong><strong>{{$batch->artwork_file_count}} <small>files</small></strong></div>
             <time datetime="{{$batch->created_at->toIso8601String()}}">{{$batch->created_at->timezone('Asia/Colombo')->format('d M Y')}}<small>{{$batch->created_at->timezone('Asia/Colombo')->format('g:i A')}} · IST</small></time>

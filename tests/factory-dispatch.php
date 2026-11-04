@@ -18,7 +18,7 @@ $agent=FactoryAgent::create(['agent_id'=>$id,'sampled_at_ms'=>now()->getTimestam
 $check(!$agent->fresh()->processing_enabled && $dispatch->next($id)===null,'New installations cannot process jobs until an administrator enables a real listener');
 $reject(fn()=>$dispatch->configure($agent,true,$user->id),422);
 $check($dispatch->readiness()['state']==='connection_only','Connection-only reporter is explicitly identified as unable to process queue');
-$agent->update(['telemetry'=>['reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$agent->update(['telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $dispatch->configure($agent,true,$user->id);
 $check($agent->fresh()->processing_enabled && count($agent->fresh()->control_audit)===1,'Administrator enable is audited');
 $svc=new ProductionService();
@@ -38,7 +38,7 @@ $owned=function($input=[])use($request,$op){$r=$request($input);$r->headers->set
 $assigned=$factory->assigned($owned(),$batch,$dispatch)->getData(true)['batch'];$check($assigned['id']===$batch->id,'Only the bound worker can fetch the assigned phase');
 $factory->status($owned(['status'=>'DOWNLOADING']),$batch);$batch->refresh();
 $reject(fn()=>$factory->assigned($owned(),$batch,$dispatch),409);
-$agent->refresh()->update(['telemetry'=>['reporter_mode'=>'managed_worker','process_status'=>'running','batch_id'=>$batch->id,'stage'=>'downloading','progress'=>['completed'=>0,'total'=>1,'phase'=>'downloading','bytes_done'=>10,'bytes_total'=>100]]]);
+$agent->refresh()->update(['telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'managed_worker','process_status'=>'running','batch_id'=>$batch->id,'stage'=>'downloading','progress'=>['completed'=>0,'total'=>1,'phase'=>'downloading','bytes_done'=>10,'bytes_total'=>100]]]);
 $check($dispatch->progress($batch)['progress']['bytes_done']===10,'Progress shows current worker evidence rather than a fabricated timer');
 $agent->update(['last_seen_at'=>now()->subMinutes(3)]);$check($dispatch->progress($batch)['progress']===null && $dispatch->progress($batch)['worker_state']==='offline','Expired worker evidence hides the progress bar and reports offline');
 $agent->update(['last_seen_at'=>now()]);$factory->status($owned(['status'=>'PREPARED']),$batch);$batch->refresh();
@@ -58,6 +58,6 @@ $reject(fn()=>$monitor->processing($r,$agent,$dispatch),403);
 $reject(fn()=>$monitor->portalPackage($r),403);$reject(fn()=>$monitor->portalSetup($r),403);
 $check(!str_contains(json_encode($dispatch->progress($batch)),$handoff['token']),'Public batch progress never exposes worker operation tokens');
 $blocked=PrintBatch::create(['batch_id'=>'BLOCKED-PROGRESS','status'=>'QUEUED','order_count'=>1,'artwork_file_count'=>1,'payload'=>[],'automation_requested_at'=>now(),'factory_agent_id'=>$id]);
-$agent->refresh()->update(['last_seen_at'=>now(),'telemetry'=>['reporter_mode'=>'listener','process_status'=>'running','stage'=>'error','batch_id'=>$blocked->id,'last_failure'=>['error_code'=>'manual_inspection_required']]]);
+$agent->refresh()->update(['last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'error','batch_id'=>$blocked->id,'last_failure'=>['error_code'=>'manual_inspection_required']]]);
 $check($dispatch->progress($blocked)['severity']==='danger' && str_contains($dispatch->progress($blocked)['title'],'restart blocked'),'A locally blocked uncertain attempt is visible on the batch page instead of silently waiting forever');
 echo "$checks factory dispatch checks passed.\n";

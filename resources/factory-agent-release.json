@@ -1,6 +1,7 @@
 {
-  "factory_agent_sha256": "ef01f7a75e327af89efc50184d9d27db9a1d566a5a9d79ddb723163e209408f7",
+  "job_output_sha256": "4e70ba4a47938393b93e390ee23e385510a9f64bfdf3d264698dcf4403db330e",
+  "version": "1.5.0",
+  "factory_agent_sha256": "7007ad44f5c45e8b17267e89c8986a17e90d6bb7411be414cd768693e0c683a9",
   "name": "LuckyBags Factory Agent",
-  "version": "1.4.1",
-  "portal_zip_sha256": "311bb197092c12351ea7104aa0e51927199a93b70cbbed4101fed20c0d4d3e87"
+  "portal_zip_sha256": "800329741ba09e3b83251782fcc29549826b8d9931139117336cc4258df37516"
 }

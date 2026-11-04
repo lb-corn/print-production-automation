@@ -1,0 +1,7 @@
+{
+  "package": "Pillow",
+  "vulnerabilities": [],
+  "version": "13.0.0",
+  "source": "https://api.osv.dev/v1/query",
+  "checked_utc": "2026-11-04T11:34:30.5849954Z"
+}

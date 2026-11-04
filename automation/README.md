@@ -158,7 +158,7 @@ Install only after the factory owner or IT accepts the remaining Print PC checks
 
 ## Public updates (no credentials)
 
-Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.4.1.zip with 21 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.5.0.zip with 22 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
 
 Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).
 
@@ -169,3 +169,16 @@ See [Factory Agent monitoring and upgrade instructions](../docs/factory-agent-mo
 Connection-only status for an existing PC: copy report-connection.ps1 beside the existing agent scripts and run it. It reads the installed VERSION/source hash and sends heartbeats only; it never calls the batch API. Keep its window open. No agent upgrade or autostart is required. The admin tab labels this mode explicitly.
 
 Background startup repair: version 1.4.1 uses the explicit Windows headless console host and a one-minute recovery trigger in addition to operator logon. Existing 1.4.0 installations can use repair-background-startup.ps1 alone without replacing credentials or agent code. Pause jobs and finish active work before repair; the repair refuses running agent processes. Actual terminal-close and sign-in tests on the client PC remain required.
+
+
+## Version 1.5.0: local labels, material queues and confirmed cleanup
+
+The portal stores order/Drive/label metadata only. It never stores or uploads production image bytes. After order sync (or a reviewed artwork selection), the resident listener polls metadata and automatically prepares one pinned original at a time on the PC in `FACTORY_PRINT_DIR/sync-cache`. No approval is needed to prepare this private copy; nothing reaches Epson at this stage. Only complete, unambiguous stock selections with Drive checksum/version pins are eligible. Unsupported, missing or changed artwork waits for review. Print requests take priority between background images. A failed image backs off for ten minutes so other orders can prepare.
+
+Labels use `LBSH<order>-<printed material>-<color>-<bag name>` (missing color is `NA`). A white rectangle and black text are baked near the bottom of a derived lossless TIFF. Original Drive files stay unchanged. Pixel dimensions, DPI, supported color mode and embedded ICC profile are preserved. Only JPEG, PNG and single-page TIFF with normal orientation are supported. Inspect the first actual Epson import at production size and verify the label does not cover required design details before enabling automatic printing.
+
+Queue by printed-material group; front/back pairs stay together. Queue preparation reuses only a matching pinned and hash-verified local labeled copy; otherwise it downloads and prepares on the PC. Final signed Handoff remains mandatory. Only then are flat, uniquely named labeled TIFF files copied to the configured `incoming` hot folder. Do not add Job ID subfolders to a nonrecursive Epson watch folder.
+
+New jobs never clear earlier incoming files. The agent retains the originals and production copies locally. Only a fresh, exact-batch signed PRINTED confirmation permits cleanup of that agent's recorded job files and matching sync cache. Epson may consume its incoming files independently; the private retained copies protect against that. Changed/unrecognized files and pre-upgrade untracked jobs are retained for manual review. Epson's internal spool/history is outside this cleanup.
+
+Existing PCs require the one-time 1.5.0 update offered in Admin > Factory Agent (including its pinned Pillow dependency). Finish active work and use the verified public ZIP with `install-portal-control.ps1`; keep existing `.env`, credentials and workspace. After that, the background listener starts automatically at operator sign-in and launches/exits temporary workers as needed. No daily terminal command is required. No new environment values are needed. Deploy the matching portal before updating the PC.

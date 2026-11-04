@@ -3,7 +3,7 @@ param([string]$OutputDir=(Join-Path $PSScriptRoot 'dist'),[switch]$PublicRelease
 $Root = Assert-AgentRoot $PSScriptRoot
 $Version = (Get-Content -LiteralPath (Join-Path $Root 'VERSION') -Raw).Trim()
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release version.' }
-$Include = @('factory_agent.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md')
+$Include = @('factory_agent.py','job_output.py','requirements.txt','requirements.lock','VERSION','release.json','config.example.env','agent-common.ps1','install.ps1','protect-agent.ps1','run-agent.ps1','run-once.ps1','install-autostart.ps1','uninstall-autostart.ps1','agent-info.ps1','update-agent.ps1','README.md','SECURITY_REVIEW.md')
 $Suffix = ''
 $Include += @('test-connectivity.ps1','report-connection.ps1','install-portal-control.ps1','repair-background-startup.ps1')
 if (!$PublicRelease) {
@@ -27,7 +27,8 @@ if (!$PublicRelease) {
     $Include += @('.env','service-account.json')
     $Suffix = '-PrivateInstall'
 }
-$Manifest = @{name='LuckyBags Factory Agent';version=$Version;factory_agent_sha256=(Get-FileHash -LiteralPath (Join-Path $Root 'factory_agent.py') -Algorithm SHA256).Hash.ToLower()}
+$OutputModuleHash=(Get-FileHash -LiteralPath (Join-Path $Root 'job_output.py') -Algorithm SHA256).Hash.ToLower()
+$Manifest = @{job_output_sha256=$OutputModuleHash;name='LuckyBags Factory Agent';version=$Version;factory_agent_sha256=(Get-FileHash -LiteralPath (Join-Path $Root 'factory_agent.py') -Algorithm SHA256).Hash.ToLower()}
 $Manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'release.json') -Encoding UTF8
 $Ancestor = [IO.Path]::GetFullPath($OutputDir)
 while (!(Test-Path -LiteralPath $Ancestor)) { $Ancestor = Split-Path -Parent $Ancestor }

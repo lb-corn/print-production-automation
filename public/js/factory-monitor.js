@@ -76,6 +76,19 @@
                 form.append(button);controls.append(form);card.append(controls);
             }
 
+            const installed=(t.agent_version||'0.0.0').split('.').map(Number);
+            const needsOutputUpdate=installed[0]<1 || (installed[0]===1 && installed[1]<5);
+            if(needsOutputUpdate && monitor.dataset.packageVersion && /^[a-f0-9]{64}$/.test(monitor.dataset.packageSha)) {
+                const update=node('details',undefined,'agent-activity portal-setup');update.append(node('summary','One-time agent update for labels and file cleanup'));
+                update.append(node('p','New labeled jobs wait until this PC is updated. Finish active work, disable and stop the existing listener task in Windows Task Scheduler, then save both downloads into the existing installation folder. Keep the current .env, credentials and workspaces.'));
+                const links=node('div',undefined,'confirmation-actions');for(const [label,url] of [['Download agent update',monitor.dataset.packageUrl],['Download installer',monitor.dataset.installerUrl]]){const link=node('a',label,'chip');link.href=url;links.append(link);}update.append(links);
+                update.append(node('pre',`cd C:\\LuckyBagsFactory
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+Unblock-File -LiteralPath .\\install-portal-control.ps1
+.\\install-portal-control.ps1 -ZipPath .\\LuckyBags-Factory-Agent.zip -ExpectedSha256 ${monitor.dataset.packageSha}`));
+                update.append(node('p','Run once as the normal printer operator. The installer updates pinned dependencies and restores background startup. Verify one labeled test print before bulk use.'));
+                card.append(update);
+            }
             const details=node('details',undefined,'agent-activity');details.open=expanded.has(agent.agent_id);details.append(node('summary','Technical details'));
             const technical=node('dl',undefined,'agent-checks');
             row(technical,'Agent ID',agent.agent_id,true);
