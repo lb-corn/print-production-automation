@@ -88,7 +88,7 @@ function applyReviewResult(result) {
         card.dataset.decision = item.decision || '';
         card.classList.toggle('approved-card', item.workflow === 'approved');
         card.classList.toggle('wrong-card', item.workflow === 'rejected');
-        const label = item.workflow === 'approved' ? 'Approved' : item.workflow === 'rejected' ? 'Rejected' : 'Needs review';
+        const label = item.workflow === 'approved' ? 'Verified' : item.workflow === 'rejected' ? 'Rejected' : 'Not verified';
         card.querySelector('.review-state').textContent = label;
         reviewFeedback(card, `${item.workflow === 'rejected' ? '✕' : '✓'} ${label} · Saved`);
         const checkbox = card.querySelector('.review-select');

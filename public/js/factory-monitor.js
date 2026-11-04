@@ -67,25 +67,16 @@
             row(table,'Last report',date(agent.last_seen_at));row(table,'Agent version',t.agent_version);
             row(table,'Activity',!online?'Not currently reporting':t.reporter_mode==='connection_only'?'Connection monitor only — worker setup required':t.batch_id?`Batch #${t.batch_id} · ${t.stage.replaceAll('_',' ')}`:'Ready for authorized jobs');
             card.append(table);
+            let controls;
             if(monitor.dataset.handoffUrl && /^[a-f0-9-]{36}$/.test(agent.agent_id)) {
-                const controls=node('div',undefined,'agent-control');controls.append(node('p',!agent.handoff_control_ready?'Apply the server database update to use handoff control.':agent.handoff_blocked?'Handoff blocked for all users. Preparation can continue.':'Handoff allowed. Every delivery still requires signed user approval.'));
+                controls=node('div',undefined,'agent-control');controls.append(node('p',!agent.handoff_control_ready?'Apply the server database update to use handoff control.':agent.handoff_blocked?'Handoff blocked for all users. Preparation can continue.':'Handoff allowed. Every delivery still requires signed user approval.'));
                 const form=node('form');form.method='post';form.action=monitor.dataset.handoffUrl.replace('AGENT_ID',agent.agent_id);
                 for(const [name,value] of [['_token',monitor.dataset.csrf],['blocked',agent.handoff_blocked?'0':'1'],['confirm_control','1']]){const input=node('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}
                 const button=node('button',agent.handoff_blocked?'Allow handoff':'Block handoff',agent.handoff_blocked?'primary':'chip');button.type='submit';button.disabled=unavailable||!agent.handoff_control_ready;
                 form.addEventListener('submit',event=>{if(!confirm(agent.handoff_blocked?'Allow handoff for this PC? Previously signed waiting handoffs may proceed.':'Block new handoffs for everyone? A delivery already started may finish safely. This does not stop a physical print.'))event.preventDefault();});
-                form.append(button);controls.append(form);card.append(controls);
+                form.append(button);controls.append(form);
             }
 
-            const installed=(t.agent_version||'0.0.0').split('.').map(Number), available=(monitor.dataset.packageVersion||'0.0.0').split('.').map(Number);
-            const needsOutputUpdate=available.some((part,index)=>part>(installed[index]||0) && available.slice(0,index).every((value,i)=>value===(installed[i]||0)));
-            if(needsOutputUpdate && monitor.dataset.updaterUrl) {
-                const update=node('details',undefined,'agent-activity portal-setup');update.append(node('summary',`Update existing agent to ${monitor.dataset.packageVersion}`));
-                update.append(node('p','On the Print PC, download this one updater and open it from Downloads. It downloads the versioned package, updates C:\\LuckyBagsFactory, and restarts the background listener. No files need to be moved into the installation folder.'));
-                const link=node('a',`Download updater v${monitor.dataset.packageVersion}`,'primary');link.href=monitor.dataset.updaterUrl;update.append(link);
-                update.append(node('p','Your .env, credentials, agent identity and print workspaces are preserved. Finish active work first; the updater refuses busy or uncertain jobs. Run as the usual printer operator.'));
-                update.append(node('p','No new .env settings are required. If you explicitly pinned the old version or source hash, the updater shows only the exact manual pin changes needed. Download links expire after 48 hours.'));
-                card.append(update);
-            }
             const details=node('details',undefined,'agent-activity');details.open=expanded.has(agent.agent_id);details.append(node('summary','Technical details'));
             const technical=node('dl',undefined,'agent-checks');
             row(technical,'Agent ID',agent.agent_id,true);
@@ -101,7 +92,7 @@
                     if(t.diagnostics[key]!==null && t.diagnostics[key]!==undefined)row(technical,label,check(t.diagnostics[key],diagnostic));
                 }
             }
-            details.append(technical);card.append(details);cards.append(card);
+            details.append(technical);card.append(details);if(controls)card.append(controls);cards.append(card);
 
         }
     }

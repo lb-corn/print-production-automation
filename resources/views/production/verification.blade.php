@@ -55,7 +55,7 @@
     $approved = $item->workflow_state === 'approved';
     $rejected = $item->workflow_state === 'rejected';
     $stale = $item->decision && !$item->approval_current;
-    $reviewLabel = $item->production_batch ? ($item->workflow_state === 'completed' ? 'Completed' : ($item->workflow_state === 'failed' ? 'Print failed' : 'In print · '.str_replace('_', ' ', strtolower($item->production_batch['status'])))) : ($approved ? 'Approved' : ($rejected ? 'Rejected' : ($stale ? 'Artwork changed · Re-verify' : ($item->is_custom ? 'Custom · Pending' : 'Not verified'))));
+    $reviewLabel = $item->production_batch ? ($item->workflow_state === 'completed' ? 'Completed' : ($item->workflow_state === 'failed' ? 'Print failed' : 'In print · '.str_replace('_', ' ', strtolower($item->production_batch['status'])))) : ($approved ? 'Verified' : ($rejected ? 'Rejected' : ($stale ? 'Artwork changed · Re-verify' : ($item->is_custom ? 'Custom · Pending' : 'Not verified'))));
 @endphp
 <details data-item-id="{{$item->id}}" class="job-card {{$approved?'approved-card':($rejected?'wrong-card':($item->workflow_state === 'completed'?'completed-card':($item->production_batch?'in-print-card':'')))}}" {{ (!$approved && !$rejected && !$item->production_batch) ? 'open' : '' }} data-workflow="{{$item->workflow_state}}" data-type="{{$item->design_type}}" data-custom="{{$item->is_custom?'yes':'no'}}" data-ready="{{$item->ready_for_print?'yes':'no'}}" data-decision="{{$item->decision?->decision??''}}" data-status="{{$item->match_status}}">
 <summary class="job-title">
@@ -64,7 +64,10 @@
 <span>{{$item->order_number}}</span>
 <h2>{{$item->product}}</h2>
 </div>
+<span class="review-header-labels">
+@include('partials.review-material-labels',['item'=>$item])
 <span class="review-state">{{$reviewLabel}}</span>
+</span>
 <span class="expand-hint" aria-hidden="true">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 <path d="m6 9 6 6 6-6"/>
