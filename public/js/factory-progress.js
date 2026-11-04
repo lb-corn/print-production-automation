@@ -55,15 +55,17 @@
     if (root) { refresh();setInterval(refresh, 5000);document.addEventListener('visibilitychange', refresh); }
     const form = document.querySelector('[data-queue-selection]');
     if (form) {
+        const blocked = form.dataset.queueBlocked === '1';
         const checks = [...document.querySelectorAll('[data-queue-item]')];
         const button = form.querySelector('[data-queue-open]');
         const dialog = document.querySelector('[data-queue-dialog]');
-        const update = () => { const count = checks.filter(check => check.checked).length;button.disabled = !count;button.textContent = `Queue & prepare selected (${count})`; };
+        const update = () => { const count = checks.filter(check => check.checked).length;button.disabled = blocked || !count;button.textContent = blocked ? 'Awaiting server update' : `Queue & prepare selected (${count})`; };
         checks.forEach(check => check.addEventListener('change', update));
         form.querySelector('[data-select-all]').addEventListener('change', event => { checks.forEach(check => { check.checked = event.target.checked; });update(); });
-        button.addEventListener('click', () => { dialog.querySelector('[data-selected-count]').textContent = checks.filter(check => check.checked).length;dialog.showModal(); });
+        button.addEventListener('click', () => { if (blocked) return;dialog.querySelector('[data-selected-count]').textContent = checks.filter(check => check.checked).length;dialog.showModal(); });
         dialog.querySelector('[data-queue-cancel]').addEventListener('click', () => dialog.close());
-        dialog.querySelector('[data-queue-confirm]').addEventListener('click', event => { event.target.disabled = true;form.requestSubmit(); });
+        dialog.querySelector('[data-queue-confirm]').addEventListener('click', event => { if (blocked) return;event.target.disabled = true;form.requestSubmit(); });
+        form.addEventListener('submit', event => { if (blocked) event.preventDefault(); });
         update();
     }
 })();

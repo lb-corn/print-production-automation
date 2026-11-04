@@ -178,11 +178,13 @@ class ProductionController extends Controller
             'summary' => $this->svc->summary($items),
             'materials' => ProductionService::MATERIALS,
             'factoryReadiness'=>app(\App\Services\FactoryDispatchService::class)->readiness(),
+            'factoryQueueAvailable'=>app(\App\Services\FactoryDispatchService::class)->consentReady(),
         ]);
     }
 
     public function batch(Request $request)
     {
+        if(!app(\App\Services\FactoryDispatchService::class)->consentReady())return redirect()->route('queue')->with('error','Printing is temporarily unavailable until an administrator completes the server database update. Your approved items have not been queued.');
         $data=$request->validate(['items'=>'required|array|min:1|max:1000','items.*'=>'required|integer|distinct','dispatch_confirmed'=>'required|accepted']);
         $batch=\Illuminate\Support\Facades\DB::transaction(function()use($request,$data){
             $batch=$this->svc->batch($request->user()->id,$data['items']);
@@ -215,6 +217,7 @@ class ProductionController extends Controller
     }
     public function batchProgress(PrintBatch $batch){return response()->json(app(\App\Services\FactoryDispatchService::class)->progress($batch))->header('Cache-Control','no-store');}
     public function requestPreparation(Request $request,PrintBatch $batch){
+        if(!app(\App\Services\FactoryDispatchService::class)->consentReady())return redirect()->route('batch.show',$batch)->with('error','Automatic preparation is unavailable until an administrator completes the server database update. No preparation request was saved.');
         $request->validate(['dispatch_confirmed'=>'required|accepted']);
         \Illuminate\Support\Facades\DB::transaction(fn()=>app(\App\Services\FactoryDispatchService::class)->request($batch));
         return redirect()->route('batch.show',$batch)->with('ok','Automatic preparation requested. The batch stays pending until an enabled listener can process it.');
