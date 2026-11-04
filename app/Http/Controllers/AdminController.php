@@ -90,16 +90,52 @@ class AdminController extends Controller
         return redirect()->route('admin.users')->with('ok', 'User deleted. Production history was preserved.');
     }
 
+    public function pcCleanup(Request $request)
+    {
+        abort_unless($request->user()?->role==='admin',403);
+        $python=base64_encode(file_get_contents(resource_path('factory-pc-cleanup.py')));
+        $script=<<<'PS'
+$ErrorActionPreference='Stop'
+$python='C:\LuckyBagsFactory\.venv\Scripts\python.exe'
+if(-not (Test-Path -LiteralPath $python -PathType Leaf)){throw 'Existing Print PC Python installation was not found.'}
+$temp=Join-Path ([IO.Path]::GetTempPath()) ('LuckyBags-Cleanup-'+[guid]::NewGuid()+'.py')
+try {
+    [IO.File]::WriteAllBytes($temp,[Convert]::FromBase64String('__CLEANUP_CODE__'))
+    & $python -I $temp
+    if($LASTEXITCODE -ne 0){throw 'PC cleanup did not complete. Read the message above; portal data has not been reset by this download.'}
+} finally {Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue}
+PS;
+        $launcher=<<<'CMD'
+@echo off
+setlocal DisableDelayedExpansion
+set "LUCKYBAGS_CLEANUP_SELF=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -Command "$lines=[IO.File]::ReadAllLines($env:LUCKYBAGS_CLEANUP_SELF); $index=[Array]::IndexOf($lines,'# POWERSHELL_START'); if($index -lt 0){exit 1}; $temp=Join-Path ([IO.Path]::GetTempPath()) ('LuckyBags-Cleanup-'+[guid]::NewGuid()+'.ps1'); [IO.File]::WriteAllLines($temp,$lines[($index+1)..($lines.Length-1)]); try { & $temp } finally { Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue }"
+set "CLEANUP_RESULT=%ERRORLEVEL%"
+echo.
+pause
+exit /b %CLEANUP_RESULT%
+# POWERSHELL_START
+CMD;
+        return response(str_replace("\n","\r\n",$launcher)."\r\n".str_replace('__CLEANUP_CODE__',$python,$script),200,['Content-Type'=>'application/octet-stream','Content-Disposition'=>'attachment; filename="Clear-LuckyBags-Print-Files.cmd"','Cache-Control'=>'no-store']);
+    }
+
     public function reset(Request $request)
     {
         $request->validate([
             'password' => ['required', 'current_password'],
             'confirmation' => ['required', Rule::in(['RESET PORTAL'])],
             'agents_paused' => ['accepted'],
+            'reload_shopify' => ['sometimes','boolean'],
         ]);
-        DB::transaction(function () {
-            foreach (self::RESET_TABLES as $table) DB::table($table)->delete();
-        });
-        return redirect()->route('dashboard')->with('ok', 'Production records reset. Artwork mappings, naming rules, settings and users were preserved. Pull the Shopify backlog to start again.');
+        try {
+            DB::transaction(function () use ($request) {
+                foreach (self::RESET_TABLES as $table) DB::table($table)->delete();
+                if($request->boolean('reload_shopify'))app(\App\Services\BacklogSyncService::class)->sync();
+            });
+        } catch (\Throwable $error) {
+            report($error);
+            return redirect()->route('admin.settings',['section'=>'reset'])->with('error','Reset could not finish. All portal records were preserved. Check Shopify, Drive and material-sheet access, then try again.');
+        }
+        return redirect()->route('dashboard')->with('ok', $request->boolean('reload_shopify')?'Production reset complete. Current Shopify bag orders were imported for fresh artwork review. PC files are not cleared by this portal reset.':'Production records reset. Settings and users were preserved. PC files are not cleared by this portal reset.');
     }
 }

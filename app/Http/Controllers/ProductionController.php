@@ -16,7 +16,7 @@ class ProductionController extends Controller
 
     public function dashboard()
     {
-        $items = ProductionItem::with('decision')->get();
+        $items = $this->svc->activeItems();
 
         $ready = $items->filter(
             fn ($item) => $this->svc->ready($item)
@@ -24,6 +24,7 @@ class ProductionController extends Controller
 
         return view('dashboard.index', [
             'total' => $items->count(),
+            'openOrderCount'=>$items->pluck('order_number')->filter()->unique()->count(),
             'ready' => $ready->count(),
             'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && (!$this->svc->approved($item) || !$this->svc->materialCompatible($item)))->count(),
             'custom' => $items->where('is_custom', true)->count(),
@@ -70,7 +71,7 @@ class ProductionController extends Controller
 
     public function verification()
     {
-        $items = ProductionItem::with('decision')
+        $items = ProductionItem::with('decision')->when(\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active'),fn($q)=>$q->where('shopify_active',true))
             ->orderByRaw("
                 CASE match_status
                     WHEN 'REVIEW' THEN 0
