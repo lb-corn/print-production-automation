@@ -136,6 +136,7 @@ jobs:
           php tests/material-batches.php
           php tests/custom-artwork.php
           php tests/material-settings.php
+          php tests/agent-updater.php
           node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php

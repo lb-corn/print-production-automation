@@ -2,7 +2,7 @@
 require __DIR__.'/factory-dispatch.php';
 use App\Services\{CustomArtworkService as Custom,MaterialCatalog};
 use App\Models\{ProductionItem,CustomArtworkTransfer as Transfer};
-$custom=new App\Http\Controllers\CustomArtworkController();$agent->update(['last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.6.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$custom=new App\Http\Controllers\CustomArtworkController();$agent->update(['last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.6.1','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $hash=str_repeat('a',128).'-1793651097';$url=Custom::thumbnail([['key'=>'_fpd-hash','value'=>$hash]]);
 $check($url==='https://fpd-api.ganymede-apps.net/api/fe/line_item_cache/thumbnail_image?data_hash='.$hash,'Fancy Product hash becomes a direct external order preview, never hosted image bytes');
 $check(Custom::thumbnail([['key'=>'_fpd-hash','value'=>'https://attacker.invalid/image']])===null && Custom::series('PSN-CSTM')==='PSN','Custom bag code comes from the material sheet and untrusted preview URLs are not accepted');
@@ -48,7 +48,7 @@ $noDrive=new class extends App\Services\GoogleDriveService {public function __co
 $sync=new App\Services\BacklogSyncService($shop,$noDrive,new App\Services\ArtworkMatcherService($noDrive));$sync->sync();$synced=ProductionItem::where('line_item_id','custom-sync-source')->firstOrFail();
 $check($synced->is_custom && $synced->matches===[] && $synced->design_type==='double','Custom-only sync imports orders without looking for their files in Google Drive');
 auth()->setUser($user);view()->share('errors',new Illuminate\Support\ViewErrorBag());
-$agent->update(['last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.6.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$agent->update(['last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.6.1','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $singleRow=[...$row,'line_item_id'=>'custom-single','product'=>'Custom Pro Sniper Elite','sku'=>'PSE-CSTM'];$single=ProductionItem::create([...$singleRow,...Custom::match($singleRow)]);
 $single->production_batch=null;$singleHtml=view('partials.custom-artwork-upload',['item'=>$single])->render();
 $item->production_batch=null;$doubleHtml=view('partials.custom-artwork-upload',['item'=>$item])->render();

@@ -158,7 +158,7 @@ Install only after the factory owner or IT accepts the remaining Print PC checks
 
 ## Public updates (no credentials)
 
-Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.6.0.zip with 23 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.6.1.zip with 23 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
 
 Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).
 
@@ -202,3 +202,12 @@ Custom upload and preview use encrypted WebRTC data channels directly between th
 The listener automatically launches a fixed temporary receiver when idle (print offers take priority). Received originals are SHA256-checked, Defender-scanned and labeled locally. Both required sides must be validated on the same PC before approval. Approved originals and derived images stay under FACTORY_PRINT_DIR/custom-artwork until every referencing material batch has a matching signed PRINTED confirmation. Replaced/unselected validated uploads expire after 24 hours only when not referenced by an approval or live batch. Incomplete failed transfers remove only their own temporary files. Unknown or changed files block cleanup.
 
 Queue preparation copies the approved custom original into the normal retained job workspace and uses current locked material labels. Final signed Handoff and physical PRINTED confirmation remain separate. The agent supports direct preview from the PC, including at Handoff; that preview also never travels through portal image storage. Existing installations need the one-time 1.6.0 public update and pinned WebRTC dependencies. Source code is fixed and integrity-checked; the portal cannot execute arbitrary commands.
+
+
+## One-file update from Downloads
+
+Admin > Factory Agent offers a versioned Windows updater. Download it on the Print PC and double-click it in Downloads; there is no need to move downloads into C:\LuckyBagsFactory. Its signed package URL expires after 48 hours. The updater downloads the exact public release, verifies its ZIP and source hashes, and targets the existing installation. It does not create a new agent or replace .env, credentials, identity or print workspaces.
+
+The updater disables future startup triggers during maintenance, checks that no worker/transfer is active, holds the actual configured workspace lock and safely pauses only verified listener processes. It checks the last operation for an unfinished/uncertain claim before stopping the idle listener. A busy or unverifiable operation postpones the update without replacing code. It then invokes the reviewed installer to update only allowlisted source files/dependencies and restore background startup. Before-install failures restore the prior task; an incomplete source/dependency update remains stopped for safe inspection/retry. No global execution-policy change or elevation is required.
+
+If .env explicitly pins an older REQUIRED_AGENT_VERSION or REQUIRED_AGENT_SHA256, the updater lists the exact manual pin change and stops before replacing code. Otherwise no .env edit is needed. Version 1.6.1 also sends custom-transfer receipts as JSON, matching the metadata-only portal API; legacy heartbeat form encoding is unchanged.

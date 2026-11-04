@@ -24,6 +24,7 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroy'])->name('users.destroy');
     Route::post('/factory-agent/{agent:agent_id}/handoff-control',[\App\Http\Controllers\FactoryMonitoringController::class,'handoffControl'])->middleware('throttle:10,1')->name('factory-agent.handoff-control');
     Route::post('/factory-agent/{agent:agent_id}/processing',[\App\Http\Controllers\FactoryMonitoringController::class,'processing'])->middleware('throttle:10,1')->name('factory-agent.processing');
+    Route::get('/factory-agent/updater',[\App\Http\Controllers\FactoryMonitoringController::class,'updater'])->middleware('throttle:10,1')->name('factory-agent.updater');
     Route::get('/factory-agent/package',[\App\Http\Controllers\FactoryMonitoringController::class,'portalPackage'])->middleware('throttle:10,1')->name('factory-agent.package');
     Route::get('/factory-agent/repair-startup',[\App\Http\Controllers\FactoryMonitoringController::class,'repairStartup'])->middleware('throttle:10,1')->name('factory-agent.repair-startup');
     Route::get('/factory-agent/setup',[\App\Http\Controllers\FactoryMonitoringController::class,'portalSetup'])->middleware('throttle:10,1')->name('factory-agent.setup');
@@ -40,3 +41,5 @@ Route::middleware(['auth','auth.session',\App\Http\Middleware\ReadOnlyDemo::clas
  Route::post('/custom-transfers/{transfer}/cancel',[\App\Http\Controllers\CustomArtworkController::class,'cancel'])->name('custom.cancel');
  Route::post('/production/{item}/custom-confirm',[\App\Http\Controllers\CustomArtworkController::class,'confirm'])->name('custom.confirm');
 });
+
+Route::get('/factory-agent/releases/{version}',[\App\Http\Controllers\FactoryMonitoringController::class,'signedPackage'])->middleware(['signed:relative','throttle:20,1'])->where('version','[0-9]+\\.[0-9]+\\.[0-9]+')->name('factory-agent.release');

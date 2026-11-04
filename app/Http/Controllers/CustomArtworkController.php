@@ -26,7 +26,7 @@ class CustomArtworkController extends Controller {
    $material=$definition[$data['side']==='back'?'back':'front'];
    $metadata=['filename'=>$data['filename'],'bytes'=>(int)$data['bytes'],'sha256'=>$data['sha256'],'context_sha256'=>Custom::context($item),'material'=>$material,'print_label'=>PrintLabelService::label($item,$material),'print_label_policy'=>PrintLabelService::POLICY];
   }
-  abort_unless($agent && $agent->last_seen_at->gt(now()->subSeconds(120)) && version_compare($agent->telemetry['agent_version']??'0.0.0','1.6.0','>='),422,'Update and connect the Print PC agent to version 1.6.0 for direct custom artwork transfer.');
+  abort_unless($agent && $agent->last_seen_at->gt(now()->subSeconds(120)) && version_compare($agent->telemetry['agent_version']??'0.0.0','1.6.1','>='),422,'Update and connect the Print PC agent to version 1.6.1 for direct custom artwork transfer.');
   return DB::transaction(function()use($r,$item,$data,$agent,$metadata,$parent){
    FactoryAgent::whereKey($agent->id)->lockForUpdate()->first();
    abort_if(Transfer::where('factory_agent_id',$agent->agent_id)->whereIn('state',['WAITING','CLAIMED','CONNECTED'])->where('expires_at','>',now())->exists(),409,'Another direct artwork transfer is active. Finish it before sending this file.');
