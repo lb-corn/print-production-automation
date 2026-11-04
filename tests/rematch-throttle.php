@@ -2,7 +2,7 @@
 // Isolated cache/session test; never opens the production database or integration clients.
 require __DIR__.'/../vendor/autoload.php';
 $app=require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function(Throwable $e):void { fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL); exit(1); });
 config(['session.driver'=>'array']);
 use Illuminate\Cache\{RateLimiter,Repository,ArrayStore};

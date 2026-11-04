@@ -11,6 +11,8 @@ return [
         'api_version' => env('SHOPIFY_API_VERSION', '2026-07'),
     ],
 
+    'materials' => ['sheet_id' => env('MATERIALS_SHEET_ID','1NyRZkS7ZFvsr2PmBLuj7eFABRkYlmBOSOdI442DooXM')],
+
     'google_drive' => [
         'rename_enabled' => (bool) env('GOOGLE_DRIVE_RENAME_ENABLED', true),
         'service_account_file' => base_path(

@@ -16,7 +16,7 @@ class LabelledPipelineTests(unittest.TestCase):
             root=Path(temporary);workspace=root/'workspace';workspace.mkdir();hot=root/'incoming';hot.mkdir()
             batch={'id':19,'batch_id':'LB-PIPELINE-19','status':'CLAIMED','handoff_authorized':True,'payload':{
                 'print_label_policy':'BOTTOM_WHITE_V1','batch_id':'LB-PIPELINE-19','order_count':1,'artwork_file_count':1,
-                'orders':[{'line_item_id':'line-19','order':'#4019','quantity':1,'artworks':[{'side':'PRINT','material':'Rave 9','filename':'source.png','drive_file_id':'source_drive_19','print_label':'LBSH4019-RAVE9-WHITE-LUCKY-FRIENDS'}]}]}}
+                'orders':[{'line_item_id':'line-19','order':'#4019','design_type':'double','quantity':1,'artworks':[{'side':'PRINT','material':'Rave 9','filename':'source.png','drive_file_id':'source_drive_19','print_label':'LBSH4019-RAVE9-WHITE-LUCKY-FRIENDS'}]}]}}
             original_payload=json.loads(json.dumps(batch['payload']))
             def download(service,file,destination):
                 destination.parent.mkdir(parents=True,exist_ok=True)
@@ -51,7 +51,7 @@ class LabelledPipelineTests(unittest.TestCase):
                  'md5_checksum':'a'*32,'drive_version':'7','print_label':'LBSH42-RAVE9-WHITE-STONE'}
             order={'line_item_id':'line-42','order':'#42','quantity':1,'artworks':[art]}
             batch={'id':42,'batch_id':'LB-SYNC-42','status':'CLAIMED','payload':{'batch_id':'LB-SYNC-42',
-                   'print_label_policy':'BOTTOM_WHITE_V1','order_count':1,'artwork_file_count':1,'orders':[order]}}
+                   'print_label_policy':'BOTTOM_WHITE_V2','order_count':1,'artwork_file_count':1,'orders':[order]}}
             def download(service,file,destination):
                 destination.parent.mkdir(parents=True,exist_ok=True)
                 Image.new('RGB',(1000,1000),(30,60,90)).save(destination,dpi=(300,300))

@@ -60,15 +60,16 @@
         const button = form.querySelector('[data-queue-open]');
         const dialog = document.querySelector('[data-queue-dialog]');
         const filter = form.querySelector('[data-material-filter]');
-        const visibleChecks = () => checks.filter(check => !filter || check.dataset.materialGroup === filter.value);
-        const update = () => { const count = checks.filter(check => check.checked).length;button.disabled = blocked || !count;button.textContent = blocked ? 'Awaiting server update' : `Queue & prepare · ${filter?.value || "selected"} (${count})`; };
+        const matchesMaterial = check => !filter?.value || JSON.parse(check.dataset.materials || '[]').includes(filter.value);
+        const visibleChecks = () => checks.filter(matchesMaterial);
+        const update = () => { const count = checks.filter(check => check.checked).length;button.disabled = blocked || !count;button.textContent = blocked ? 'Awaiting server update' : `Queue selected (${count})`; };
         checks.forEach(check => check.addEventListener('change', update));
         form.querySelector('[data-select-all]').addEventListener('change', event => { visibleChecks().forEach(check => { check.checked = event.target.checked; });update(); });
-        button.addEventListener('click', () => { if (blocked) return;dialog.querySelector('[data-selected-count]').textContent = checks.filter(check => check.checked).length;const material=dialog.querySelector('[data-selected-material]');if(material)material.textContent=filter?.value||'';dialog.showModal(); });
+        button.addEventListener('click', () => { if (blocked) return;dialog.querySelector('[data-selected-count]').textContent = checks.filter(check => check.checked).length;const material=dialog.querySelector('[data-selected-material]');if(material){const names=new Set(checks.filter(c=>c.checked).flatMap(c=>JSON.parse(c.dataset.materials||'[]')));material.textContent=`${names.size} material batch(es): ${[...names].sort().join(', ')}`;}dialog.showModal(); });
         dialog.querySelector('[data-queue-cancel]').addEventListener('click', () => dialog.close());
         dialog.querySelector('[data-queue-confirm]').addEventListener('click', event => { if (blocked) return;event.target.disabled = true;form.requestSubmit(); });
         form.addEventListener('submit', event => { if (blocked) event.preventDefault(); });
-        if(filter){const apply=()=>{checks.forEach(check=>{check.checked=false;const card=check.closest('[data-queue-card]');if(card)card.hidden=check.dataset.materialGroup!==filter.value;});form.querySelector('[data-select-all]').checked=false;update();};filter.addEventListener('change',apply);apply();}
+        if(filter){const apply=()=>{checks.forEach(check=>{check.checked=false;const card=check.closest('[data-queue-card]');if(card)card.hidden=!matchesMaterial(check);});const all=form.querySelector('[data-select-all]');all.checked=false;all.disabled=blocked || visibleChecks().length===0;const empty=document.querySelector('[data-material-empty]');if(empty)empty.hidden=visibleChecks().length!==0;update();};filter.addEventListener('change',apply);apply();}
         update();
     }
 })();

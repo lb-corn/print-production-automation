@@ -57,10 +57,12 @@ class FactoryController extends Controller
         $data=$request->validate(['after'=>'nullable|integer|min:0']);$after=(int)($data['after']??0);
         $items=\App\Models\ProductionItem::where('id','>',$after)->orderBy('id')->limit(100)->get();
         $processed=app(\App\Services\ProductionService::class)->batchIndex(true);
+        $catalog=app(\App\Services\MaterialCatalog::class);$catalog->rows(true);$map=$catalog->map();
         $orders=[];
         foreach($items as $item){
-            if((int)$item->quantity<1 || (int)$item->quantity>10000 || isset($processed[$item->line_item_id]) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset(\App\Services\ProductionService::MATERIALS[$item->series_code]))continue;
-            $materials=\App\Services\ProductionService::MATERIALS[$item->series_code];$arts=[];
+            if((int)$item->quantity<1 || (int)$item->quantity>10000 || isset($processed[$item->line_item_id]) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset($map[$item->series_code]))continue;
+            if(($catalog->row($item->series_code)['type']??null)!==$item->design_type)continue;
+            $materials=$map[$item->series_code];$arts=[];
             foreach($item->matches as $match){
                 $side=$item->design_type==='single'?'PRINT':strtoupper($match['side']);
                 $material=$materials[$side==='BACK'?1:0];
@@ -70,7 +72,7 @@ class FactoryController extends Controller
             }
             if($arts)$orders[]=['line_item_id'=>$item->line_item_id,'order'=>$item->order_number,'quantity'=>(int)$item->quantity,'artworks'=>$arts];
         }
-        return response()->json(['orders'=>$orders,'next_after'=>$items->count()===100?$items->last()->id:0])->header('Cache-Control','no-store');
+        return response()->json(['print_label_policy'=>\App\Services\PrintLabelService::POLICY,'orders'=>$orders,'next_after'=>$items->count()===100?$items->last()->id:0])->header('Cache-Control','no-store');
     }
     public function completion(Request $request,PrintBatch $batch,\App\Services\FactoryDispatchService $dispatch){
         $id=$dispatch->identity($request);

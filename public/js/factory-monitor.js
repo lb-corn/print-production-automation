@@ -77,7 +77,7 @@
             }
 
             const installed=(t.agent_version||'0.0.0').split('.').map(Number);
-            const needsOutputUpdate=installed[0]<1 || (installed[0]===1 && installed[1]<5);
+            const needsOutputUpdate=installed[0]<1 || (installed[0]===1 && (installed[1]<5 || (installed[1]===5 && (installed[2]||0)<1)));
             if(needsOutputUpdate && monitor.dataset.packageVersion && /^[a-f0-9]{64}$/.test(monitor.dataset.packageSha)) {
                 const update=node('details',undefined,'agent-activity portal-setup');update.append(node('summary','One-time agent update for labels and file cleanup'));
                 update.append(node('p','New labeled jobs wait until this PC is updated. Finish active work, disable and stop the existing listener task in Windows Task Scheduler, then save both downloads into the existing installation folder. Keep the current .env, credentials and workspaces.'));

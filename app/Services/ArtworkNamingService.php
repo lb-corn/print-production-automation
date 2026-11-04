@@ -12,6 +12,7 @@ class ArtworkNamingService
 
     public function scan(int $actor,bool $standardize=false): array
     {
+        app(MaterialCatalog::class)->rows(true);
         $this->matcher->refreshReviewedSelections();
         $index=$this->drive->artworkIndex();$catalog=$this->shopify->getArtworkCatalog();$rules=$this->store->rules();
         return $this->store->create($actor,['naming_policy'=>self::POLICY,'selections_digest'=>$this->selectionsDigest(),'rules'=>$rules,'rules_digest'=>$this->rulesDigest($rules),'index'=>$index,'catalog'=>$catalog,'catalog_digest'=>$this->catalogDigest($catalog),

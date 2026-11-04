@@ -20,7 +20,7 @@ $agent->refresh()->update(['handoff_blocked'=>false,'telemetry'=>['agent_version
 $item=$make('requires-label-update');$new=$svc->batch($user->id,[$item->id]);Illuminate\Support\Facades\DB::transaction(fn()=>$dispatch->request($new));
 $check($dispatch->next($id)===null && $dispatch->readiness($new->fresh())['state']==='agent_update_required','Old PC agents cannot silently print jobs without their required labels');
 $r=Illuminate\Http\Request::create('/begin','POST',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);$reject(fn()=>$dispatch->begin($r,$new,'prepare'),409);
-$agent->update(['telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$agent->update(['telemetry'=>['agent_version'=>'1.5.1','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $first=$make('material-one');$other=$make('material-two');$other->update(['series_code'=>'LUC']);$count=App\Models\PrintBatch::count();
 $reject(fn()=>$svc->batch($user->id,[$first->id,$other->id]),422);
 $check(App\Models\PrintBatch::count()===$count,'Mixed printed-material groups cannot be queued together or partially batched');

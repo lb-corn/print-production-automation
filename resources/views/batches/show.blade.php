@@ -1,7 +1,9 @@
 <x-layouts.app
+
     heading="{{ $batch->batch_id }}"
     subheading="{{$batch->status==='CANCELLED'?'Cancelled history · not queued':'Factory production batch'}}"
 >
+@if(($relatedBatches??collect())->count()>1)<section class="panel"><h2>Related material batches</h2><p>Each material is delivered and confirmed separately. A double-sided order completes only after all of its material batches are printed.</p><nav class="related-material-batches" aria-label="Related material batches">@foreach($relatedBatches as $related)<a href="{{route('batch.show',$related->id)}}" @if($related->id===$batch->id) aria-current="page" @endif>{{$related->payload['material_group']}} · {{$related->status}}</a>@endforeach</nav></section>@endif
     @php
         $status = $batch->status;
 

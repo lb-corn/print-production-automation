@@ -133,6 +133,7 @@ jobs:
           node tests/factory-monitor-controls.cjs
           php tests/queue-server-setup.php
           php tests/print-output.php
+          php tests/material-batches.php
           node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs
           php tests/rematch-throttle.php

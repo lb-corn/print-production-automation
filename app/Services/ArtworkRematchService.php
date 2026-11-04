@@ -13,6 +13,7 @@ class ArtworkRematchService
     /** Fetch before taking database locks; a failed Drive request leaves all selections untouched. */
     public function rematch(?array $index = null): array
     {
+        app(MaterialCatalog::class)->rows(true);
         self::ensureSchemaReady();
         $this->matcher->refreshReviewedSelections();
         $index ??= $this->drive->artworkIndex();
