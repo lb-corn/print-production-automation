@@ -99,13 +99,15 @@
 </div>
 <div class="compare {{count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">
 <div class="art">
-<label>SHOPIFY ORDER IMAGE</label>
+<label>{{$item->is_custom?'CUSTOM ORDER PREVIEW':'SHOPIFY ORDER IMAGE'}}</label>
 @if($item->shopify_image)<img src="{{$item->shopify_image}}" alt="Shopify order artwork for {{$item->product}}" loading="lazy">
 @else<div class="placeholder">No Shopify image</div>
 @endif<p>{{$item->product}}</p>
 </div>
 <div class="drive-grid {{$item->design_type==='single' || !count($item->display_matches??[]) ? 'one' : ''}}">
-@if(!$item->production_batch && !count($item->display_matches??[]) && !$item->is_custom)
+@if($item->is_custom)
+@include('partials.custom-artwork-upload',['item'=>$item])
+@elseif(!$item->production_batch && !count($item->display_matches??[]) && !$item->is_custom)
 @include('partials.artwork-review', ['item'=>$item])
 @else
 @forelse($item->display_matches??[] as $m)<div class="art">

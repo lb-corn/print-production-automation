@@ -40,6 +40,7 @@ class ProductionController extends Controller
         try {
             $r = app(BacklogSyncService::class)->sync();
             $response=redirect()->route($destination)->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
+            if(($r['custom_items']??0)>0)$response->with('ok',session('ok').' Custom bags: '.$r['custom_items'].' imported for direct artwork upload.');
             if(!($r['artwork_schema_ready']??true))$response->with('warning','Orders synced and artwork checked. The server still needs the artwork_review database migration before artwork approval and printing. You do not need to fix the whole catalog.');
             return $response;
         } catch (\Throwable $e) {

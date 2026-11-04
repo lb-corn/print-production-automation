@@ -158,7 +158,7 @@ Install only after the factory owner or IT accepts the remaining Print PC checks
 
 ## Public updates (no credentials)
 
-Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.5.1.zip with 22 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
+Build with ".\automation\make-release.ps1 -PublicRelease" for a distributable update ZIP. This produces LuckyBags-Factory-Agent-v1.6.0.zip with 23 approved code/documentation files, excluding .env and service-account.json. Use only this public ZIP with update-agent.ps1; the updater rejects private installer archives and preserves the installed secrets. PrivateInstall ZIPs are for fresh installations only.
 
 Packaging regression check: .\automation\tests\test-release.ps1 (uses fake credentials, never contacts Google or a printer).
 
@@ -191,3 +191,14 @@ The portal reads only the **Lucky Bags** tab of the configured material Google S
 Selection now creates one homogeneous batch per printed material. A double-sided bag may appear in two related batches, each with its own signed Handoff and PRINTED confirmation. An order counts as completed only after all its material batches are printed. Single-sided back material is fabric stock only and never creates a blank print file. Untouched orders can be returned only by cancelling all their affected material sides atomically; a started side blocks that return.
 
 Label policy BOTTOM_WHITE_V2 places the label 1.5% above the bottom (previously 4%). Cache keys include the layout policy, so old higher labels cannot be reused. Agent 1.5.1 supports both prior V1 batch snapshots and new V2 jobs; update the PC once to use V2. No new PC environment settings are required.
+
+
+## Version 1.6.0: custom artwork directly to the PC
+
+Recognized custom bag orders (for example PSN-CSTM) sync from Shopify with Fancy Product's external thumbnail as the order preview. The preview is never treated as a production original. Operators choose/drag one print file for a single-sided bag or FRONT and BACK files for a double-sided bag, then explicitly confirm all sides. Bag type/materials remain sourced from the Lucky Bags sheet.
+
+Custom upload and preview use encrypted WebRTC data channels directly between the browser and Print PC. The portal stores only small SDP connection metadata, file hashes, filenames, dimensions, approval state and receipts. It never accepts the image file body. No image is uploaded to portal hosting or used as a cloud fallback. Keep the browser tab open until validation finishes. STUN-assisted peer connectivity is required; restrictive networks can block it, in which case the UI reports failure and does not queue unvalidated artwork. No TURN relay or new inbound HTTP server is installed.
+
+The listener automatically launches a fixed temporary receiver when idle (print offers take priority). Received originals are SHA256-checked, Defender-scanned and labeled locally. Both required sides must be validated on the same PC before approval. Approved originals and derived images stay under FACTORY_PRINT_DIR/custom-artwork until every referencing material batch has a matching signed PRINTED confirmation. Replaced/unselected validated uploads expire after 24 hours only when not referenced by an approval or live batch. Incomplete failed transfers remove only their own temporary files. Unknown or changed files block cleanup.
+
+Queue preparation copies the approved custom original into the normal retained job workspace and uses current locked material labels. Final signed Handoff and physical PRINTED confirmation remain separate. The agent supports direct preview from the PC, including at Handoff; that preview also never travels through portal image storage. Existing installations need the one-time 1.6.0 public update and pinned WebRTC dependencies. Source code is fixed and integrity-checked; the portal cannot execute arbitrary commands.

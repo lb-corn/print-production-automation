@@ -7,21 +7,23 @@ use Illuminate\Validation\ValidationException;
 /** Lucky Bags metadata only. Never downloads or hosts artwork. */
 class MaterialCatalog
 {
+    public const DEFAULT_SHEET_ID='1NyRZkS7ZFvsr2PmBLuj7eFABRkYlmBOSOdI442DooXM';
     private ?array $snapshot=null;
     private ?string $failure=null;
     public function rows(bool $fresh=false):array {
         if(!$fresh && $this->snapshot!==null)return $this->snapshot;
         try {
-            $id=(string)config('services.materials.sheet_id');
+            $id=(string)config('services.materials.sheet_id',self::DEFAULT_SHEET_ID);
             if(!preg_match('/^[A-Za-z0-9_-]{20,100}$/',$id))throw new \RuntimeException('Sheet configuration missing');
             $response=Http::timeout(12)->connectTimeout(5)->withOptions(['allow_redirects'=>false])->get('https://docs.google.com/spreadsheets/d/'.$id.'/gviz/tq',['tqx'=>'out:csv','sheet'=>'Lucky Bags']);
-            if(!$response->successful())throw new \RuntimeException('Sheet unavailable');
+            if(!$response->successful())throw new \RuntimeException('Google Sheets returned HTTP '.$response->status());
             $rows=$this->parse($response->body());
             $this->failure=null;
             return $this->snapshot=$rows;
         } catch(\Throwable $e) {
             $this->snapshot=[];
-            $this->failure='Lucky Bags material settings are unavailable or invalid. Check access to the Lucky Bags tab, its column headings and unique bag codes, then refresh. New preparation is blocked; existing batch snapshots are unchanged.';
+            $reason=$e instanceof \Illuminate\Http\Client\ConnectionException?'The server could not connect to Google Sheets.':(in_array($e->getMessage(),['Sheet configuration missing','Missing headings','Invalid headings','Invalid bag code or type','Invalid cell','Invalid row','Empty material sheet','Invalid sheet response'],true)?$e->getMessage().'.':(preg_match('/^Google Sheets returned HTTP [0-9]{3}$/',$e->getMessage())?$e->getMessage().'.':'The sheet could not be validated.'));
+            $this->failure=$reason.' Check the Lucky Bags tab and sharing access, then refresh. New preparation is paused; existing batches are preserved.';
             if($fresh)throw ValidationException::withMessages(['materials'=>$this->failure]);
             return [];
         }

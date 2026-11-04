@@ -362,12 +362,18 @@ def validate_batch(batch):
             raise ValueError('Invalid artwork count')
         for artwork in artworks:
             ext = Path(str(artwork.get('filename', ''))).suffix.lower()
-            if ext not in MIME_TYPES or not re.fullmatch(r'[A-Za-z0-9_-]{5,200}', str(artwork.get('drive_file_id', ''))):
+            custom = artwork.get('source_kind') == 'pc_custom'
+            if custom:
+                uuid.UUID(str(artwork.get('custom_upload_id', '')))
+                if not re.fullmatch(r'[a-f0-9]{64}', str(artwork.get('source_sha256', ''))) or artwork.get('factory_agent_id') != stable_agent_id():
+                    raise ValueError('Custom artwork is bound to another PC or source')
+            if ext not in MIME_TYPES or (not custom and not re.fullmatch(r'[A-Za-z0-9_-]{5,200}', str(artwork.get('drive_file_id', '')))):
                 raise ValueError('Only approved JPG, PNG, TIFF or PDF Drive originals are accepted')
             identity = hashlib.sha256(str(order.get('line_item_id', '')).encode()).hexdigest()[:12]
             name = safe(f"{order.get('order', '')}_{identity}_{artwork.get('side', '')}") + ext
             material = safe(artwork.get('material'))
-            files.append({'relative': str(Path(material) / name), 'drive_file_id': artwork['drive_file_id'],
+            files.append({'relative': str(Path(material) / name), 'drive_file_id': artwork.get('drive_file_id'),
+                          **({'custom_upload_id': artwork['custom_upload_id'], 'expected_source_sha256': artwork['source_sha256']} if custom else {}),
                           'mime': MIME_TYPES[ext], 'quantity': order['quantity'], 'side': artwork.get('side'),
                           'expected_md5': artwork.get('md5_checksum'), 'expected_version': artwork.get('drive_version')})
     if len({file['relative'] for file in files}) != len(files):
@@ -681,6 +687,7 @@ def listen_for_portal():
                 time.sleep(5)
                 continue
             cleanup_retained_jobs()
+            cleanup_custom_assets()
             send_heartbeat()
             candidate = api('GET', '/factory/work').get('job')
             if candidate:
@@ -704,6 +711,12 @@ def listen_for_portal():
                     except Exception:
                         report_interrupted(operation)
                         raise
+            elif (transfer := api('GET', '/factory/custom-transfers').get('transfer')):
+                transfer_id = str(uuid.UUID(transfer['id']))
+                operation = None
+                child = subprocess.Popen([sys.executable, '-I', str(HERE / 'factory_agent.py'), '--custom-transfer', transfer_id],
+                                         cwd=str(HERE), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             elif time.monotonic() - last_cache >= 30:
                 # Fixed idle-only background operation; never opens the Epson folder.
                 last_cache = time.monotonic()
@@ -884,11 +897,14 @@ def prepare_labelled(batch, already_claimed=False):
             raise ValueError('Existing batch workspace requires inspection')
         folder.mkdir(parents=True)
         status(batch['id'], 'DOWNLOADING')
-        service = drive()
+        service = drive() if any(not file.get('custom_upload_id') for file in files) else None
         monitor_state(progress={'completed': 0, 'total': len(files), 'phase': 'downloading'})
         for index, file in enumerate(files):
             source = contained(folder, file['source_relative'])
             destination = contained(folder, file['relative'])
+            custom_source = None
+            if file.get('custom_upload_id'):
+                custom_source, _, _ = custom_module().source_files(OUT, file['custom_upload_id'], file['expected_source_sha256'], output_module())
             cached = cached_artwork(file)
             if cached:
                 source.parent.mkdir(parents=True, exist_ok=True)
@@ -897,7 +913,11 @@ def prepare_labelled(batch, already_claimed=False):
                 shutil.copyfile(cached[1], destination)
                 file['label_output'] = cached[2]['label_output']
             else:
-                download(service, file, source)
+                if custom_source:
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(custom_source, source)
+                else:
+                    download(service, file, source)
                 file['label_output'] = output_module().render_label(source, destination, file['print_label'], MAX_FILE_BYTES, file.get('print_label_policy', 'BOTTOM_WHITE_V2'))
             file['source_sha256'] = digest(source)
             file['source_bytes'] = source.stat().st_size
@@ -928,7 +948,7 @@ def verify_labelled(batch, with_hashes=False):
     verified = []
     for file in expected:
         entry = recorded.get(file['relative'], {})
-        if any(entry.get(key) != file.get(key) for key in ('drive_file_id', 'source_relative', 'print_label')):
+        if any(entry.get(key) != file.get(key) for key in ('drive_file_id', 'source_relative', 'print_label', 'custom_upload_id', 'expected_source_sha256')):
             raise ValueError('Labeled output identity differs from the locked batch')
         for relative, hash_key, size_key in ((file['source_relative'], 'source_sha256', 'source_bytes'), (file['relative'], 'sha256', 'bytes')):
             path = contained(folder, relative)
@@ -990,19 +1010,74 @@ def cleanup_retained_jobs():
         if cleanup_lock is not None:
             cleanup_lock.close()
 
+CUSTOM_MODULE = None
+LAST_CUSTOM_CLEANUP = 0
+CUSTOM_CLEANUP_CURSOR = 0
+
+
+def custom_module():
+    global CUSTOM_MODULE
+    if CUSTOM_MODULE is None:
+        import importlib.util
+        manifest = json.loads(no_reparse(HERE / 'release.json').read_text(encoding='utf-8-sig'))
+        path = no_reparse(HERE / 'custom_transfer.py')
+        if digest(path) != manifest.get('custom_transfer_sha256'):
+            raise ValueError('Custom transfer module integrity check failed')
+        spec = importlib.util.spec_from_file_location('factory_custom_transfer', path)
+        CUSTOM_MODULE = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(CUSTOM_MODULE)
+    return CUSTOM_MODULE
+
+
+def cleanup_custom_assets():
+    global LAST_CUSTOM_CLEANUP, CUSTOM_CLEANUP_CURSOR
+    root = contained(OUT, 'custom-artwork')
+    if not root.is_dir() or time.monotonic() - LAST_CUSTOM_CLEANUP < 45:
+        return
+    LAST_CUSTOM_CLEANUP = time.monotonic()
+    lock = None
+    try:
+        lock = acquire_lock('.agent.lock')
+        folders = sorted([path for path in root.iterdir() if path.is_dir() and re.fullmatch(r'[a-f0-9-]{36}', path.name)], key=lambda path: path.name)
+        if not folders:
+            return
+        start = CUSTOM_CLEANUP_CURSOR % len(folders)
+        selected = (folders[start:] + folders[:start])[:5]
+        CUSTOM_CLEANUP_CURSOR = start + len(selected)
+        for folder in selected:
+            no_reparse(folder)
+            if not (folder / 'ready.json').is_file():
+                continue
+            proof = api('GET', f'/factory/custom-transfers/{folder.name}/completion')
+            if custom_module().cleanup_asset(OUT, proof, output_module()):
+                record_operation('cleanup')
+            send_heartbeat()
+    except Exception:
+        log.warning('Custom file cleanup deferred; no broad deletion attempted')
+    finally:
+        if lock is not None:
+            lock.close()
+
+
 def main():
     global STOP, PORTAL_MODE, ACTIVE_OPERATION
     arguments = sys.argv[1:]
+    custom = len(arguments) == 2 and arguments[0] == '--custom-transfer'
+    if custom:
+        try:
+            custom_id = str(uuid.UUID(arguments[1]))
+        except ValueError:
+            raise SystemExit(2)
     managed = len(arguments) == 3 and arguments[0] == '--managed-job' and arguments[1].isdigit() and 0 < int(arguments[1]) <= 2147483647
     if managed:
         try:
             ACTIVE_OPERATION = {'batch_id': int(arguments[1]), 'token': str(uuid.UUID(arguments[2]))}
         except ValueError:
             raise SystemExit(2)
-    if not managed and (len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose', '--listen', '--sync-cache'} for arg in arguments)):
+    if not managed and not custom and (len(arguments) > 1 or any(arg not in {'--check', '--once', '--health', '--diagnose', '--listen', '--sync-cache'} for arg in arguments)):
         print('Choose one supported mode: --check, --once, --health or --diagnose. No action was started.')
         raise SystemExit(2)
-    PORTAL_MODE = managed or '--listen' in arguments or '--sync-cache' in arguments
+    PORTAL_MODE = managed or custom or '--listen' in arguments or '--sync-cache' in arguments
     if PORTAL_MODE:
         monitor_state(reporter_mode='managed_worker' if managed else 'listener')
     if '--health' in sys.argv or '--diagnose' in sys.argv:
@@ -1061,6 +1136,17 @@ def main():
     MONITOR_STOP.clear()
     monitor = threading.Thread(target=heartbeat_loop, name='factory-heartbeat', daemon=True)
     monitor.start()
+    if custom:
+        try:
+            import asyncio
+            asyncio.run(custom_module().transfer(custom_id, OUT, api, output_module(), scan_file))
+            record_operation('custom_upload')
+        except Exception as exc:
+            log.warning('Direct custom transfer failed (%s); no print action was started', type(exc).__name__)
+            record_operation('custom_upload', 'custom_transfer_failed')
+        finally:
+            finish_monitor(monitor, listener_alive=True)
+        return
     if '--sync-cache' in arguments:
         try:
             sync_cache_once()

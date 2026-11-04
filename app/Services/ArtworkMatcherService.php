@@ -353,6 +353,7 @@ class ArtworkMatcherService
 
     public static function validSelection($item): bool
     {
+        if($item->is_custom??false)return CustomArtworkService::validSelection($item);
         if (($item->artwork_review['policy'] ?? null) !== self::POLICY || $item->match_status !== 'REVIEW' || $item->is_custom || !in_array($item->design_type, ['single','double'], true)) return false;
         $sides = array_column($item->matches ?? [], 'side'); sort($sides);
         return $sides === ($item->design_type === 'double' ? ['back','front'] : ['single'])
