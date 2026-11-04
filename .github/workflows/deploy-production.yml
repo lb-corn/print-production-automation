@@ -147,6 +147,9 @@ jobs:
           php tests/bulk-review.php
           php tests/batch-return.php
           php tests/admin-controls.php
+          php tests/reset-flow.php
+          php tests/backlog-reconciliation.php
+          python3 tests/pc-cleanup.py
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh
 

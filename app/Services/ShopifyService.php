@@ -171,9 +171,10 @@ GRAPHQL;
     public function getProductionBacklog(int $first = 50): array
     {
         $query = <<<'GRAPHQL'
-query ProductionBacklog($first: Int!) {
+query ProductionBacklog($first: Int!, $after: String) {
     orders(
         first: $first
+        after: $after
         sortKey: CREATED_AT
         reverse: true
         query: "fulfillment_status:unfulfilled OR fulfillment_status:partial"
@@ -191,6 +192,7 @@ query ProductionBacklog($first: Int!) {
             }
 
             lineItems(first: 100) {
+                pageInfo { hasNextPage endCursor }
                 nodes {
                     id
                     name
@@ -227,17 +229,64 @@ query ProductionBacklog($first: Int!) {
 }
 GRAPHQL;
 
-        $data = $this->graphql(
-            $query,
-            [
-                'first' => $first,
-            ]
-        );
+        $lineQuery=<<<'GRAPHQL'
+query ProductionBacklogLines($id: ID!, $after: String) { order(id: $id) { lineItems(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes {
+                    id
+                    name
+                    quantity
+                    unfulfilledQuantity
+                    customAttributes { key value }
+                    sku
+                    variantTitle
+                    variant {
+                        id
+                        sku
+                        title
+                        product { id }
+                    }
+
+                    product {
+                        id
+                        title
+                        productType
+                    }
+
+                    image {
+                        url
+                    }
+} } } }
+GRAPHQL;
+        $orders=[];$after=null;$seen=[];
+        do {
+            $data=$this->graphql($query,['first'=>min(250,max(1,$first)),'after'=>$after]);
+            $page=$data['orders']??null;
+            if(!is_array($page) || !is_array($page['nodes']??null))throw new \RuntimeException('Incomplete Shopify backlog response.');
+            foreach($page['nodes'] as $order){
+                if(!is_array($order['lineItems']['nodes']??null))throw new \RuntimeException('Incomplete Shopify order lines.');
+                $linesPage=$order['lineItems'];$lineSeen=[];
+                while($linesPage['pageInfo']['hasNextPage']??false){
+                    $cursor=$linesPage['pageInfo']['endCursor']??null;
+                    if(!is_string($cursor)||$cursor===''||isset($lineSeen[$cursor])||count($lineSeen)>=1000)throw new \RuntimeException('Shopify line pagination did not advance.');
+                    $lineSeen[$cursor]=true;
+                    $more=$this->graphql($lineQuery,['id'=>$order['id'],'after'=>$cursor]);
+                    $linesPage=$more['order']['lineItems']??null;
+                    if(!is_array($linesPage)||!is_array($linesPage['nodes']??null)||!is_bool($linesPage['pageInfo']['hasNextPage']??null))throw new \RuntimeException('Incomplete Shopify order lines.');
+                    $order['lineItems']['nodes']=array_merge($order['lineItems']['nodes'],$linesPage['nodes']);
+                }
+                $orders[]=$order;
+            }
+            $after=null;
+            if($page['pageInfo']['hasNextPage']??false){
+                $after=$page['pageInfo']['endCursor']??null;
+                if(!is_string($after)||$after===''||isset($seen[$after])||count($seen)>=1000)throw new \RuntimeException('Shopify backlog pagination did not advance.');
+                $seen[$after]=true;
+            }
+        }while($after!==null);
 
         $items = [];
 
         foreach (
-            $data['orders']['nodes'] ?? []
+            $orders
             as $order
         ) {
             /*
@@ -378,10 +427,8 @@ GRAPHQL;
              * This is NOT necessarily the number
              * of manufacturing orders.
              */
-            'order_count' => count(
-                $data['orders']['nodes']
-                ?? []
-            ),
+            'order_count' => count($orders),
+            'complete' => true,
 
             /*
              * Number of eligible bag-production
@@ -389,9 +436,7 @@ GRAPHQL;
              */
             'item_count' => count($items),
 
-            'has_next_page' =>
-                $data['orders']['pageInfo']['hasNextPage']
-                ?? false,
+            'has_next_page' => false,
 
             'end_cursor' =>
                 $data['orders']['pageInfo']['endCursor']

@@ -55,7 +55,7 @@ class FactoryController extends Controller
     public function syncArtwork(Request $request,\App\Services\FactoryDispatchService $dispatch){
         $dispatch->identity($request);
         $data=$request->validate(['after'=>'nullable|integer|min:0']);$after=(int)($data['after']??0);
-        $items=\App\Models\ProductionItem::where('id','>',$after)->orderBy('id')->limit(100)->get();
+        $items=\App\Models\ProductionItem::where('id','>',$after)->when(\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active'),fn($q)=>$q->where('shopify_active',true))->orderBy('id')->limit(100)->get();
         $processed=app(\App\Services\ProductionService::class)->batchIndex(true);
         $catalog=app(\App\Services\MaterialCatalog::class);$catalog->rows(true);$map=$catalog->map();
         $orders=[];

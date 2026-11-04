@@ -17,7 +17,7 @@ mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions
 trap 'echo "Activation failed. Application remains in maintenance mode; inspect the error and restore from your backup if necessary." >&2' ERR
 "$PHP_BIN" artisan optimize:clear
 "$PHP_BIN" artisan migrate --force
-"$PHP_BIN" -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); if (!app(App\Services\FactoryDispatchService::class)->consentReady()) { fwrite(STDERR,"Print queue setup is incomplete. Ensure the latest database migrations were uploaded and applied to this application database.\n"); exit(1); } if (!App\Services\CustomArtworkService::ready()) { fwrite(STDERR,"Custom artwork setup is incomplete. Upload and apply migration 000009.\n"); exit(1); } echo "Print queue database setup verified.\n";'
+"$PHP_BIN" -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); if (!app(App\Services\FactoryDispatchService::class)->consentReady()) { fwrite(STDERR,"Print queue setup is incomplete. Ensure the latest database migrations were uploaded and applied to this application database.\n"); exit(1); } if (!App\Services\CustomArtworkService::ready()) { fwrite(STDERR,"Custom artwork setup is incomplete. Upload and apply migration 000009.\n"); exit(1); } if (!Illuminate\Support\Facades\Schema::hasColumn("production_items","shopify_active")) { fwrite(STDERR,"Shopify backlog setup is incomplete. Upload and apply migration 000010.\n"); exit(1); } echo "Print queue database setup verified.\n";'
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan view:cache
 "$PHP_BIN" artisan up

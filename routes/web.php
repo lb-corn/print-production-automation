@@ -32,7 +32,8 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireAdmin::cl
     Route::get('/factory-agent/connection-reporter',[\App\Http\Controllers\FactoryMonitoringController::class,'connectionReporter'])->middleware('throttle:10,1')->name('factory-agent.connection-reporter');
     Route::get('/factory-agent/connectivity-script',[\App\Http\Controllers\FactoryMonitoringController::class,'connectivityScript'])->middleware('throttle:10,1')->name('factory-agent.connectivity-script');
     Route::get('/reset', fn()=>redirect()->route('admin.settings',['section'=>'reset']))->name('reset');
-    Route::post('/reset', [\App\Http\Controllers\AdminController::class, 'reset'])->middleware('throttle:3,1')->name('reset.store');
+    Route::get('/reset/pc-cleanup', [\App\Http\Controllers\AdminController::class, 'pcCleanup'])->name('reset.pc-cleanup');
+    Route::post('/reset', [\App\Http\Controllers\AdminController::class, 'reset'])->middleware('throttle:admin-reset')->name('reset.store');
 });
 
 Route::middleware(['auth','auth.session',\App\Http\Middleware\ReadOnlyDemo::class,\App\Http\Middleware\PortalWriteLock::class])->group(function(){

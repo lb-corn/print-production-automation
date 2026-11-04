@@ -13,16 +13,19 @@ class BacklogSyncService
     {
         app(MaterialCatalog::class)->rows(true);
         $hasReview=ArtworkRematchService::schemaReady();
+        $presence=\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active');
         $this->matcher->refreshReviewedSelections();
         $backlog = $this->shopify->getProductionBacklog();
         $index = count(array_filter($backlog['items'],fn($row)=>!($row['is_custom']??false)))?$this->drive->artworkIndex():[];
-        $added = $updated = $unchanged = $matched = $missing = $ambiguous = $skipped = $customItems = 0;
+        $added = $updated = $unchanged = $matched = $missing = $ambiguous = $skipped = $customItems = $retired = 0;
         $rematcher = new ArtworkRematchService($this->drive, $this->matcher);
-        DB::transaction(function () use ($backlog,$index,$rematcher,$hasReview,&$added,&$updated,&$unchanged,&$matched,&$missing,&$ambiguous,&$skipped,&$customItems) {
+        DB::transaction(function () use ($backlog,$index,$rematcher,$hasReview,$presence,&$retired,&$added,&$updated,&$unchanged,&$matched,&$missing,&$ambiguous,&$skipped,&$customItems) {
             foreach ($backlog['items'] as $row) {
                 $item = ProductionItem::where('line_item_id', $row['line_item_id'])->lockForUpdate()->first();
+                if($presence && $item && !$item->shopify_active)$item->forceFill(['shopify_active'=>true,'shopify_seen_at'=>now()])->save();
                 if (isset(app(ProductionService::class)->batchIndex(true)[$row['line_item_id']])) { $skipped++; continue; }
                 $fields = array_intersect_key($row, array_flip(['order_number','product','variant','sku','quantity','shopify_image']));
+                if($presence)$fields=[...$fields,'shopify_active'=>true];
                 $custom=(bool)($row['is_custom']??false);
                 $match = $custom?CustomArtworkService::match($row,$item):$this->matcher->match($row, $index);
                 if(!empty($row['shopify_variant_id']) && (($row['order_sku']??null)!==($row['sku']??null) || ($row['order_variant']??null)!==($row['variant']??null))) {
@@ -42,8 +45,12 @@ class BacklogSyncService
                 if($custom){$customItems++;continue;}
                 match ($match['match_status']) { 'REVIEW'=>$matched++, 'AMBIGUOUS'=>$ambiguous++, default=>$missing++ };
             }
+            if($presence && ($backlog['complete']??false)){
+                $activeIds=array_column($backlog['items'],'line_item_id');
+                $retired=ProductionItem::where('shopify_active',true)->whereNotIn('line_item_id',$activeIds)->update(['shopify_active'=>false]);
+            }
         });
-        return ['custom_items'=>$customItems,'artwork_schema_ready'=>$hasReview,'shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
+        return ['retired_items'=>$retired,'custom_items'=>$customItems,'artwork_schema_ready'=>$hasReview,'shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
             'updated'=>$updated,'unchanged'=>$unchanged,'matched'=>$matched,'missing'=>$missing,'ambiguous'=>$ambiguous,
             'processed_skipped'=>$skipped,'drive_files'=>count(array_filter($index,fn($f)=>($f['kind']??'')==='artwork'))];
     }

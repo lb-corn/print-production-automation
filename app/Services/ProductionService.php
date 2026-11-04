@@ -10,7 +10,7 @@ class ProductionService{
  function workspaceStats(bool $refresh = false): array {
   if ($refresh || $this->workspaceStatsCache === null) {
    $index=$this->batchIndex($refresh);
-   $items=ProductionItem::with('decision')->get();
+   $items=$this->activeItems();
    $this->workspaceStatsCache=[
     'ready'=>$items->filter(fn($item)=>$this->ready($item))->count(),
     'in_print'=>count(array_filter($index,fn($batch)=>!in_array($batch['status'],['PRINTED','FAILED'],true))),
@@ -38,7 +38,7 @@ class ProductionService{
  function approved($i): bool { return ArtworkMatcherService::validSelection($i) && $i->decision?->decision === 'CORRECT' && count($this->ids($i)) && $this->current($i); }
  function ids($i){return collect($i->matches??[])->pluck('id')->filter()->sort()->values()->all();}
  function current($i){$d=$i->decision;return $d&&$this->ids($i)===collect($d->drive_file_ids??[])->sort()->values()->all();}
- function ready($i){return $this->approved($i) && !$this->processed($i) && $this->materialCompatible($i) && in_array($i->design_type,['single','double'],true) && (int)$i->quantity>0;}
+ function ready($i){return ($i->shopify_active??true) && $this->approved($i) && !$this->processed($i) && $this->materialCompatible($i) && in_array($i->design_type,['single','double'],true) && (int)$i->quantity>0;}
  function verify($item,$decision,$uid){
   return DB::transaction(function() use($item,$decision,$uid) {
    $locked=ProductionItem::lockForUpdate()->findOrFail($item->id);
@@ -51,7 +51,8 @@ class ProductionService{
    return VerificationDecision::updateOrCreate(['line_item_id'=>$locked->line_item_id],['decision'=>$decision,'drive_file_ids'=>$ids,'updated_by'=>$uid]);
   });
  }
- function queue(){$this->batchIndex(true);return ProductionItem::with('decision')->get()->filter(fn($i)=>$this->ready($i))->values();}
+ function activeItems(){return ProductionItem::with('decision')->when(\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active'),fn($q)=>$q->where('shopify_active',true))->get();}
+ function queue(){$this->batchIndex(true);return $this->activeItems()->filter(fn($i)=>$this->ready($i))->values();}
  function summary($items): array {
   $printable = $nonprint = array_fill_keys(app(MaterialCatalog::class)->materials(), ['sides'=>0,'yards'=>0]); $sets = 0; $sides = 0; $files = 0;
   foreach ($items as $item) {
