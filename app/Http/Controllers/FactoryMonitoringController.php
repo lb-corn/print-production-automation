@@ -74,6 +74,10 @@ CMD;
     }
     public function portalPackage(Request $request){
         abort_unless($request->user()?->role==='admin',403);
+        if($request->filled('version')){
+            $version=(string)$request->query('version');
+            return response()->download(app(\App\Services\FactoryAgentReleaseService::class)->package($version),'LuckyBags-Factory-Agent-v'.$version.'.zip',['Cache-Control'=>'no-store']);
+        }
         abort_unless(is_file(resource_path('factory-agent-install.zip')),404,'Managed agent package is not available.');
         return response()->download(resource_path('factory-agent-install.zip'),'LuckyBags-Factory-Agent.zip',['Cache-Control'=>'no-store']);
     }

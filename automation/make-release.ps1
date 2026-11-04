@@ -58,3 +58,13 @@ Write-Host "Release created: $Zip"
 Write-Host "SHA256: $Hash"
 Write-Host 'Publish the hash through an independently trusted channel. A hash is not a publisher signature.'
 if (!$PublicRelease) { Write-Host 'PRIVATE INSTALL: contains .env and a Google private key. Transfer only to the trusted Print PC. Never publish, commit or use with update-agent.ps1. Edit .env on that PC: API key and actual Epson hot folder.' -ForegroundColor Yellow }
+
+# Public builds from this repository always publish the versioned portal history.
+$PortalResources = Join-Path (Split-Path $Root -Parent) 'resources'
+if ($PublicRelease -and (Test-Path -LiteralPath (Join-Path $PortalResources 'views') -PathType Container)) {
+    $Notes = Get-Content -LiteralPath (Join-Path $Root 'release-notes.json') -Raw | ConvertFrom-Json
+    if ($Notes.version -ne $Version -or !$Notes.summary) { throw 'Update release-notes.json for this VERSION before publishing.' }
+    & python (Join-Path $Root 'publish_release.py') --resources $PortalResources --package $Zip --summary $Notes.summary
+    if ($LASTEXITCODE -ne 0) { throw 'Public release history publication failed.' }
+    Copy-Item -LiteralPath (Join-Path $Root 'update-installed-agent.ps1') -Destination (Join-Path $PortalResources 'factory-agent-updater.ps1') -Force
+}

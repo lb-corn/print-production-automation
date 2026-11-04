@@ -1,0 +1,42 @@
+[
+  {
+    "version": "1.6.1",
+    "file": "LuckyBags-Factory-Agent-v1.6.1.zip",
+    "sha256": "df4172a5563ec4e9093dd48e4f03451393824a6f37bae8acce5ebb0272113071",
+    "bytes": 56162,
+    "published_at": "2026-11-04T18:05:03Z",
+    "summary": "One-download updates that preserve the existing Print PC setup."
+  },
+  {
+    "version": "1.6.0",
+    "file": "LuckyBags-Factory-Agent-v1.6.0.zip",
+    "sha256": "2ec9c6018d0c8af0c4a22d3a774e27dc56fa545e2cb5b49f52acb382de51383d",
+    "bytes": 55643,
+    "published_at": "2026-11-04T17:06:20Z",
+    "summary": "Direct custom artwork uploads to the Print PC."
+  },
+  {
+    "version": "1.5.1",
+    "file": "LuckyBags-Factory-Agent-v1.5.1.zip",
+    "sha256": "3019cf30926c753322135fda8c0a770531e7129b6548c494123b3e65271aeef0",
+    "bytes": 49815,
+    "published_at": "2026-11-04T14:30:51Z",
+    "summary": "Live material settings and separate material print batches."
+  },
+  {
+    "version": "1.5.0",
+    "file": "LuckyBags-Factory-Agent-v1.5.0.zip",
+    "sha256": "dcb58814a22483e84efefe47998bf86c905a46b48175f293787f8a16416824fe",
+    "bytes": 48877,
+    "published_at": "2026-11-04T12:47:12Z",
+    "summary": "Printed artwork labels and retention until print confirmation."
+  },
+  {
+    "version": "1.4.1",
+    "file": "LuckyBags-Factory-Agent-v1.4.1.zip",
+    "sha256": "311bb197092c12351ea7104aa0e51927199a93b70cbbed4101fed20c0d4d3e87",
+    "bytes": 40828,
+    "published_at": "2026-11-03T08:36:04Z",
+    "summary": "Reliable background startup and connection reporting."
+  }
+]

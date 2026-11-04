@@ -150,6 +150,10 @@ jobs:
           php tests/reset-flow.php
           php tests/backlog-reconciliation.php
           python3 tests/pc-cleanup.py
+          python3 automation/publish_release.py --resources resources --validate
+          python3 tests/release-history.py
+          php tests/agent-release-history.php
+          php tests/review-material-labels.php
       - name: Validate post-deployment shell script
         run: bash -n deployment/post-deploy.sh
 

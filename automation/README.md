@@ -211,3 +211,10 @@ Admin > Factory Agent offers a versioned Windows updater. Download it on the Pri
 The updater disables future startup triggers during maintenance, checks that no worker/transfer is active, holds the actual configured workspace lock and safely pauses only verified listener processes. It checks the last operation for an unfinished/uncertain claim before stopping the idle listener. A busy or unverifiable operation postpones the update without replacing code. It then invokes the reviewed installer to update only allowlisted source files/dependencies and restore background startup. Before-install failures restore the prior task; an incomplete source/dependency update remains stopped for safe inspection/retry. No global execution-policy change or elevation is required.
 
 If .env explicitly pins an older REQUIRED_AGENT_VERSION or REQUIRED_AGENT_SHA256, the updater lists the exact manual pin change and stops before replacing code. Otherwise no .env edit is needed. Version 1.6.1 also sends custom-transfer receipts as JSON, matching the metadata-only portal API; legacy heartbeat form encoding is unchanged.
+
+
+## Public release history
+
+Increment `automation/VERSION` and update the matching version and short summary in `automation/release-notes.json` for every agent release. Run `automation/make-release.ps1 -PublicRelease` from the repository with Python available. The build automatically verifies and publishes the public ZIP, refreshes portal downloads and updater template, and keeps the latest five immutable versions in `resources/factory-agent-releases`. Commit the generated catalog and versioned ZIPs with the source changes. Private builds never enter this catalog. An already published version cannot be replaced with different contents; use a new version number.
+
+The deployment regression gate checks retained package hashes, the latest download, runtime source hashes and VERSION consistency. The Factory Agent page always lists the newest retained release first, with a separate ZIP for each version and the current one-file updater.
