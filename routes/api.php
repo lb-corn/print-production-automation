@@ -18,3 +18,6 @@ use Illuminate\Support\Facades\Route;use App\Http\Controllers\FactoryController;
  \Illuminate\Support\Facades\Route::post('/custom-transfers/{transfer}/report',[\App\Http\Controllers\CustomArtworkController::class,'report']);
  \Illuminate\Support\Facades\Route::get('/custom-transfers/{transfer}/completion',[\App\Http\Controllers\CustomArtworkController::class,'completion']);
 });
+
+// POST acquires the same write lock as work claims, while this action remains read-only.
+\Illuminate\Support\Facades\Route::post('/factory/maintenance-check',[FactoryController::class,'maintenance'])->middleware(['factory.key','throttle:factory-work',\App\Http\Middleware\PortalWriteLock::class]);

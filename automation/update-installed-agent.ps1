@@ -96,17 +96,16 @@ try:
  if hashlib.sha256((root/'factory_agent.py').read_bytes()).hexdigest()!=manifest.get('factory_agent_sha256'):raise RuntimeError('installed_integrity')
  spec=importlib.util.spec_from_file_location('installed_update_check',root/'factory_agent.py');agent=importlib.util.module_from_spec(spec);spec.loader.exec_module(agent)
  lock=agent.acquire_lock('.agent.lock')
- journal=agent.OUT/'portal-operation.json'
- if journal.exists():
-  if journal.stat().st_size>4096:raise RuntimeError('uncertain_claim')
-  operation=json.loads(journal.read_text(encoding='utf-8'))
-  if operation.get('state')=='requesting':raise RuntimeError('uncertain_claim')
-  if operation.get('token'):
-   agent.PORTAL_MODE=True;agent.ACTIVE_OPERATION=operation
-   try:agent.api('GET',f"/factory/batches/{int(operation['batch_id'])}/assigned")
-   except RuntimeError as error:
-    if str(error)!='Factory API returned HTTP 409':raise RuntimeError('cannot_verify_job')
-   else:raise RuntimeError('active_job')
+ agent.PORTAL_MODE=True
+ try:proof=agent.api('POST','/factory/maintenance-check')
+ except Exception as error:
+  message=str(error)
+  if message in {'Factory API returned HTTP 401','Factory API returned HTTP 403','Factory API returned HTTP 422'}:raise RuntimeError('portal_auth_failed')
+  if message=='Factory API returned HTTP 404':raise RuntimeError('portal_update_required')
+  if message in {'Factory API returned HTTP 409','Factory API returned HTTP 429'}:raise RuntimeError('portal_busy')
+  raise RuntimeError('portal_unreachable')
+ if not isinstance(proof,dict) or proof.get('ok') is not True or proof.get('protocol')!=1 or proof.get('agent_id')!=agent.stable_agent_id() or type(proof.get('busy')) is not bool:raise RuntimeError('invalid_maintenance_response')
+ if proof['busy']:raise RuntimeError('active_transfer' if proof.get('reason')=='active_transfer' else 'active_job')
  publish({'ready':True})
  deadline=time.monotonic()+1200
  while not release.exists() and time.monotonic()<deadline:
@@ -116,7 +115,7 @@ try:
   if code.value!=259:break
   time.sleep(.2)
 except Exception as error:
- publish({'ready':False,'reason':str(error) if str(error) in {'listener_busy','installed_integrity','uncertain_claim','cannot_verify_job','active_job'} else 'active_process'})
+ publish({'ready':False,'reason':str(error) if str(error) in {'listener_busy','installed_integrity','active_job','active_transfer','portal_auth_failed','portal_update_required','portal_busy','portal_unreachable','invalid_maintenance_response'} else 'active_process'})
 finally:
  if lock:lock.close()
  for handle in handles:
@@ -130,7 +129,19 @@ finally:
     while(!(Test-Path -LiteralPath $State) -and !$Helper.HasExited -and (Get-Date) -lt $Deadline){Start-Sleep -Milliseconds 200}
     if(!(Test-Path -LiteralPath $State)){throw 'Could not obtain an idle maintenance window. Nothing was replaced.'}
     $Ready=Get-Content -LiteralPath $State -Raw | ConvertFrom-Json
-    if(!$Ready.ready){throw "Update postponed ($($Ready.reason)). Finish active work or inspect an uncertain job, then retry. No code or .env changes were made."}
+    if(!$Ready.ready){
+        $Advice=switch([string]$Ready.reason){
+            'active_job' {'The portal reports an active or interrupted print job. Finish or review that job in Print batches before updating.'}
+            'active_transfer' {'A custom artwork upload is active. Finish or cancel that upload, then retry.'}
+            'portal_auth_failed' {'The portal rejected this PC identity/API credentials. Check the existing portal connection settings; do not replace the installation folder.'}
+            'portal_update_required' {'Deploy the latest portal main branch first, then download a fresh updater.'}
+            'portal_busy' {'The portal is handling another request. Wait a minute, then retry.'}
+            'portal_unreachable' {'The PC could not complete the portal check. Check its internet connection and existing PRODUCTION_API address, then retry.'}
+            'invalid_maintenance_response' {'The portal did not return the expected maintenance proof. Deploy the latest portal and download a fresh updater.'}
+            default {'The PC is not idle or the installed source could not be verified. Finish active work and retry.'}
+        }
+        throw "Update postponed ($($Ready.reason)). $Advice No code or .env changes were made."
+    }
     $Others=@(Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" | Where-Object {(($_.ExecutablePath -and $_.ExecutablePath.StartsWith((Join-Path $Root '.venv\'),[StringComparison]::OrdinalIgnoreCase)) -or ($_.CommandLine -and $_.CommandLine.IndexOf((Join-Path $Root 'factory_agent.py'),[StringComparison]::OrdinalIgnoreCase) -ge 0)) -and $_.ProcessId -ne $Helper.Id -and $ListenerIds -notcontains $_.ProcessId})
     if($Others.Count){throw 'Another agent process started. No source files were replaced.'}
     if($Task -and $WasRunning){Stop-ScheduledTask -TaskName LuckyBagsFactoryAgent}
