@@ -62,7 +62,8 @@ print(json.dumps([key for key,value in required.items() if values.get(key) and v
 '@
     $PinResult=& $Python -I -c $Pins $Root $ExpectedVersion $Manifest.factory_agent_sha256
     if($LASTEXITCODE -ne 0){throw 'Cannot inspect the existing version pins. No settings were changed.'}
-    $PinChanges=@($PinResult | ConvertFrom-Json)
+    $ParsedPins=$PinResult | ConvertFrom-Json
+    $PinChanges=@(foreach($PinName in $ParsedPins){if($PinName -is [string] -and $PinName -in @('REQUIRED_AGENT_VERSION','REQUIRED_AGENT_SHA256')){$PinName}else{throw 'Invalid version pin inspection response. No settings were changed.'}})
     if($PinChanges.Count){foreach($Pin in $PinChanges){$Value=if($Pin -eq 'REQUIRED_AGENT_VERSION'){$ExpectedVersion}else{$Manifest.factory_agent_sha256};Write-Host "In the existing .env, manually set $Pin=$Value" -ForegroundColor Yellow};throw 'An explicit .env version pin needs the changes listed above. Save that edit and run this updater again. No code was replaced.'}
     $Task=Get-ScheduledTask -TaskName LuckyBagsFactoryAgent -ErrorAction SilentlyContinue
     if($Task){

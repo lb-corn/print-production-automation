@@ -34,3 +34,15 @@ try{
     $Resolved=[IO.Path]::GetFullPath($Fixture)
     if([IO.Path]::GetFileName($Resolved).StartsWith('LuckyBagsUpdaterTest-') -and [IO.Path]::GetDirectoryName($Resolved) -eq [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')){Remove-Item -LiteralPath $Resolved -Recurse -Force}
 }
+
+# Windows PowerShell 5.1 preserves an empty JSON array as one pipeline object.
+# Exercise the updater's actual normalization code, rather than a duplicate implementation.
+$PinSource=[IO.File]::ReadAllText($Source)
+$PinBlock=[regex]::Match($PinSource,'(?ms)    \$ParsedPins=.+?(?=    if\(\$PinChanges.Count\))').Value
+if(!$PinBlock){throw 'Updater pin normalization block was not found.'}
+foreach($PinCase in @(@('[]',0),@('["REQUIRED_AGENT_VERSION"]',1),@('["REQUIRED_AGENT_VERSION","REQUIRED_AGENT_SHA256"]',2))){
+    $PinResult=$PinCase[0]
+    Invoke-Expression $PinBlock
+    if($PinChanges.Count -ne $PinCase[1]){throw 'Empty/single/multiple pin normalization failed.'}
+}
+Write-Host 'Version pin normalization passed for Windows PowerShell empty, single and multiple JSON results.'
