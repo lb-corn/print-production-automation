@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 class UpdateMaintenanceTests(unittest.TestCase):
  def fixture(self,root):
   (root/'workspace').mkdir()
-  code="from pathlib import Path\nimport msvcrt\nOUT=Path(__file__).parent/'workspace'\ndef acquire_lock(name):\n h=open(OUT/name,'a+b');h.write(b'0');h.flush();h.seek(0);msvcrt.locking(h.fileno(),msvcrt.LK_NBLCK,1);return h\ndef api(*a,**k):raise RuntimeError('Factory API returned HTTP 409')\n"
+  code="from pathlib import Path\nimport msvcrt,json\nOUT=Path(__file__).parent/'workspace'\ndef stable_agent_id():return 'ea1ec5ee-6313-431d-9f60-8c7834a601be'\ndef acquire_lock(name):\n h=open(OUT/name,'a+b');h.write(b'0');h.flush();h.seek(0);msvcrt.locking(h.fileno(),msvcrt.LK_NBLCK,1);return h\ndef api(method,path):\n assert method=='POST' and path=='/factory/maintenance-check'\n config=OUT/'proof.json'\n proof=json.loads(config.read_text()) if config.exists() else {'ok':True,'protocol':1,'agent_id':stable_agent_id(),'busy':False}\n if 'error' in proof:raise RuntimeError(proof['error'])\n return proof\n"
   (root/'factory_agent.py').write_text(code,encoding='utf-8');(root/'release.json').write_text(json.dumps({'factory_agent_sha256':hashlib.sha256((root/'factory_agent.py').read_bytes()).hexdigest()}))
   text=(ROOT/'update-installed-agent.ps1').read_text(encoding='utf-8');match=re.search(r"(?ms)^    \$Maintenance=@'\n(.*?)\n'@",text)
   self.assertIsNotNone(match);helper=root/'maintenance.py';helper.write_text(match[1],encoding='utf-8');return helper
@@ -38,3 +38,21 @@ class UpdateMaintenanceTests(unittest.TestCase):
     process=self.start(root,helper,[])
     try:self.assertFalse(self.state(root,process)['ready']);process.wait(timeout=5)
     finally:lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+
+ def test_portal_proof_handles_stale_journals_and_distinct_failures(self):
+  identity='ea1ec5ee-6313-431d-9f60-8c7834a601be'
+  clean={'ok':True,'protocol':1,'agent_id':identity,'busy':False}
+  cases=[(clean,None),({**clean,'busy':True},'active_job'),({**clean,'busy':True,'reason':'active_transfer'},'active_transfer'),({'error':'Factory API returned HTTP 401'},'portal_auth_failed'),({'error':'Factory API returned HTTP 404'},'portal_update_required'),({'error':'Factory API returned HTTP 429'},'portal_busy'),({'error':'Connection failed'},'portal_unreachable'),({**clean,'agent_id':'wrong'},'invalid_maintenance_response'),({**clean,'busy':'false'},'invalid_maintenance_response')]
+  for proof,reason in cases:
+   with self.subTest(reason=reason),tempfile.TemporaryDirectory(prefix='lb-update-proof-') as temp:
+    root=Path(temp);helper=self.fixture(root)
+    journal=root/'workspace/portal-operation.json';journal.write_text(json.dumps({'batch_id':9999,'state':'requesting'}))
+    before=journal.read_bytes();(root/'workspace/proof.json').write_text(json.dumps(proof))
+    process=self.start(root,helper,[])
+    try:
+     result=self.state(root,process)
+     self.assertEqual(result['ready'],reason is None)
+     if reason:self.assertEqual(result['reason'],reason)
+     self.assertEqual(journal.read_bytes(),before)
+    finally:
+     (root/'release').touch();process.wait(timeout=5)

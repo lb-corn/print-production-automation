@@ -22,7 +22,7 @@ try{
     if(!$Rejected){throw 'Private settings entry was accepted.'}
     if((Get-FileHash -LiteralPath (Join-Path $Fixture '.env')).Hash -ne $Before){throw 'Read-only preflight changed .env.'}
     $Text=[IO.File]::ReadAllText($Source)
-    foreach($Required in @('agent.acquire_lock(''.agent.lock'')','NtSuspendProcess','NtResumeProcess','uncertain_claim','Factory API returned HTTP 409','-WindowStyle Hidden','REQUIRED_AGENT_VERSION','REQUIRED_AGENT_SHA256')){
+    foreach($Required in @('agent.acquire_lock(''.agent.lock'')','NtSuspendProcess','NtResumeProcess','/factory/maintenance-check','Factory API returned HTTP 409','-WindowStyle Hidden','REQUIRED_AGENT_VERSION','REQUIRED_AGENT_SHA256')){
         if(!$Text.Contains($Required)){throw "Missing update guard: $Required"}
     }
     $MaintenancePath='C:\Temp\with space\maintenance.py';$Root=$Fixture;$State='C:\Temp\state.json';$Release='C:\Temp\release';$PidJson='[]'

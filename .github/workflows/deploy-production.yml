@@ -130,6 +130,7 @@ jobs:
           php tests/filename-cleanup.php
           php tests/backlog-refresh.php
           php tests/factory-monitoring.php
+          php tests/factory-maintenance.php
           node tests/factory-monitor-controls.cjs
           php tests/queue-server-setup.php
           php tests/print-output.php

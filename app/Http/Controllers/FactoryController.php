@@ -7,6 +7,18 @@ use Illuminate\Support\Facades\DB;
 
 class FactoryController extends Controller
 {
+    // Serialized with begin-work/reset by PortalWriteLock. Read-only: never clears jobs.
+    public function maintenance(Request $request, \App\Services\FactoryDispatchService $dispatch)
+    {
+        abort_unless($dispatch->ready(),503,'Apply portal dispatch setup first.');
+        $id=$dispatch->identity($request);
+        abort_unless(\App\Models\FactoryAgent::where('agent_id',$id)->exists(),422,'Registered Factory agent identity is required.');
+        $busy=PrintBatch::where(fn($q)=>$q->where('factory_agent_id',$id)->orWhereNull('factory_agent_id'))
+            ->where(function($q){$q->whereIn('status',['CLAIMED','DOWNLOADING','DELIVERING'])->orWhere(fn($q)=>$q->where('status','HANDOFF_REQUESTED')->where('agent_operation_phase','handoff')->whereNotNull('agent_operation_token'));})->exists();
+        $transfer=\App\Services\CustomArtworkService::ready() && \App\Models\CustomArtworkTransfer::where('factory_agent_id',$id)->whereIn('state',['CLAIMED','CONNECTED'])->where('expires_at','>',now())->exists();
+        return response()->json(['ok'=>true,'protocol'=>1,'agent_id'=>$id,'busy'=>$busy||$transfer,'reason'=>$busy?'active_job':($transfer?'active_transfer':null)])->header('Cache-Control','no-store');
+    }
+
     public function next()
     {
         $query=PrintBatch::whereIn('status', ['QUEUED','HANDOFF_REQUESTED']);
