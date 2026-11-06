@@ -60,7 +60,7 @@ jobs:
                           r'child_process.{0,80}(?:exec|spawn)', r'curl\s+[^\n|]{0,200}\|\s*(?:bash|sh)',
                           r'file_put_contents\s*\(\s*[\'\"](?:\.htaccess|\.user\.ini)']
               hits = []
-              for directory in ['app', 'bootstrap', 'public', 'resources', 'routes', 'automation', 'deployment']:
+              for directory in ['app', 'bootstrap', 'public', 'resources', 'packages/ui-theme', 'routes', 'automation', 'deployment']:
                   for path in (ROOT / directory).rglob('*'):
                       # Check tracked source only: local virtualenvs/runtime files must never enter the gate/package.
                       relative = path.relative_to(ROOT).as_posix()
@@ -202,7 +202,7 @@ jobs:
 
           ROOT = Path.cwd()
           TARGET = ROOT / '.deploy'
-          ALLOW = ['app','bootstrap','config','database/migrations','database/seeders','public','resources','routes','vendor','deployment',
+          ALLOW = ['app','bootstrap','config','database/migrations','database/seeders','public','resources','packages/ui-theme','routes','vendor','deployment',
                    'artisan','composer.json','composer.lock']
 
 
@@ -234,7 +234,7 @@ jobs:
                       destination.parent.mkdir(parents=True,exist_ok=True)
                       shutil.copyfile(path,destination)
                       count += 1
-              for required in ['database/migrations/2026_11_04_000009_create_custom_artwork_transfers.php','database/migrations/2026_11_03_000008_add_batch_dispatch_consent.php','public/index.php','artisan','vendor/autoload.php','vendor/google/apiclient-services/src/Drive.php','vendor/google/apiclient-services/src/Drive/DriveFile.php','deployment/post-deploy.sh']:
+              for required in ['packages/ui-theme/resources/views/app.blade.php','database/migrations/2026_11_06_000011_create_configurable_roles.php','database/migrations/2026_11_04_000009_create_custom_artwork_transfers.php','database/migrations/2026_11_03_000008_add_batch_dispatch_consent.php','public/index.php','artisan','vendor/autoload.php','vendor/google/apiclient-services/src/Drive.php','vendor/google/apiclient-services/src/Drive/DriveFile.php','deployment/post-deploy.sh']:
                   if not (TARGET / required).is_file(): raise SystemExit(f'Incomplete deployment package: {required}')
               print(f'Allowlisted web deployment package created: {count} files. No .env, credentials, runtime storage, agent, or operator documents included.')
 
