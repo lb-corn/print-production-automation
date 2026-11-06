@@ -134,6 +134,12 @@ class JerseyOrder extends Model
         return $this->customFields(internal: true);
     }
 
+    public function scopeEligibleForProduction(Builder $query): Builder
+    {
+        return $query->whereNull('shopify_cancelled_at')
+            ->where(fn (Builder $query) => $query->whereNull('shopify_financial_status')->orWhereRaw('UPPER(shopify_financial_status) <> ?', ['REFUNDED']));
+    }
+
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
         $search = trim((string) $search);

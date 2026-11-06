@@ -39,7 +39,7 @@ class JerseyOrderController extends Controller
             ->forSize($filters['size'] ?? null);
 
         if ($status !== 'all') {
-            $query->forFulfillmentStatus($status);
+            $query->eligibleForProduction()->forFulfillmentStatus($status);
         }
 
         $orders = $query
@@ -57,9 +57,9 @@ class JerseyOrderController extends Controller
         ];
 
         $summary = [
-            'unfulfilled' => JerseyOrder::where('shopify_fulfillment_status', 'UNFULFILLED')->count(),
-            'partially_fulfilled' => JerseyOrder::where('shopify_fulfillment_status', 'PARTIALLY_FULFILLED')->count(),
-            'fulfilled' => JerseyOrder::where('shopify_fulfillment_status', 'FULFILLED')->count(),
+            'unfulfilled' => JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status', 'UNFULFILLED')->count(),
+            'partially_fulfilled' => JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status', 'PARTIALLY_FULFILLED')->count(),
+            'fulfilled' => JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status', 'FULFILLED')->count(),
             'total' => JerseyOrder::count(),
         ];
 

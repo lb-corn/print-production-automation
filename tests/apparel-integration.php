@@ -106,4 +106,36 @@ try{$webSync->store($manualSync);check(count($manualSync->calls)===1,'Overlappin
 $app->instance(JerseyOrderSyncService::class,$manualSync);
 $exit=Illuminate\Support\Facades\Artisan::call('shopify:sync-jerseys',['--source'=>'scheduled']);
 check($exit===0 && end($manualSync->calls)===[false,null,null,'scheduled'],'Imported CLI command passes scheduled incremental options');
+Auth::setUser($manager);
+$shortcutHtml=$report->index(Request::create('/apparel/orders?search=SAFE&per_page=50'))->render();
+preg_match_all('/<a class="summary-card summary-filter"[^>]*href="([^"]+)"[^>]*>/', $shortcutHtml, $shortcutLinks);
+check(count($shortcutLinks[1])===4,'All four fulfillment summary cards are actionable links');
+foreach(['UNFULFILLED','PARTIALLY_FULFILLED','FULFILLED','all'] as $index=>$status) {
+    parse_str(parse_url(html_entity_decode($shortcutLinks[1][$index]),PHP_URL_QUERY),$query);
+    check(($query['fulfillment_status'] ?? null)===$status && ($query['per_page'] ?? null)==='50' && !isset($query['search'],$query['page']),'Summary shortcut selects global status and retains page size: '.$status);
+}
+check(substr_count(implode('',$shortcutLinks[0]),'aria-current="page"')===1,'Only the selected status shortcut is highlighted');
+$baseWaiting=$report->index(Request::create('/apparel/orders'))->getData()['orders']->total();
+$historyCases=[
+ ['cancelled', ['shopify_cancelled_at'=>now()]],
+ ['refunded', ['shopify_financial_status'=>'REFUNDED']],
+ ['null-financial', ['shopify_financial_status'=>null]],
+ ['partial-refund', ['shopify_financial_status'=>'PARTIALLY_REFUNDED']],
+ ['fulfilled-refund', ['shopify_financial_status'=>'REFUNDED','shopify_fulfillment_status'=>'FULFILLED']],
+];
+$historyIds=[];
+foreach($historyCases as [$label,$extra]) {
+ $row=$sync->normalizeLineItem(apparelOrderPayload(['id'=>'gid://shopify/Order/history-'.$label,'name'=>'#H-'.$label]),array_replace($line,['id'=>'gid://shopify/LineItem/history-'.$label]));
+ $historyIds[$label]=JerseyOrder::create(array_merge($row,$extra))->id;
+}
+$waiting=$report->index(Request::create('/apparel/orders?per_page=100'))->getData();$waitingIds=$waiting['orders']->pluck('id')->all();
+check(!in_array($historyIds['cancelled'],$waitingIds,true) && !in_array($historyIds['refunded'],$waitingIds,true),'Unfulfilled excludes cancelled and fully refunded orders');
+check(in_array($historyIds['null-financial'],$waitingIds,true) && in_array($historyIds['partial-refund'],$waitingIds,true),'Unfulfilled retains null financial states and partially refunded work');
+check($waiting['orders']->total()===$baseWaiting+2 && $waiting['summary']['unfulfilled']===$baseWaiting+2,'Clickable Unfulfilled count matches eligible global orders');
+$allIds=$report->index(Request::create('/apparel/orders?fulfillment_status=all&per_page=100'))->getData()['orders']->pluck('id')->all();
+check(!array_diff(array_values($historyIds),$allIds),'All statuses retains historical cancelled and refunded orders');
+$fulfilledIds=$report->index(Request::create('/apparel/orders?fulfillment_status=FULFILLED&per_page=100'))->getData()['orders']->pluck('id')->all();
+check(!in_array($historyIds['fulfilled-refund'],$fulfilledIds,true),'Other production status lists also exclude fully refunded orders');
+$paidHtml=$report->index(Request::create('/apparel/orders?fulfillment_status=all&per_page=100'))->render();
+check(!preg_match('/<span class="badge badge-neutral">\s*PAID\s*<\/span>/',$paidHtml) && str_contains($paidHtml,'REFUNDED'),'List omits Paid badges while preserving relevant archive warnings');
 echo "SUCCESS $checks total permission and apparel checks; no live services used.\n";

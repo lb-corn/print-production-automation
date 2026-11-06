@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 $app->instance(App\Services\ProductionService::class,new class extends App\Services\ProductionService {
     public function workspaceStats(bool $refresh=false):array {return ['ready'=>4,'in_print'=>2,'completed'=>3];}
 });
+$waitingBefore=JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','UNFULFILLED')->count();
 $ids=JerseyOrder::orderBy('id')->limit(3)->pluck('id');
 JerseyOrder::findOrFail($ids[0])->update(['shopify_fulfillment_status'=>'FULFILLED']);
 JerseyOrder::findOrFail($ids[1])->update(['shopify_fulfillment_status'=>'PARTIALLY_FULFILLED']);
@@ -17,7 +18,7 @@ foreach([[$admin,['bags','apparel']],[$manager,['bags','apparel']],[$bag,['bags'
     $summary=$summaryService->forUser($account,true);
     check(array_keys($summary['areas'])===$expected,'Summary includes only authorized areas: '.$account->role);
     if(in_array('bags',$expected,true))check($summary['areas']['bags']===['ready'=>4,'active'=>2,'done'=>3],'Bag summary retains ready, printing and completed counts');
-    if(in_array('apparel',$expected,true))check($summary['areas']['apparel']===['waiting'=>26,'active'=>1,'done'=>1],'Apparel summary separates waiting/partial/fulfilled and excludes cancelled lines');
+    if(in_array('apparel',$expected,true))check($summary['areas']['apparel']===['waiting'=>$waitingBefore-3,'active'=>1,'done'=>1],'Apparel summary separates waiting/partial/fulfilled and excludes cancelled lines');
     $html=view('partials.sidebar-help')->render();
     check(str_contains($html,'Production summary') && str_contains($html,'Quick guide') && !str_contains($html,'sidebar-help sidebar-live'),'Summary has compact content and a guide instead of an empty panel');
     $nav=view('partials.production-navigation')->render();

@@ -25,28 +25,29 @@
 <link rel="stylesheet" href="{{asset('css/apparel.css')}}?v={{filemtime(public_path('css/apparel.css'))}}">
 <div class="apparel-workspace">
 <div class="apparel-report-content">
-<section class="panel apparel-sync-toolbar"><div><strong>Shopify sync <span class="sync-health {{$syncHealth['class']}}">{{$syncHealth['label']}}</span></strong><p>{{$syncHealth['message']}}</p><small>Last successful sync: {{$lastSyncLabel}} @if($lastSyncRelative) &middot; {{$lastSyncRelative}} @endif</small></div>
+<section class="panel apparel-sync-toolbar" aria-label="Shopify synchronization">
+<div class="apparel-sync-copy">
+<div class="apparel-sync-title"><strong>Shopify sync</strong><span class="sync-health {{$syncHealth['class']}}" title="{{$syncHealth['message']}}" aria-label="{{$syncHealth['label']}}. {{$syncHealth['message']}}">{{$syncHealth['label']}}</span><span class="apparel-sync-timestamp">Last sync: {{$lastSyncLabel}} @if($lastSyncRelative) &middot; {{$lastSyncRelative}} @endif</span></div>
+@if($syncHealth['state']==='error')
+<p class="apparel-sync-error" role="alert">{{$syncHealth['message']}}</p>
+@endif
+</div>
 @if(auth()->user()->allows('apparel.sync.edit'))
 <form method="post" action="{{route('apparel.orders.sync')}}" data-sync-form>@csrf<button class="button button-primary" type="submit" data-default-label="Sync Orders" data-loading-label="Syncing..."><span class="button-spinner" aria-hidden="true"></span><span class="button-label">Sync Orders</span></button></form>
 @endif
 </section>
-        <section class="summary-grid" aria-label="Order summary">
-            <article class="summary-card">
-                <span class="summary-label"><i class="summary-dot dot-warning"></i>Unfulfilled</span>
-                <strong>{{ number_format($summary['unfulfilled']) }}</strong>
-            </article>
-            <article class="summary-card">
-                <span class="summary-label"><i class="summary-dot dot-orange"></i>Partially Fulfilled</span>
-                <strong>{{ number_format($summary['partially_fulfilled']) }}</strong>
-            </article>
-            <article class="summary-card">
-                <span class="summary-label"><i class="summary-dot dot-success"></i>Fulfilled</span>
-                <strong>{{ number_format($summary['fulfilled']) }}</strong>
-            </article>
-            <article class="summary-card">
-                <span class="summary-label"><i class="summary-dot dot-info"></i>Total Apparel Items</span>
-                <strong>{{ number_format($summary['total']) }}</strong>
-            </article>
+        <section class="summary-grid" aria-label="Filter by fulfillment status">
+            @foreach([
+                'UNFULFILLED'=>['Unfulfilled','unfulfilled','dot-warning'],
+                'PARTIALLY_FULFILLED'=>['Partially Fulfilled','partially_fulfilled','dot-orange'],
+                'FULFILLED'=>['Fulfilled','fulfilled','dot-success'],
+                'all'=>['Total Apparel Items','total','dot-info']
+            ] as $status=>[$label,$countKey,$dot])
+            <a class="summary-card summary-filter" href="{{route('apparel.orders.index',['fulfillment_status'=>$status,'per_page'=>$filters['per_page'] ?? 25])}}" @if(($filters['fulfillment_status'] ?? 'UNFULFILLED')===$status) aria-current="page" @endif aria-label="{{$label}}: {{number_format($summary[$countKey])}} order lines. Show matching orders.">
+                <span class="summary-label"><i class="summary-dot {{$dot}}" aria-hidden="true"></i>{{$label}}</span>
+                <strong>{{ number_format($summary[$countKey]) }}</strong>
+            </a>
+            @endforeach
         </section>
 
         <section class="panel filter-card">
@@ -131,7 +132,7 @@
         <section class="panel table-panel" data-table-panel>
             <div class="apparel-report-heading"><div><h2>Apparel orders</h2><p>{{number_format($orders->total())}} matching order {{$orders->total()===1?'line':'lines'}}</p></div><span>{{str_replace('_',' ',($filters['fulfillment_status'] ?? 'UNFULFILLED')==='all'?'All statuses':$filters['fulfillment_status'])}}</span></div>
             <div class="table-wrap">
-                <table class="orders-table">
+                <table class="orders-table apparel-order-tiles">
                     <thead>
                     <tr>
                         <th>Order</th>
@@ -162,7 +163,15 @@
                                 $detailsPrimary = null;
                             }
 
-                            $detailMeta = $detailValues->push('Qty '.$order->quantity);
+                            if ($detailsPrimary && collect(explode(' / ', $detailsPrimary))->every(fn($part) => $detailValues->contains(fn($value) => strcasecmp(trim($part), $value) === 0))) {
+                                $detailsPrimary = null;
+                            }
+                            $detailMeta = collect([
+                                ['label'=>'Style','value'=>$order->style],
+                                ['label'=>'Color','value'=>$order->color],
+                                ['label'=>'Size','value'=>$order->size],
+                                ['label'=>'Qty','value'=>$order->quantity],
+                            ])->filter(fn($meta)=>$meta['value']!==null && $meta['value']!=='');
                         @endphp
                         <tr class="{{ trim('order-card '.$remarkRowClass) }}">
                             <td class="order-section" data-label="Order">
@@ -172,7 +181,7 @@
                                 </div>
                                 <div class="badge-stack compact">
                                     <span class="badge {{ $badgeClass($order->shopify_fulfillment_status) }}">{{ str_replace('_', ' ', $order->shopify_fulfillment_status) }}</span>
-                                    @if ($order->shopify_financial_status)
+                                    @if ($order->shopify_financial_status && strtoupper($order->shopify_financial_status)!=='PAID')
                                         <span class="badge badge-neutral">{{ str_replace('_', ' ', $order->shopify_financial_status) }}</span>
                                     @endif
                                     @if ($order->shopify_cancelled_at)
@@ -203,7 +212,7 @@
                                 @endif
                                 <div class="details-meta">
                                     @foreach ($detailMeta as $meta)
-                                        <span class="detail-meta-item">{{ $meta }}</span>
+                                        <span class="detail-meta-item"><small>{{$meta['label']}}</small><b>{{$meta['value']}}</b></span>
                                     @endforeach
                                 </div>
                                 @if ($personalizationFields !== [])

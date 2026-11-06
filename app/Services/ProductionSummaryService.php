@@ -23,7 +23,7 @@ class ProductionSummaryService
         }
         if ($apparel) {
             $counts = Schema::hasTable('jersey_orders')
-                ? JerseyOrder::whereNull('shopify_cancelled_at')->selectRaw('shopify_fulfillment_status, COUNT(*) as total')->groupBy('shopify_fulfillment_status')->pluck('total', 'shopify_fulfillment_status')->all()
+                ? JerseyOrder::eligibleForProduction()->selectRaw('shopify_fulfillment_status, COUNT(*) as total')->groupBy('shopify_fulfillment_status')->pluck('total', 'shopify_fulfillment_status')->all()
                 : null;
             $data['areas']['apparel'] = $counts === null
                 ? ['waiting' => null, 'active' => null, 'done' => null]
