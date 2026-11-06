@@ -147,6 +147,7 @@ jobs:
           php tests/order-catalog-refresh.php
           php tests/bulk-review.php
           php tests/batch-return.php
+          php tests/apparel-integration.php
           php tests/role-permissions.php
           php tests/admin-controls.php
           php tests/reset-flow.php

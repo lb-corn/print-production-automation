@@ -15,6 +15,7 @@ class RoleController extends Controller {
         foreach($data['permissions'] as $permission) {
             $parts=explode('.',$permission);
             if(in_array($parts[0],['bags','apparel'],true)) $data['permissions'][]=$parts[0].'.overview.view';
+            if($parts[0]==='apparel' && in_array($parts[1],['tracking','remarks'],true)) $data['permissions'][]='apparel.orders.view';
             $view=$parts[0].'.'.$parts[1].'.view';
             if($parts[2]!=='view' && isset(AccessCatalog::permissions()[$view])) $data['permissions'][]=$view;
         }

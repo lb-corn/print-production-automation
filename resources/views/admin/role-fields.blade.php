@@ -1,5 +1,5 @@
 <label class="role-name-field"><span>Role name</span><input name="name" value="{{$roleName}}" required maxlength="80"></label>
-@foreach(['bags'=>'Bag Production','apparel'=>'Apparel Production (integration planned)','admin'=>'Administration'] as $area=>$areaLabel)
+@foreach(['bags'=>'Bag Production','apparel'=>'Apparel Production','admin'=>'Administration'] as $area=>$areaLabel)
 <fieldset class="permission-area"><legend>{{$areaLabel}}</legend>
 <div class="permission-grid">
 @foreach($permissions as $key=>$label)

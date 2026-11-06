@@ -47,3 +47,12 @@ Route::middleware(['auth','auth.session', \App\Http\Middleware\RequireFeature::c
 });
 
 Route::get('/factory-agent/releases/{version}',[\App\Http\Controllers\FactoryMonitoringController::class,'signedPackage'])->middleware(['signed:relative','throttle:20,1'])->where('version','[0-9]+\\.[0-9]+\\.[0-9]+')->name('factory-agent.release');
+
+Route::middleware(['auth','auth.session',\App\Http\Middleware\RequireFeature::class,\App\Http\Middleware\ReadOnlyDemo::class,\App\Http\Middleware\PortalWriteLock::class])->prefix('apparel')->name('apparel.')->group(function(){
+    Route::get('/orders',[\App\Http\Controllers\JerseyOrderController::class,'index'])->name('orders.index');
+    Route::get('/orders/{jerseyOrder}',[\App\Http\Controllers\JerseyOrderController::class,'show'])->name('orders.show');
+    Route::patch('/orders/{jerseyOrder}/tracking',[\App\Http\Controllers\JerseyOrderTrackingController::class,'update'])->name('orders.tracking.update');
+    Route::patch('/orders/{jerseyOrder}/remark',[\App\Http\Controllers\JerseyOrderRemarkController::class,'update'])->name('orders.remark.update');
+    Route::patch('/orders/{jerseyOrder}/remark/processed',[\App\Http\Controllers\JerseyOrderRemarkProcessedController::class,'update'])->name('orders.remark.processed.update');
+    Route::post('/orders/sync',[\App\Http\Controllers\ShopifySyncController::class,'store'])->middleware('throttle:3,1')->name('orders.sync');
+});

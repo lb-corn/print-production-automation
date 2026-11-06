@@ -1,5 +1,5 @@
 <div class="role-manager">
-<p class="role-manager-intro">Admin has full access. Demo is read only. Customize other roles below. Apparel permissions become available with its integration.</p>
+<p class="role-manager-intro">Admin has full access. Demo is read only. Customize other roles below.</p>
 <div class="role-list">
 @foreach($roles as $role)
 <details class="panel role-card" name="role-editor">

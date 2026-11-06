@@ -22,9 +22,9 @@ $admin=userFor('admin');$manager=userFor('manager');$bag=userFor('bag-production
 check(User::where('email','legacy@example.test')->firstOrFail()->role==='manager','Migration preserves legacy accounts as Manager');
 check($manager->roleLabel()==='Manager','Manager display name');
 foreach(AccessCatalog::permissions() as $key=>$label) check($admin->allows($key),'Admin '.$key);
-check(!$manager->allows('admin.roles.edit') && $manager->allows('bags.artwork.approve') && $manager->allows('apparel.orders.edit'),'Manager production defaults exclude admin');
+check(!$manager->allows('admin.roles.edit') && $manager->allows('bags.artwork.approve') && $manager->allows('apparel.tracking.edit'),'Manager production defaults exclude admin');
 check($bag->allows('bags.batches.edit') && !$bag->allows('apparel.orders.view'),'Bag production area isolation');
-check($apparel->allows('apparel.orders.approve') && !$apparel->allows('bags.overview.view'),'Apparel area isolation');
+check($apparel->allows('apparel.remarks.approve') && !$apparel->allows('bags.overview.view'),'Apparel area isolation');
 check($demo->allows('bags.artwork.view') && !$demo->allows('bags.artwork.approve'),'Demo remains read only');
 $gate=new App\Http\Middleware\RequireFeature;
 function requestFor($user,$name,$method='GET',$data=[]){global $app;$r=Request::create('/test',$method,$data);$route=new HttpRoute([$method],'test',fn()=>null);$route->name($name);$r->setRouteResolver(fn()=>$route);$r->setUserResolver(fn()=>$user);$r->setLaravelSession($app['session']->driver());return $r;}
@@ -36,11 +36,11 @@ foreach(app('router')->getRoutes() as $route){if(in_array('auth',$route->gatherM
 rejected(fn()=>$gate->handle(requestFor($apparel,'production'),fn()=>'allowed'),'Apparel cannot directly access bags');
 rejected(fn()=>$gate->handle(requestFor($manager,'admin.roles'),fn()=>'allowed'),'Manager cannot directly edit roles');
 rejected(fn()=>$gate->handle(requestFor($demo,'verify','POST'),fn()=>'allowed'),'Demo cannot approve through direct requests');
-$custom=Role::create(['slug'=>'custom-approver','name'=>'Cross-area approver','permissions'=>['bags.overview.view','bags.artwork.view','apparel.orders.approve','apparel.overview.view']]);
+$custom=Role::create(['slug'=>'custom-approver','name'=>'Cross-area approver','permissions'=>['bags.overview.view','bags.artwork.view','apparel.remarks.approve','apparel.overview.view']]);
 $reviewer=userFor($custom->slug);
-check($reviewer->allows('apparel.orders.approve')&&!$reviewer->allows('apparel.orders.edit'),'Cross-area approval without edit');
+check($reviewer->allows('apparel.remarks.approve')&&!$reviewer->allows('apparel.tracking.edit'),'Cross-area approval without edit');
 $custom->update(['permissions'=>['apparel.overview.view']]);
-check(!$reviewer->fresh()->allows('apparel.orders.approve'),'Revocation applies on next request');
+check(!$reviewer->fresh()->allows('apparel.remarks.approve'),'Revocation applies on next request');
 $roles=new App\Http\Controllers\RoleController;
 $req=requestFor($admin,'admin.roles.store','POST',['name'=>'Custom bag approver','permissions'=>['bags.artwork.approve']]);$roles->store($req);
 $new=Role::where('name','Custom bag approver')->firstOrFail();check(in_array('bags.artwork.view',$new->permissions,true)&&in_array('bags.overview.view',$new->permissions,true),'Permission dependencies enforced');
@@ -55,7 +55,7 @@ preg_match('/<nav class="admin-settings-nav"[\s\S]*?<\/nav>/', $html, $settingsN
 check(isset($settingsNav[0]) && strpos($settingsNav[0],'Roles and permissions') < strpos($settingsNav[0],'Manage Users'),'Roles settings precede user management');
 check(str_contains($html,'Production permissions')&&str_contains($html,'Bag Production'),'Role editor renders shared theme');
 Illuminate\Support\Facades\Auth::login($apparel);
-$html=view('dashboard.apparel')->render();check(!str_contains($html,'Artwork verification')&&!str_contains($html,'data-factory-connection'),'Apparel theme hides bag navigation and widgets');
+$html=app(App\Http\Controllers\ApparelOverviewController::class)->index()->render();check(!str_contains($html,'Artwork verification')&&!str_contains($html,'data-factory-connection'),'Apparel theme hides bag navigation and widgets');
 Illuminate\Support\Facades\Auth::login($bag);
 $html=view('partials.production-navigation')->render();check(str_contains($html,'Artwork verification')&&!str_contains($html,'Apparel Production'),'Bag navigation excludes apparel');
 $exception=new Symfony\Component\HttpKernel\Exception\HttpException(403,'Your role does not allow this feature.');

@@ -3,6 +3,7 @@ namespace App\Services;
 class RouteAccess {
     public static function permission(string $name): ?string {
         $map=[
+        'apparel.orders.index'=>'apparel.orders.view','apparel.orders.show'=>'apparel.orders.view','apparel.orders.tracking.update'=>'apparel.tracking.edit','apparel.orders.remark.update'=>'apparel.remarks.edit','apparel.orders.remark.processed.update'=>'apparel.remarks.approve','apparel.orders.sync'=>'apparel.sync.edit',
         'workspace.factory-status'=>'bags.batches.view','workspace.status'=>'bags.overview.view',
         'production'=>'bags.artwork.view','production.sync-backlog'=>'bags.sync.edit','production.rematch'=>'bags.artwork.edit','production.bulk-verify'=>'bags.artwork.approve','verify'=>'bags.artwork.approve','queue'=>'bags.queue.view',
         'batch.create'=>'bags.batches.edit','batches'=>'bags.batches.view','batch.show'=>'bags.batches.view','batch.progress'=>'bags.batches.view','batch.dispatch'=>'bags.batches.approve','batch.return-item'=>'bags.batches.edit','batch.return-to-review'=>'bags.batches.edit','batch.edge-print'=>'bags.batches.approve','batch.printed'=>'bags.batches.approve',

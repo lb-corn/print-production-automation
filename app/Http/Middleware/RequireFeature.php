@@ -11,7 +11,7 @@ class RequireFeature {
             if(!$request->user()->allows('bags.overview.view') && !$request->user()->allows('apparel.overview.view') && !$request->has('area')) return response()->view('dashboard.access');
             $area=$request->query('area',$request->user()->allows('bags.overview.view')?'bags':'apparel');
             abort_unless(in_array($area,['bags','apparel'],true) && $request->user()->allows($area.'.overview.view'),403);
-            if($area==='apparel') return response()->view('dashboard.apparel');
+            if($area==='apparel') return response(app(\App\Http\Controllers\ApparelOverviewController::class)->index());
             return $next($request);
         }
         $permission=$name==='admin.settings'?RouteAccess::section($request->query('section','artwork')):RouteAccess::permission($name);

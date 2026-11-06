@@ -47,3 +47,5 @@ Artisan::command('production:replace-users {admin_email} {operator_email}', func
     $this->info('User roster replaced. Exactly these two active accounts remain. Sign in with the new credentials.');
     return 0;
 })->purpose('Explicitly replace the user roster; passwords entered through hidden prompts, never command arguments');
+
+\Illuminate\Support\Facades\Schedule::command('shopify:sync-jerseys --source=scheduled')->everyTenMinutes()->withoutOverlapping(15)->name('shopify-jersey-orders-sync')->onFailure(function(){\Illuminate\Support\Facades\Log::error('Scheduled Shopify apparel orders sync failed.');});
