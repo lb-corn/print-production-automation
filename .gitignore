@@ -17,6 +17,7 @@ automation/.venv/
 /automation/factory_print/
 /automation/dist/
 /automation/__pycache__/
+/automation/agent-id
 /automation/*.pyc
 branch_structure.json
 temp_auto_push.bat
@@ -39,3 +40,8 @@ factory_edgeprint_test/
 
 # Private admin rename previews and durable audit ledgers
 /storage/app/private/artwork-names/
+
+# Isolated role-preview database and local-only test artifacts
+/tmp/roles-preview*
+/tmp/setup-role-preview.php
+/tmp/roles-*-test.log

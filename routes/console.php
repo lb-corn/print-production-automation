@@ -32,7 +32,7 @@ Artisan::command('production:replace-users {admin_email} {operator_email}', func
     $adminEmail = strtolower(trim($this->argument('admin_email')));
     $operatorEmail = strtolower(trim($this->argument('operator_email')));
     $this->warn('This replaces the user roster with exactly one Admin and Mike as a normal user. All other accounts are deleted. Production history is preserved.');
-    $this->line('Admin: '.$adminEmail.'; normal user: '.$operatorEmail);
+    $this->line('Admin: '.$adminEmail.'; Manager: '.$operatorEmail);
     if (!$this->confirm('Replace all users with these two accounts?', false)) return 1;
     $passwords = [];
     foreach (['Admin', 'Mike'] as $label) {

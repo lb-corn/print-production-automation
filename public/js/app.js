@@ -1,5 +1,12 @@
 const filters = document.querySelectorAll('[data-filter]');
 const cards = document.querySelectorAll('.verification-cards .job-card');
+function updateDesignCounts() {
+    const state=document.querySelector('[data-filter-group="state"].active')?.dataset.filter || 'any';
+    const totals={all:0,single:0,double:0,custom:0};
+    cards.forEach(card=>{if(state!=='any' && card.dataset.workflow!==state)return;totals.all++;if(card.dataset.custom==='yes')totals.custom++;else if(card.dataset.type in totals)totals[card.dataset.type]++;});
+    document.querySelectorAll('[data-design-count]').forEach(count=>count.textContent=totals[count.dataset.designCount]??0);
+}
+updateDesignCounts();
 filters.forEach(button => {
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
     button.addEventListener('click', () => {
@@ -16,6 +23,7 @@ filters.forEach(button => {
             card.hidden = !(matchesType && (state === 'any' || card.dataset.workflow === state));
             if (!card.hidden) visible++;
         });
+        updateDesignCounts();
         const empty = document.querySelector('[data-filter-empty]');
         if (empty) empty.hidden = visible > 0 || cards.length === 0;
     });
@@ -80,7 +88,7 @@ function applyReviewResult(result) {
         card.dataset.decision = item.decision || '';
         card.classList.toggle('approved-card', item.workflow === 'approved');
         card.classList.toggle('wrong-card', item.workflow === 'rejected');
-        const label = item.workflow === 'approved' ? 'Approved' : item.workflow === 'rejected' ? 'Rejected' : 'Needs review';
+        const label = item.workflow === 'approved' ? 'Verified' : item.workflow === 'rejected' ? 'Rejected' : 'Not verified';
         card.querySelector('.review-state').textContent = label;
         reviewFeedback(card, `${item.workflow === 'rejected' ? '✕' : '✓'} ${label} · Saved`);
         const checkbox = card.querySelector('.review-select');
@@ -91,6 +99,7 @@ function applyReviewResult(result) {
         const total = document.querySelector(`.review-total.${state} strong`);
         if (total) total.textContent = count;
     }
+    updateDesignCounts();
     if (result.workspace) updateWorkspaceStats(result.workspace);
     updateSelection();
 }
@@ -259,6 +268,86 @@ document.addEventListener('click', async (event) => {
         button.textContent = 'Copy unavailable — select the filename';
     }
 });
+const filenameSearch = document.querySelector('[data-filename-search]');
+if (filenameSearch) {
+    const rows=[...document.querySelectorAll('[data-filename-row]')];
+    const clear=document.querySelector('[data-filename-clear]');
+    const count=document.querySelector('[data-filename-count]');
+    const empty=document.querySelector('[data-filename-empty]');
+    const normalize=text=>text.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const filter=()=>{
+        const terms=normalize(filenameSearch.value).split(/\s+/).filter(Boolean);let visible=0;
+        rows.forEach(row=>{const text=normalize(row.dataset.filenameSearchText||'');row.hidden=!terms.every(term=>text.includes(term));if(!row.hidden)visible++;});
+        if(clear)clear.hidden=!filenameSearch.value;
+        if(count)count.textContent=`${visible} of ${rows.length} files`;
+        if(empty)empty.hidden=visible>0||!terms.length;
+    };
+    filenameSearch.addEventListener('input',filter);
+    clear?.addEventListener('click',()=>{filenameSearch.value='';filter();filenameSearch.focus();});
+    window.addEventListener('pageshow',filter);
+    filter();
+}
+
+const filenameProcessForms = [...document.querySelectorAll('[data-filename-process]')];
+let filenameProcessing = false;
+filenameProcessForms.forEach(form => form.addEventListener('submit', event => {
+    if (filenameProcessing) { event.preventDefault(); return; }
+    filenameProcessing = true;
+    filenameProcessForms.forEach(other => { const button=other.querySelector('button');button.disabled=true;if(other===form){button.textContent='Processing…';other.setAttribute('aria-busy','true');} });
+}));
+window.addEventListener('pageshow',()=>{
+    filenameProcessing=false;
+    filenameProcessForms.forEach(form=>{form.removeAttribute('aria-busy');const button=form.querySelector('button');button.disabled=false;button.textContent='Process suggested name';});
+});
+
+const catalogSyncForms = [...document.querySelectorAll('[data-catalog-sync]')];
+const catalogSyncButtons = [...document.querySelectorAll('[data-catalog-sync] button[type="submit"], button[form="artwork-scan-form"]')];
+let catalogSyncPending = false;
+catalogSyncForms.forEach(form => form.addEventListener('submit', event => {
+    if (catalogSyncPending) { event.preventDefault(); return; }
+    catalogSyncPending = true;
+    catalogSyncForms.forEach(other => other.setAttribute('aria-busy', 'true'));
+    catalogSyncButtons.forEach(button => { button.dataset.catalogSyncLabel = button.textContent; button.disabled = true; button.textContent = 'Syncing catalog…'; });
+}));
+window.addEventListener('pageshow', () => {
+    catalogSyncPending = false;
+    catalogSyncForms.forEach(form => form.removeAttribute('aria-busy'));
+    catalogSyncButtons.forEach(button => {
+        if (button.dataset.catalogSyncLabel !== undefined) { button.textContent = button.dataset.catalogSyncLabel; delete button.dataset.catalogSyncLabel; button.disabled = false; }
+    });
+});
+
+const backlogForms = [...document.querySelectorAll('[data-backlog-form]')];
+let backlogPending = false;
+backlogForms.forEach(form => form.addEventListener('submit', event => {
+    if (event.defaultPrevented) return;
+    if (backlogPending) { event.preventDefault(); return; }
+    if (!window.confirm('Get the latest production backlog from Shopify and match its artwork from Google Drive? Print batches stay locked. Changed artwork needs approval again.')) {
+        event.preventDefault();
+        return;
+    }
+    backlogPending = true;
+    backlogForms.forEach(other => {
+        other.setAttribute('aria-busy', 'true');
+        other.querySelectorAll('button[type="submit"]').forEach(button => {
+            button.dataset.backlogLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Refreshing…';
+        });
+    });
+}));
+window.addEventListener('pageshow', () => {
+    backlogPending = false;
+    backlogForms.forEach(form => {
+        form.removeAttribute('aria-busy');
+        form.querySelectorAll('button[data-backlog-label]').forEach(button => {
+            button.disabled = false;
+            button.textContent = button.dataset.backlogLabel;
+            delete button.dataset.backlogLabel;
+        });
+    });
+});
+
 const rematchForms = [...document.querySelectorAll('[data-rematch-form]')];
 let rematchPending = false;
 rematchForms.forEach((form) => {
@@ -307,3 +396,16 @@ if (actionNotice) {
     actionNotice.setAttribute('tabindex', '-1');
     requestAnimationFrame(() => { actionNotice.scrollIntoView({block:'start',behavior:'smooth'}); actionNotice.focus({preventScroll:true}); });
 }
+
+// Overview tabs use server-authorized panels; keep keyboard interaction native and predictable.
+document.querySelectorAll('[data-overview-tabs]').forEach(tablist => {
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+    tablist.addEventListener('keydown', event => {
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[next].focus();
+        tabs[next].click();
+    });
+});

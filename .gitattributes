@@ -2,3 +2,11 @@
 automation/factory_agent.py text eol=lf
 
 *.sh text eol=lf
+
+automation/job_output.py text eol=lf
+
+automation/custom_transfer.py text eol=lf
+
+# Preserve packaged documents and signed release archives byte for byte.
+*.pdf binary
+*.zip binary

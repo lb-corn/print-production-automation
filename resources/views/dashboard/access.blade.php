@@ -1,0 +1,1 @@
+<x-layouts.app heading="Workspace" subheading="Your assigned access"><section class="panel"><h2>Welcome</h2><p>Use your account menu to access the features assigned to your role. Contact your administrator if you need production access.</p></section></x-layouts.app>

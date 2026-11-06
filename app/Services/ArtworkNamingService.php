@@ -6,16 +6,17 @@ use Illuminate\Support\Facades\DB;
 
 class ArtworkNamingService
 {
-    public const POLICY='compatible-reviewed-color-context-v6';
+    public const POLICY='preserve-standard-id-names-v9';
     public function __construct(private GoogleDriveService $drive,private ShopifyService $shopify,
         private ArtworkMatcherService $matcher,private ArtworkRenameStore $store) {}
 
-    public function scan(int $actor): array
+    public function scan(int $actor,bool $standardize=false): array
     {
+        app(MaterialCatalog::class)->rows(true);
         $this->matcher->refreshReviewedSelections();
         $index=$this->drive->artworkIndex();$catalog=$this->shopify->getArtworkCatalog();$rules=$this->store->rules();
         return $this->store->create($actor,['naming_policy'=>self::POLICY,'selections_digest'=>$this->selectionsDigest(),'rules'=>$rules,'rules_digest'=>$this->rulesDigest($rules),'index'=>$index,'catalog'=>$catalog,'catalog_digest'=>$this->catalogDigest($catalog),
-            'entries'=>$this->build($index,$catalog,[], $this->lockedFiles(),$rules),'mappings'=>[]]);
+            'standardize'=>$standardize,'entries'=>$this->build($index,$catalog,[], $this->lockedFiles(),$rules,$standardize),'mappings'=>[]]);
     }
     public function revise(string $token,int $actor,array $mappings,bool $reuse=false): array
     {
@@ -34,7 +35,9 @@ class ArtworkNamingService
                 abort_unless(($mapping['color']??null)===$expectedColor,422,'The corrected color must equal the selected Shopify variant.');
                 $plan['color_correction_reviews'][]=['file_id'=>$id,'original_name'=>$entries[$id]['source']['name'],'from'=>$attributes['color'],'to'=>$expectedColor,'actor'=>$actor,'at'=>gmdate('c')];
             }
-            abort_if(in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
+            $single=$this->matcher->match($row,[])['design_type']==='single';
+            abort_if($single && ($attributes['side']??null)==='back',422,'This product needs single-sided artwork, but this file is labeled BACK. Choose the production front file. If the filename is incorrect, verify the image and correct its side in Drive, then sync the catalog.');
+            abort_if(!$single && in_array($attributes['side']??null,['front','back'],true) && ($mapping['side']??null)!==$attributes['side'],422,'The selected side differs from FRONT/BACK in the filename.');
             if(!empty($mapping['catalog_key']))$plan['mappings'][$id]=$mapping;
             if($reuse && !$colorMismatch) {
                 $folderName=trim(substr($entries[$id]['folder'],strrpos($entries[$id]['folder'],'/')+1));
@@ -46,7 +49,7 @@ class ArtworkNamingService
         }
         $plan['rules']=$this->store->rules();$plan['rules_digest']=$this->rulesDigest($plan['rules']);
         $this->matcher->refreshReviewedSelections();
-        $plan['entries']=$this->build($plan['index'],$plan['catalog'],$plan['mappings'],$this->lockedFiles(),$plan['rules']);
+        $plan['entries']=$this->build($plan['index'],$plan['catalog'],$plan['mappings'],$this->lockedFiles(),$plan['rules'],(bool)($plan['standardize']??false));
         $this->store->save($plan);return $plan;
     }
     public function revisePair(string $token,int $actor,string $catalogKey,string $frontId,string $backId,bool $reuse=false,bool $confirmColorCorrection=false): array
@@ -111,6 +114,35 @@ class ArtworkNamingService
         $this->matcher->refreshReviewedSelections();
         $plan['selections_digest']=$this->selectionsDigest();$this->store->save($plan);
     }
+    public function setSuggestedName(string $token,int $actor,string $id,string $target): void
+    {
+        $plan=$this->store->load($token,$actor);$this->requirePolicy($plan);
+        abort_unless($plan['status']==='preview' && !empty($plan['standardize']),422,'Refresh the filename list before editing a suggestion.');
+        $plan['target_overrides'][$id]=trim($target);
+        $plan['entries']=$this->applyTargetOverrides($plan,$plan['entries']);
+        $this->store->save($plan);
+    }
+    private function applyTargetOverrides(array $plan,array $entries): array
+    {
+        foreach($plan['target_overrides']??[] as $id=>$target) {
+            $position=null;foreach($entries as $i=>$entry)if($entry['id']===$id)$position=$i;
+            abort_unless($position!==null && $entries[$position]['status']==='ready',422,'This file is protected or its suggestion changed. Refresh the list.');
+            $entry=$entries[$position];$source=$entry['source'];$proposal=$entry['proposal'];
+            abort_unless($target!==$source['name'] && strlen($target)<=255 && !preg_match('~[\\\\/\x00-\x1f]~',$target) && pathinfo($target,PATHINFO_EXTENSION)===pathinfo($source['name'],PATHINFO_EXTENSION),422,'Use a different filename and keep the original extension.');
+            $row=collect($plan['catalog'])->firstWhere('catalog_key',$proposal['catalog_key']);
+            $folder=trim(substr($entry['folder'],strrpos($entry['folder'],'/')+1));
+            $candidate=$row?$this->matcher->namingCandidate($row,[...$source,'name'=>$target],$folder):null;
+            abort_unless($candidate && $candidate['target']===$target && $candidate['side']===$proposal['side'] && $candidate['color']===$proposal['color'],422,'Use a supported name for the same product, series, color and side. Keep the suggested format or a recognized design name.');
+            $owners=[];foreach($plan['catalog'] as $catalogRow)if($this->matcher->seriesFromSku($catalogRow['sku'])===$proposal['series'] && $this->matcher->designCodeFromSku($catalogRow['sku'])===$this->matcher->designCodeFromSku($row['sku']))$owners[$this->matcher->designIdentity($catalogRow['product'])]=true;
+            $stem=$this->stem($target);$identity=$this->matcher->designIdentity($row['product']);
+            abort_if(count($owners)>1 && !str_contains('-'.$stem.'-','-'.$identity.'-'),422,'This SKU code is shared by different designs. Keep the full product design in the filename.');
+            foreach($entries as $other)if($other['id']!==$id && $other['source']['parent_id']===$source['parent_id']) {
+                abort_if($this->stem($other['source']['name'])===$this->stem($target) || (!empty($other['proposal']) && $this->stem($other['proposal']['target'])===$this->stem($target)),422,'That filename conflicts with another file in this folder.');
+            }
+            $entries[$position]['proposal']['target']=$target;
+        }
+        return $entries;
+    }
     public function begin(string $token,int $actor,array $ids,bool $refresh): array
     {
         abort_unless(config('services.google_drive.rename_enabled',false),403,'Enable Drive renaming on the server before applying a plan.');
@@ -119,8 +151,9 @@ class ArtworkNamingService
         abort_if(!$ids || count($ids)!==count(array_unique($ids)),422,'Choose distinct ready files.');
         $entries=array_column($plan['entries'],null,'id');
         foreach($ids as $id)abort_unless(isset($entries[$id])&&$entries[$id]['status']==='ready',422,'Only ready files from this preview may be renamed.');
+        if(!empty($plan['standardize']))foreach($ids as $id)abort_if($this->matcher->isStandardFilename($entries[$id]['source']),422,'This file already uses the expected ID-suffixed format. No rename is needed. Refresh the list.');
         $this->revalidate($plan,$ids);
-        $plan['status']='applying';$plan['expires_at']=time()+7200;$plan['pending']=array_values($ids);$plan['renamed']=0;$plan['refresh']=$refresh;$plan['approved_ids']=array_values($ids);$plan['confirmed_at']=gmdate('c');
+        $plan['status']='applying';$plan['expires_at']=time()+7200;$plan['pending']=array_values($ids);$plan['renamed']=0;$plan['refresh']=$refresh||!empty($plan['standardize']);$plan['approved_ids']=array_values($ids);$plan['confirmed_at']=gmdate('c');
         $this->store->save($plan);return $plan;
     }
     /** Process small chunks so a single confirmation can safely handle a large folder. */
@@ -149,15 +182,31 @@ class ArtworkNamingService
                 $this->store->save($plan); // Durable before any metadata mutation; failures stop the operation.
                 $after=app(GoogleDriveRenameService::class)->rename($current[$id],$entry['proposal']['target']);
                 $renamed=[...$current[$id],...$after,'parent_id'=>$after['parents'][0]??$current[$id]['parent_id']];
+                $path=$current[$id]['path']??$current[$id]['name'];$slash=strrpos($path,'/');
+                $renamed['path']=($slash===false?'':substr($path,0,$slash+1)).$renamed['name'];
                 $this->store->refreshRenamedSelection($current[$id],$renamed);$this->matcher->refreshReviewedSelections();$plan['selections_digest']=$this->selectionsDigest();
+                if(isset($plan['target_overrides'][$id]))$this->store->rememberFilename($renamed,$actor);
                 $event=array_key_last($plan['events']);$plan['events'][$event]['status']='renamed';$plan['events'][$event]['after']=$after;
                 $plan['renamed']++;array_shift($plan['pending']);foreach($plan['entries'] as &$updated)if($updated['id']===$id)$updated['status']='renamed';unset($updated);$this->store->save($plan);
+                foreach($plan['index'] as &$file)if(($file['id']??null)===$id)$file=$renamed;unset($file);
+                $this->store->invalidateCatalogPreviews($id);
             }
             if(!$plan['pending']) {
                 $plan['status']='complete';$plan['match_counts']=null;
                 if($plan['refresh']) {
                     try{$plan['match_counts']=app(ArtworkRematchService::class)->rematch();}
                     catch(\Throwable $e){report($e);$plan['warning']='Names changed, but unbatched matches could not be refreshed. Run Rematch Artwork.';}
+                }
+                try {
+                    // Publish only verified filename metadata using the catalog checked before rename.
+                    // No order import, print-queue mutation or extra Shopify/Drive scan is needed.
+                    $rules=$this->store->rules();
+                    $preview=$this->store->create($actor,['naming_policy'=>self::POLICY,'selections_digest'=>$this->selectionsDigest(),'rules'=>$rules,'rules_digest'=>$this->rulesDigest($rules),
+                        'index'=>$plan['index'],'catalog'=>$plan['catalog'],'catalog_digest'=>$plan['catalog_digest'],'standardize'=>false,
+                        'entries'=>$this->build($plan['index'],$plan['catalog'],[],$this->lockedFiles(),$rules),'mappings'=>[]]);
+                    $plan['catalog_preview_token']=$preview['token'];
+                } catch(\Throwable $e) {
+                    report($e);$plan['warning']=trim(($plan['warning']??'').' Names changed, but the catalog preview could not refresh. Refresh Artwork matching to retry.');
                 }
             }
         } catch(\Throwable $e) {
@@ -174,7 +223,7 @@ class ArtworkNamingService
         if($checkCatalog)abort_unless($this->catalogDigest($this->shopify->getArtworkCatalog())===$plan['catalog_digest'],422,'Shopify catalog changed. Scan again.');
         $index=$this->drive->artworkIndex();$locked=$this->lockedFiles();
         $current=array_column(array_filter($index,fn($f)=>($f['kind']??'')==='artwork'),null,'id');
-        $entries=$this->build($index,$plan['catalog'],$plan['mappings'],$locked,$plan['rules']??[]);$entries=array_column($entries,null,'id');
+        $entries=$this->build($index,$plan['catalog'],$plan['mappings'],$locked,$plan['rules']??[],(bool)($plan['standardize']??false));$entries=$this->applyTargetOverrides($plan,$entries);$entries=array_column($entries,null,'id');
         $original=array_column($plan['entries'],null,'id');
         foreach($ids as $id) {
             abort_unless(isset($current[$id],$original[$id],$entries[$id]) && $entries[$id]['status']==='ready'
@@ -182,7 +231,7 @@ class ArtworkNamingService
         }
         return $current;
     }
-    public function build(array $index,array $catalog,array $mappings,array $locked,array $rules=[]): array
+    public function build(array $index,array $catalog,array $mappings,array $locked,array $rules=[],bool $standardize=false): array
     {
         $folders=array_column(array_filter($index,function($folder){
             if(($folder['kind']??'')!=='series_folder')return false;
@@ -208,7 +257,7 @@ class ArtworkNamingService
             if(!$mapping && count($owners)===1) { $owner=array_values($owners)[0]; if(ArtworkMatcherService::artworkFingerprint($owner['source'])===ArtworkMatcherService::artworkFingerprint($file))$mapping=$owner['mapping']; }
             foreach($catalog as $row) {
                 if($mapping && ($mapping['catalog_key']??null)!==$row['catalog_key'])continue;
-                $candidate=$this->matcher->namingCandidate($row,$file,$folder['name'],$mapping);
+                $candidate=$this->matcher->namingCandidate($row,$file,$folder['name'],$mapping,$standardize);
                 if(!$candidate)continue;
                 // Reuse folder ambiguity detection from the matcher without choosing any file.
                 $context=$this->matcher->match($row,array_values($folders));
@@ -224,7 +273,7 @@ class ArtworkNamingService
                 elseif(!$choices && $attributes['side']) {
                     foreach($catalog as $row) {
                         if($this->matcher->designIdentity($row['product'])!==$rule)continue;
-                        $candidate=$this->matcher->namingCandidate($row,$file,$folder['name'],['side'=>$attributes['side'],'color'=>$attributes['color']??'']);
+                        $candidate=$this->matcher->namingCandidate($row,$file,$folder['name'],['side'=>$attributes['side'],'color'=>$attributes['color']??''],$standardize);
                         if(!$candidate || $this->matcher->match($row,array_values($folders))['match_status']==='AMBIGUOUS')continue;
                         $choices[]=$candidate;
                     }

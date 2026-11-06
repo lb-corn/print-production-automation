@@ -2,7 +2,7 @@
 // Reviewed regression harness. All persistence is SQLite :memory:, all integrations are fakes.
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function (Throwable $error): void { fwrite(STDERR, 'FAIL: '.$error->getMessage().PHP_EOL); exit(1); });
 config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'stderr']);
 Illuminate\Support\Facades\DB::purge('sqlite');
@@ -62,7 +62,7 @@ $drive->tree['pse']=[$file('correct','PSE-DUC-RED.png')];
 $app->instance(GoogleDriveService::class,$drive);
 $app->instance(ArtworkMatcherService::class,$matcher);
 $svc=$app->make(ProductionService::class);
-$user=User::create(['name'=>'Operator','email'=>'artwork@example.test','password'=>'unused','role'=>'operator']);
+$user=User::create(['name'=>'Operator','email'=>'artwork@example.test','password'=>'unused','role'=>'manager']);
 Illuminate\Support\Facades\Auth::login($user);
 $make = function($id) use($row,$matcher) { return ProductionItem::create(['line_item_id'=>$id,...$row,...$matcher->match($row)]); };
 $item=$make('unbatched');
@@ -119,7 +119,7 @@ $middleware=$route->gatherMiddleware();
 $check(in_array('web',$middleware) && in_array('auth',$middleware) && in_array(App\Http\Middleware\ReadOnlyDemo::class,$middleware) && in_array(App\Http\Middleware\PortalWriteLock::class,$middleware),'Rematch uses CSRF, authentication, demo guard and write serialization');
 view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $html=$controller->verification()->render();
-$check(str_contains($html,'data-copy-filename') && str_contains($html,'artwork-folder-link') && str_contains($html,'data-rematch-form'),'Operator UI renders suggestions, clipboard control, folder link and confirmed rematch');
+$check(!str_contains($html,'data-copy-filename') && str_contains($html,'artwork-folder-link') && str_contains($html,'data-rematch-form'),'Order UI offers folder access and confirmed rematch without filename suggestions or copy controls');
 $legacy=$make('legacy');$legacy->update(['artwork_review'=>null]);
 $check(!ArtworkMatcherService::validSelection($legacy),'Legacy selections cannot be approved without strict rematch');
 echo "$checks artwork security/regression checks passed.\n";
@@ -129,7 +129,7 @@ $legacy->update(['match_status'=>'REVIEW','matches'=>[['id'=>'old-mockup','name'
 $drive->fail=true;
 $html=$controller->verification()->render();
 $check(!str_contains($html,'old-mockup') && !str_contains($html,'PSN-ELT-DUCK CAMO RED MOCKUP.jpg'),'Legacy invalid preview is hidden from the right-hand box');
-$check(str_contains($html,'LB-PSE-DUC-RED-SINGLE.jpg') && str_contains($html,'Check production artwork'),'Legacy missing state computes the proposed filename without Drive or database writes');
+$check(!str_contains($html,'LB-PSE-DUC-RED-SINGLE.jpg') && str_contains($html,'Check production artwork'),'Legacy missing state shows lookup guidance without proposed filenames or Drive/database writes');
 $check($legacy->fresh()->artwork_review===null && $legacy->fresh()->matches[0]['id']==='old-mockup','Rendering missing instructions does not modify saved selections');
 $drive->fail=false;
 // Prove rollback even when a later item fails after an earlier selection was saved.
@@ -242,8 +242,13 @@ $check(!$matcher->match($finger)['matches'],'Nonstandard PNS-ELT spelling requir
 $drive->tree['pse']=[$file('wrong-series','PSN-GOLDEN FINGER-WHITE.jpg')];
 $check(!$matcher->match($finger)['matches'],'PSN alone never substitutes for PSE even in the PSE folder');
 $ui=$controller->verification()->render();
-$check(str_contains($ui,'artwork-rematch-toolbar') && !str_contains($ui,'Fetch current Drive artwork for unbatched stock items'),'Global rematch uses the compact toolbar');
-$check(str_contains($ui,'Naming guidance &amp; details') && str_contains($ui,'artwork-filename-row'),'Missing-artwork UI uses compact filename rows and expandable diagnostics');
+$document=new DOMDocument();@$document->loadHTML($ui);$xpath=new DOMXPath($document);
+$toolbar=$xpath->query('//section[@aria-labelledby="production-refresh-heading"]')->item(0);
+$rematchForm=$toolbar?$xpath->query('.//form[@data-rematch-form][@method="post"]',$toolbar)->item(0):null;
+$backlogForm=$toolbar?$xpath->query('.//form[@data-backlog-form][@method="post"]',$toolbar)->item(0):null;
+$check($rematchForm && $rematchForm->getAttribute('action')===route('production.rematch') && $xpath->query('.//input[@name="_token"]',$rematchForm)->length===1 && $xpath->query('.//input[@name="confirm_rematch"][@value="1"]',$rematchForm)->length===1,'Orders and artwork section retains the protected global rematch action');
+$check($backlogForm && $backlogForm->getAttribute('action')===route('production.sync-backlog') && $xpath->query('.//input[@name="_token"]',$backlogForm)->length===1 && $xpath->query('.//input[@name="return_to"][@value="production"]',$backlogForm)->length===1,'Backlog refresh shares the same section and returns to Artwork Verification');
+$check(str_contains($ui,'Matching details') && !str_contains($ui,'<div class="artwork-filename-row">') && !str_contains($ui,'data-copy-filename'),'Missing-artwork UI retains diagnostics and removes filename suggestions');
 echo "$checks total artwork checks passed.\n";
 // A future design follows the same grammar; no image-specific configuration or alias is needed.
 $future=['sku'=>'2028-ZEB42-PSE-0001','product'=>'Lucky Bags 2028 Zebra Night Sky','variant'=>'Pro Sniper Elite / Red'];

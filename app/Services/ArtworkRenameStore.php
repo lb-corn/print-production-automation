@@ -19,6 +19,7 @@ class ArtworkRenameStore
         abort_unless(is_file($path),404,'Artwork naming plan not found. Scan again.');
         $plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
         abort_unless(($plan['actor']??null)===$actor,403);
+        abort_if(!$allowExpired && !empty($plan['catalog_stale']),422,'A Drive filename changed. Refresh the artwork page before continuing.');
         abort_if(!$allowExpired && ($plan['expires_at']??0)<time(),422,'This preview expired. Scan again.');
         return $plan;
     }
@@ -29,7 +30,7 @@ class ArtworkRenameStore
         foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json')?:[] as $path) {
             if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
             try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
-            if(($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
+            if(!empty($plan['standardize']) || !empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
             if(!$latest || $plan['created_at']>$latest['created_at'])$latest=$plan;
         }
         return $latest;
@@ -40,10 +41,21 @@ class ArtworkRenameStore
         foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json') ?: [] as $path) {
             if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
             try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
-            if(($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY)continue;
+            if(!empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY)continue;
             if($latest===null || ($plan['created_at']??0)>($latest['created_at']??0))$latest=$plan;
         }
         return $latest ? self::summary($latest) : null;
+    }
+    /** Retire cached previews, including bookmarked tokens, without deleting audit history. */
+    public function invalidateCatalogPreviews(string $fileId): void
+    {
+        foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json')?:[] as $path) {
+            if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
+            try{$preview=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
+            if(($preview['status']??null)!=='preview' || !empty($preview['catalog_stale']))continue;
+            if(!in_array($fileId,array_column($preview['index']??[],'id'),true))continue;
+            $preview['catalog_stale']=true;$this->save($preview);
+        }
     }
     public static function summary(array $plan): array
     {
@@ -66,6 +78,16 @@ class ArtworkRenameStore
         return ['images'=>count($linked),'products'=>count($products),'variants'=>count($plan['catalog']),
             'good'=>($counts['standard']??0)+($counts['renamed']??0),'ready'=>$counts['ready']??0,
             'review'=>($counts['review']??0)+($counts['conflict']??0),'protected'=>$counts['locked']??0,'catalog_matched'=>$coverage['matched'],'catalog_missing'=>$coverage['missing'],'catalog_ambiguous'=>$coverage['ambiguous'],'checked_at'=>$plan['created_at']];
+    }
+    public function preferredFilenames(): array
+    {
+        $path=$this->directory.DIRECTORY_SEPARATOR.'filename-preferences.json';
+        return is_file($path)?json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR):[];
+    }
+    public function rememberFilename(array $file,int $actor): void
+    {
+        $names=$this->preferredFilenames();$names[$file['id']]=['name'=>$file['name'],'fingerprint'=>ArtworkMatcherService::artworkFingerprint($file),'policy'=>ArtworkNamingService::POLICY,'actor'=>$actor,'at'=>gmdate('c')];
+        $this->write($this->directory.DIRECTORY_SEPARATOR.'filename-preferences.json',$names);
     }
     public function selections(): array
     {

@@ -1,14 +1,14 @@
 <?php
 // Isolated database and faked integrations; never touches live queue entries.
 require __DIR__.'/../vendor/autoload.php';
-$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function(Throwable $e):void{fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL);exit(1);});
 config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array']);Illuminate\Support\Facades\DB::purge('sqlite');
 foreach(glob(__DIR__.'/../database/migrations/*.php') as $file)(require $file)->up();
 use App\Models\{ProductionItem,PrintBatch,User,VerificationDecision};
 use App\Services\{ProductionService,BatchReturnService,ArtworkMatcherService};
 $checks=0;$check=function($ok,$label)use(&$checks){if(!$ok)throw new RuntimeException($label);echo 'PASS: '.$label.PHP_EOL;$checks++;};
-$user=User::create(['name'=>'Operator','email'=>'return@example.test','password'=>'unused','role'=>'operator']);$svc=new ProductionService();$return=new BatchReturnService();
+$user=User::create(['name'=>'Operator','email'=>'return@example.test','password'=>'unused','role'=>'manager']);$svc=new ProductionService();$return=new BatchReturnService();
 $create=fn($id)=>ProductionItem::create(['line_item_id'=>$id,'product'=>'Test artwork','variant'=>'PSE','quantity'=>1,'series_code'=>'PSE','design_type'=>'single','match_status'=>'REVIEW','artwork_review'=>['policy'=>ArtworkMatcherService::POLICY],'matches'=>[['id'=>'file-'.$id,'side'=>'single','name'=>'PSE-TEST.jpg']]]);
 $a=$create('return-a');$b=$create('return-b');$other=$create('unchanged');$otherBefore=$other->fresh()->toJson();
 $svc->verify($a,'CORRECT',$user->id);$batch=$svc->batch($user->id);$orders=$batch->payload['orders'];

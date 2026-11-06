@@ -20,6 +20,12 @@ def batch(quantity=1):
 
 
 class AgentSecurityTests(unittest.TestCase):
+    def test_relative_configuration_uses_install_folder(self):
+        self.assertEqual(agent.installation_path('service-account.json'), agent.HERE / 'service-account.json')
+        self.assertEqual(agent.installation_path('factory_print'), agent.HERE / 'factory_print')
+        absolute = Path(tempfile.gettempdir()).resolve() / 'factory-creds.json'
+        self.assertEqual(agent.installation_path(str(absolute)), absolute)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='lb-agent-test-')
         self.root = Path(self.temp.name)
@@ -122,6 +128,43 @@ class AgentSecurityTests(unittest.TestCase):
         with patch.object(agent, 'status'), patch.object(agent, 'scan_file'):
             with self.assertRaises(RuntimeError): agent.handoff(item)
         self.assertEqual(list(self.hot.iterdir()), [])
+
+    def test_artwork_changed_during_scan_is_not_published(self):
+        item, folder = self.prepare_fixture()
+        def replace_after_scan(source):
+            source.write_bytes(b'\x89PNG\r\n\x1a\nsubstituted bytes')
+        with patch.object(agent, 'status'), patch.object(agent, 'scan_file', side_effect=replace_after_scan):
+            with self.assertRaises(ValueError): agent.handoff(item)
+        self.assertEqual(list(self.hot.iterdir()), [])
+
+    def test_artwork_changed_during_copy_is_not_published(self):
+        item, folder = self.prepare_fixture()
+        def substituted_copy(src, dst):
+            dst.write(b'\x89PNG\r\n\x1a\nsubstituted bytes')
+        with patch.object(agent, 'status'), patch.object(agent, 'scan_file'), patch.object(agent.shutil, 'copyfileobj', side_effect=substituted_copy):
+            with self.assertRaises(ValueError): agent.handoff(item)
+        self.assertFalse(any(path.suffix == '.png' for path in self.hot.iterdir()))
+
+    def test_double_sided_batch_uses_both_exact_drive_originals(self):
+        item = batch()
+        front = item['payload']['orders'][0]['artworks'][0]
+        front['side'] = 'FRONT'
+        back = copy.deepcopy(front); back.update(side='BACK', drive_file_id='drive_back_456')
+        item['payload']['orders'][0]['artworks'].append(back)
+        item['payload']['artwork_file_count'] = 2
+        item, folder = self.prepare_fixture(item)
+        with patch.object(agent, 'status'), patch.object(agent, 'scan_file'):
+            agent.handoff(item)
+        self.assertEqual(len(list(self.hot.glob('*.png'))), 2)
+        self.assertEqual({file['drive_file_id'] for file in agent.validate_batch(item)}, {'drive_test_123', 'drive_back_456'})
+
+    def test_drive_changes_after_approval_are_rejected_before_download(self):
+        artwork = agent.validate_batch(batch())[0]
+        service = Mock()
+        service.files.return_value.get.return_value.execute.return_value = {'id': artwork['drive_file_id'], 'mimeType': 'image/png', 'size': '32', 'md5Checksum': 'a' * 32, 'version': '2'}
+        for extra in ({'expected_md5': 'b' * 32}, {'expected_version': '1'}):
+            with self.assertRaises(ValueError): agent.download(service, {**artwork, **extra}, self.out / 'changed.png')
+        service.files.return_value.get_media.assert_not_called()
 
     def test_defender_cannot_be_disabled(self):
         with patch.object(agent, 'SCAN', False):

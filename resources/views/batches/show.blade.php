@@ -1,7 +1,9 @@
 <x-layouts.app
+
     heading="{{ $batch->batch_id }}"
     subheading="{{$batch->status==='CANCELLED'?'Cancelled history · not queued':'Factory production batch'}}"
 >
+@if(($relatedBatches??collect())->count()>1)<section class="panel"><h2>Related material batches</h2><p>Each material is delivered and confirmed separately. A double-sided order completes only after all of its material batches are printed.</p><nav class="related-material-batches" aria-label="Related material batches">@foreach($relatedBatches as $related)<a href="{{route('batch.show',$related->id)}}" @if($related->id===$batch->id) aria-current="page" @endif>{{$related->payload['material_group']}} · {{$related->status}}</a>@endforeach</nav></section>@endif
     @php
         $status = $batch->status;
 
@@ -21,7 +23,7 @@
     <div class="stats compact">
         <div class="stat">
             <span>Status</span>
-            <b class="smallb">{{ $batch->status }}</b>
+            <b class="smallb" data-batch-status>{{ $batch->status }}</b>
         </div>
 
         <div class="stat">
@@ -40,124 +42,14 @@
         </div>
     </div>
 
-    @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()?->role!=='demo')
+    @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()->allows('bags.batches.edit'))
     <p class="admin-notice">Need an artwork correction? Use <b>Return this item to Artwork Review</b> beside that item below. Other items stay queued.</p>
     @elseif($status==='CANCELLED')
     <p class="admin-notice"><strong>Cancelled batch history — not in the print queue.</strong> Items were returned for artwork review. <a href="{{route('production')}}">Open Artwork Verification →</a>
 @if($batch->payload['returned_to_review']['replacement_batch_id']??null)<a href="{{route('batch.show',$batch->payload['returned_to_review']['replacement_batch_id'])}}">View replacement batch →</a>@endif</p>
     @endif
     @if($status!=='CANCELLED')
-    <section class="panel">
-        <div class="panel-head">
-            <div>
-                <h2>Factory Print Progress</h2>
-                <p>
-                    Track this batch from the cloud application
-                    through the Factory PC and Epson Edge Print.
-                </p>
-            </div>
-        </div>
-
-        @php
-            $stepLabels = ['Batch created', 'Factory PC claimed', 'Downloading artwork', 'Artwork prepared', 'Handoff requested', 'Sent to Edge Print', 'Print completed'];
-            $stepColors = ['#d9f4df', '#b6e8c3', '#8ed5a4', '#65bd84', '#3da367', '#23834e', '#166534'];
-        @endphp
-        @if($status === 'FAILED')
-            <p class="progress-failure" role="status">Processing failed · Check the Factory Agent log. Printing is not complete.</p>
-        @endif
-        <ol class="print-progress" aria-label="Factory print progress">
-            @foreach($steps as $index=>$step)
-                @php
-                    $reached = $currentIndex !== false && $index <= $currentIndex;
-                    $current = $currentIndex !== false && $index === $currentIndex;
-                @endphp
-                <li class="print-step {{$reached?'is-reached':''}} {{$current?'is-current':''}} {{$step === 'PRINTED' && $reached?'is-complete':''}}"
-                    style="--step-green:{{$stepColors[$index]}}" @if($current) aria-current="step" @endif>
-                    <span class="print-step-marker" aria-hidden="true">@if($reached)<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>@else{{$index+1}}@endif</span>
-                    <span class="print-step-copy"><strong>{{$stepLabels[$index]}}</strong><small>{{$current ? ($step === 'PRINTED' ? 'Success' : 'Current stage') : ($reached ? 'Done' : 'Pending')}}</small></span>
-                </li>
-            @endforeach
-        </ol>
-
-        @if($status === 'PREPARED')
-            <div style="margin-top:22px;">
-                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="HANDOFF" data-confirm-url="{{route('batch.edge-print',$batch)}}">Review &amp; sign handoff →</button>@endif
-            </div>
-
-        @elseif($status === 'HANDOFF_REQUESTED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #e5e7eb;
-                    border-radius:10px;
-                "
-            >
-                <strong>Waiting for Factory PC...</strong>
-
-                <div style="margin-top:4px;">
-                    The Factory Agent will detect this request
-                    and hand the prepared artwork to Epson Edge Print.
-                </div>
-            </div>
-
-        @elseif($status === 'SENT_TO_RIP')
-            <div style="margin-top:22px;">
-                <div
-                    style="
-                        margin-bottom:14px;
-                        padding:14px 16px;
-                        border:1px solid #e5e7eb;
-                        border-radius:10px;
-                    "
-                >
-                    <strong>Artwork sent to Epson Edge Print.</strong>
-
-                    <div style="margin-top:4px;">
-                        Review the jobs in Edge Print, RIP them,
-                        and physically print the batch.
-                    </div>
-                </div>
-
-                @if(auth()->user()?->role !== 'demo')<button type="button" class="primary" data-print-confirm="PRINTED" data-confirm-url="{{route('batch.printed',$batch)}}">Confirm physical print completion →</button>@endif
-            </div>
-
-        @elseif($status === 'PRINTED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #d1fae5;
-                    border-radius:10px;
-                "
-            >
-                <strong>✓ PRINT COMPLETE</strong>
-
-                @if($batch->completed_at)
-                    <div style="margin-top:4px;">
-                        Completed:
-                        {{ $batch->completed_at->format('M d, Y · g:i A') }}
-                    </div>
-                @endif
-            </div>
-
-        @elseif($status === 'FAILED')
-            <div
-                style="
-                    margin-top:22px;
-                    padding:14px 16px;
-                    border:1px solid #fecaca;
-                    border-radius:10px;
-                "
-            >
-                <strong>Factory processing failed.</strong>
-
-                <div style="margin-top:4px;">
-                    Check the Factory Agent log before retrying this batch.
-                </div>
-            </div>
-        @endif
-    </section>
+    @include('partials.factory-progress')
 
     @endif
     @if($status==='CANCELLED')<details class="panel cancelled-batch-history"><summary>Original batch contents · history only</summary>@endif
@@ -175,12 +67,14 @@
         @foreach($batch->payload['orders'] ?? [] as $order)
             <article class="batch-content-item">
                 <div class="batch-content-title"><div><span>{{$order['order']}}</span><h3 title="{{$order['product']}}">{{$order['product']}}</h3><p>{{$order['variant'] ?? 'Standard'}} · {{$order['series_code']}}</p></div><strong class="batch-quantity">{{$order['quantity']}} <small>{{$order['quantity'] === 1 ? 'set' : 'sets'}}</small></strong></div>
-                @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()?->role!=='demo' && isset($itemIds[$order['line_item_id']]))
+                @if($status==='QUEUED' && !$batch->claimed_at && !$batch->completed_at && !$batch->confirmations()->exists() && auth()->user()->allows('bags.batches.edit') && isset($itemIds[$order['line_item_id']]))
                 <form method="post" action="{{route('batch.return-item',[$batch->id,$itemIds[$order['line_item_id']]])}}" data-return-batch data-return-scope="item" data-batch-id="{{$batch->id}}">@csrf<input type="hidden" name="return_confirmed" value="1"><button class="chip" type="submit">Return this item to Artwork Review</button></form>
                 @endif
                 <div class="batch-artwork-rows">
                 @foreach($order['artworks'] as $artwork)
-                    <div class="batch-artwork-row"><span class="artwork-side">{{$artwork['side']}}</span><strong>{{$artwork['material']}}</strong>@include('partials.artwork-filename',['filename'=>$artwork['filename']])</div>
+                    <div class="batch-artwork-row"><span class="artwork-side">{{$artwork['side']}}</span><strong>{{$artwork['material']}}</strong>@include('partials.artwork-filename',['filename'=>$artwork['filename']])@if($artwork['print_label']??null)<code class="batch-print-label">{{$artwork['print_label']}}</code>@endif
+@if(($artwork['source_kind']??null)==='pc_custom' && isset($itemIds[$order['line_item_id']]) && $status!=='PRINTED')@include('partials.custom-artwork-preview',['uploadId'=>$artwork['custom_upload_id'],'side'=>$artwork['side']==='PRINT'?'single':strtolower($artwork['side']),'previewItem'=>$itemIds[$order['line_item_id']]])@endif
+</div>
                 @endforeach
                 </div>
             </article>
@@ -197,7 +91,7 @@
 @endforeach
 </section>
 <dialog id="print-confirmation" class="print-confirmation" aria-labelledby="print-confirm-title">
-@if(auth()->user()?->role !== 'demo')<form method="post" data-signed-print-form>
+@if(auth()->user()->allows('bags.batches.approve'))<form method="post" data-signed-print-form>
 @csrf
 <h2 id="print-confirm-title">Review and sign</h2><p data-confirm-description></p>
 <div class="confirmation-facts"><strong>{{$batch->batch_id}}</strong><span>{{$batch->order_count}} items · {{collect($batch->payload['orders'] ?? [])->sum('quantity')}} sets · {{$batch->artwork_file_count}} artwork files</span></div>

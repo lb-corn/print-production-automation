@@ -1,7 +1,7 @@
 <?php
 // Full naming workflow tests: isolated SQLite, fake integrations and disposable private audit files only.
 require __DIR__.'/../vendor/autoload.php';
-$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 set_exception_handler(function(Throwable $e):void{fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL);exit(1);});
 config(['services.google_drive.reviewed_selections_enabled'=>false,'database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','logging.default'=>'naming_test','logging.channels.naming_test'=>['driver'=>'monolog','handler'=>Monolog\Handler\NullHandler::class],'services.google_drive.rename_enabled'=>true]);
 Illuminate\Support\Facades\DB::purge('sqlite');
@@ -10,7 +10,7 @@ use App\Services\{ArtworkNamingService,ArtworkMatcherService,ArtworkRenameStore,
 use App\Models\{ProductionItem,PrintBatch,VerificationDecision,User};
 use GuzzleHttp\{Client,HandlerStack};use GuzzleHttp\Handler\MockHandler;use GuzzleHttp\Psr7\Response;
 $checks=0;$check=function($ok,$message)use(&$checks){if(!$ok)throw new RuntimeException($message);$checks++;echo 'PASS: '.$message.PHP_EOL;};
-$drive=new class extends GoogleDriveService{public array $index=[];public function __construct(){}public function artworkIndex():array{return $this->index;}};
+$drive=new class extends GoogleDriveService{public array $index=[];public int $reads=0;public bool $fail=false;public function __construct(){}public function artworkIndex():array{$this->reads++;if($this->fail)throw new RuntimeException('Drive unavailable');return $this->index;}};
 $shopify=new class extends ShopifyService{public array $rows=[];public function __construct(){}public function getArtworkCatalog():array{return $this->rows;}};
 $matcher=new ArtworkMatcherService($drive);
 $folder=['kind'=>'series_folder','id'=>'pse','name'=>'PSE','path'=>'GROUP B (Carpet) / PSE'];
@@ -20,7 +20,7 @@ $shopify->rows=[$row];$drive->index=[$folder,$source('duck','Duck Camo Red.jpg')
 $directory=storage_path('framework/cache/data/naming-tests-'.bin2hex(random_bytes(8)));
 $store=new ArtworkRenameStore($directory);$service=new ArtworkNamingService($drive,$shopify,$matcher,$store);
 $admin=User::create(['name'=>'Admin','email'=>'naming@example.test','password'=>'NamingTestPassword123','role'=>'admin']);
-$operator=User::create(['name'=>'Operator','email'=>'operator@example.test','password'=>'unused','role'=>'operator']);
+$operator=User::create(['name'=>'Operator','email'=>'operator@example.test','password'=>'unused','role'=>'manager']);
 $plan=$service->scan($admin->id);$entry=$plan['entries'][0];$target=$entry['proposal']['target'];
 $check($entry['status']==='ready' && $target==='LB-PSE-DUC-RED-SINGLE.jpg' && str_ends_with($target,'.jpg'),'Nonstandard names get portable canonical names without ID suffixes');
 $check($service->scan($admin->id)['entries'][0]['proposal']['target']===$target,'Repeated scans generate the same name for the same Drive file');
@@ -86,12 +86,12 @@ $check(count($httpHistory)===2 && $httpHistory[1]['request']->getMethod()==='PAT
 foreach([['version'=>'2'],['etag'=>null],['capabilities'=>['canRename'=>false]],['parents'=>[['id'=>'elsewhere']]]] as $change){$history=[];$stack=HandlerStack::create(new MockHandler([new Response(200,[],json_encode([...$raw,...$change]))]));$stack->push(GuzzleHttp\Middleware::history($history));try{(new GoogleDriveRenameService(new Client(['handler'=>$stack])))->rename($expected,'new-name.jpg');throw new Exception('Unsafe write accepted');}catch(RuntimeException $e){$check(count($history)===1,'Stale metadata, missing validator, missing permission or changed parent prevents PATCH');}}
 try{(new GoogleDriveRenameService(new Client(['handler'=>HandlerStack::create(new MockHandler([]))])))->rename($expected,'new-name.png');throw new Exception('Extension changed');}catch(RuntimeException $e){$check(true,'Rename never changes the actual file extension');}
 // Admin-only routing and direct controller guards.
-foreach(app('router')->getRoutes() as $route)if(str_starts_with($route->getName()??'','admin.artwork-names'))$check(in_array(App\Http\Middleware\RequireAdmin::class,$route->gatherMiddleware()) && in_array(App\Http\Middleware\PortalWriteLock::class,$route->gatherMiddleware()),'Naming route requires admin and serialized writes: '.$route->getName());
+foreach(app('router')->getRoutes() as $route)if(str_starts_with($route->getName()??'','admin.artwork-names'))$check(in_array(App\Http\Middleware\RequireFeature::class,$route->gatherMiddleware()) && in_array(App\Http\Middleware\PortalWriteLock::class,$route->gatherMiddleware()),'Naming route requires admin and serialized writes: '.$route->getName());
 $controller=new App\Http\Controllers\ArtworkNamingController();$request=Illuminate\Http\Request::create('/admin/artwork-names');$request->setUserResolver(fn()=>$operator);
 try{$controller->index($request,$store);throw new LogicException('Operator admitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Operators cannot invoke the admin naming controller');}
 Illuminate\Support\Facades\Auth::login($admin);view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $request=Illuminate\Http\Request::create('/admin/artwork-names','GET',['plan'=>$stale['token']]);$request->setUserResolver(fn()=>$admin);
-$html=$controller->index($request,$store)->render();$check(str_contains($html,'Check files') && str_contains($html,'Rename ready files') && str_contains($html,'Confirm rename'),'Admin page renders scan, review, explicit confirmation and filename preview');
+$html=$controller->index($request,$store)->render();$check(str_contains($html,'Sync catalog') && str_contains($html,'Filename cleanup') && !str_contains($html,'id="artwork-naming-apply"'),'Artwork matching links to separate filename cleanup without bulk rename controls');
 $request=Illuminate\Http\Request::create('/admin/artwork-names/begin','POST',['plan'=>$stale['token'],'ids'=>['stale']]);$request->setUserResolver(fn()=>$admin);
 try{$controller->begin($request);throw new LogicException('Unconfirmed apply admitted');}catch(Illuminate\Validation\ValidationException $e){$check(isset($e->errors()['password'],$e->errors()['confirmation'],$e->errors()['reviewed']),'Apply requires admin password, typed RENAME and explicit review');}
 // Test full catalog pagination without Shopify credentials or order history.
@@ -175,7 +175,7 @@ $settingsHtml=$settings->index($request)->render();
 $check(substr_count($settingsHtml,'<main>')===1 && str_contains($settingsHtml,'Admin Settings') && str_contains($settingsHtml,'DANGER ZONE') && str_contains($settingsHtml,'RESET PORTAL') && !str_contains($settingsHtml,'id="artwork-naming-apply"'),'Reset is a separate section inside one settings page, retaining its destructive-action confirmations');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
 $settingsHtml=$settings->index($request)->render();
-$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Check files') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
+$check(str_contains($settingsHtml,'admin-settings-nav') && str_contains($settingsHtml,'Sync catalog') && !str_contains($settingsHtml,'Type RESET PORTAL'),'Artwork is the default settings section and does not render the reset form');
 $menu=view('partials.account-menu')->render();
 $check(str_contains($menu,'Admin Settings') && !str_contains($menu,'Artwork filenames') && !str_contains($menu,'Reset portal data'),'Account menu groups the two tools under a single Admin Settings link');
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['section'=>'../../credentials']);$request->setUserResolver(fn()=>$admin);
@@ -248,8 +248,8 @@ $shopify->rows=[$row];$drive->index=[$folder,$source('simple-ui','Duck Camo Red.
 $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$simple['token'],'section'=>'artwork']);$request->setUserResolver(fn()=>$admin);
 $simpleHtml=$controller->index($request,$store)->render();$dom=new DOMDocument();@$dom->loadHTML($simpleHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//input[@data-naming-search]/ancestor::form')->length===0,'Filename search is outside the password form so it cannot become the username field');
-$check($xpath->query('//dialog[@data-naming-dialog]//input[@type="password" and @disabled]')->length===1 && !str_contains($simpleHtml,'Type RENAME'),'Confirmation is one short dialog, without an always-visible password block or typing a phrase');
-$check($xpath->query('//input[@name="ids[]" and @checked]')->length===1,'Safe ready files are preselected automatically');
+$check($xpath->query('//dialog[@data-naming-dialog]')->length===0 && !str_contains($simpleHtml,'Type RENAME'),'Artwork matching has no filename password dialog or rename phrase');
+$check($xpath->query('//input[@name="ids[]"]')->length===0,'Artwork matching contains no bulk filename selection');
 $check(!str_contains($simpleHtml,'Check and standardize Drive names') && !str_contains($simpleHtml,'Destructive production reset'),'Settings navigation has no subtitles or explanatory filler');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
@@ -293,7 +293,7 @@ $request=Illuminate\Http\Request::create('/admin/settings','GET',['plan'=>$choos
 $chooser=$controller->index($request,$store);$check(isset($chooser->getData()['reviewGroups']['standard-chooser']),'The visual chooser includes correctly named files, not only review/conflict files');
 $chooserHtml=$chooser->render();$dom=new DOMDocument();@$dom->loadHTML($chooserHtml,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//dialog[@data-artwork-match-dialog]//select[@data-naming-catalog and @hidden]')->length===1 && $xpath->query('//button[@data-match-product]')->length===1,'A single product worklist opens one focused visual comparison without visible mapping dropdowns');
-$check($xpath->query('//details[summary[contains(text(),"Filename changes")]]//form[@id="artwork-naming-apply"]')->length===1,'Advanced filename controls are collapsed instead of competing with product matching');
+$check($xpath->query('//form[@id="artwork-naming-apply"]')->length===0 && str_contains($chooserHtml,'Filename cleanup'),'Filename processing lives in a separate Admin menu');
 $blueDouble=[...$bubbleDouble,'catalog_key'=>hash('sha256','blue-double'),'variant'=>'Snipers / Blue'];$shopify->rows=[$blueDouble];$drive->index=[$doubleFolder,$source('side-guard','SNP-BUBBLES-BLUE-FRONT.jpg','snp')];$guard=$service->scan($admin->id);
 try{$service->revise($guard['token'],$admin->id,['side-guard'=>['catalog_key'=>$blueDouble['catalog_key'],'side'=>'back','color'=>'BLUE']],false);throw new LogicException('Wrong side mapping accepted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422,'Server rejects tampered mapping that contradicts explicit FRONT/BACK');}
 $redDouble=[...$blueDouble,'catalog_key'=>hash('sha256','red-double'),'variant'=>'Snipers / Red'];$shopify->rows=[$redDouble];$guard=$service->scan($admin->id);
@@ -367,7 +367,7 @@ $ambiguous=$matcher->match($row,[$folder,$source('ui-duplicate-a','PSE-DUC-RED.j
 $check($ambiguous['match_status']==='AMBIGUOUS' && $ambiguous['artwork_review']['suggested_filenames']===[],'Ambiguous matches produce no misleading filename suggestion');
 auth()->setUser($admin);$ambiguous['artwork_review']['suggested_filenames']=['legacy-misleading.jpg'];$viewItem=(object)[...$row,...$ambiguous,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
 $check($xpath->query('//button[@data-copy-filename]')->length===0 && str_contains($html,'PSE-DUC-RED.jpeg'),'Ambiguous-artwork UI hides even stale copy suggestions and shows conflicting filenames');
-$missing=$matcher->match($row,[$folder]);$viewItem=(object)[...$row,...$missing,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$check((new DOMXPath($dom))->query('//button[@data-copy-filename]')->length===1,'Missing artwork still presents its standard filename suggestion');
+$missing=$matcher->match($row,[$folder]);$viewItem=(object)[...$row,...$missing,'production_batch'=>null];$html=view('partials.artwork-review',['item'=>$viewItem])->render();$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$check((new DOMXPath($dom))->query('//button[@data-copy-filename]')->length===0 && !str_contains($html,'LB-PSE-DUC-RED-SINGLE.jpg') && str_contains($html,'Choose artwork for this product'),'Missing artwork directs Admin to product matching without filename suggestions or copy controls');
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";
 
@@ -458,9 +458,11 @@ $midnightPlan=$service->scan($admin->id);
 $check(count(array_filter($midnightPlan['entries'],fn($e)=>$e['status']==='review'))===2 && $matcher->match($midnightRow,$drive->index)['match_status']==='MISSING','MIDNIGHT is not automatically guessed to mean BLACK');
 $midnightPlan=$service->revisePair($midnightPlan['token'],$admin->id,$midnightRow['catalog_key'],'midnight-front','midnight-back',false);
 $check(array_column($midnightPlan['entries'],'status')===['standard','standard'] && array_column(array_column($midnightPlan['entries'],'proposal'),'target')===array_column($midnightPair,'name'),'Reviewed MIDNIGHT FRONT/BACK pair retains actual names instead of requiring BLACK renames');
+config(['services.google_drive.rename_enabled'=>false]);
 $writesBefore=$writer->writes;$service->saveReviewedChoice($midnightPlan,$admin->id,$midnightRow['catalog_key'],['midnight-front','midnight-back']);
 $midnightReload=$service->scan($admin->id);$midnightMatch=$matcher->match($midnightRow,$drive->index);
 $check(array_column($midnightReload['entries'],'status')===['standard','standard'] && $midnightMatch['match_status']==='REVIEW' && count($midnightMatch['matches'])===2 && $midnightMatch['artwork_review']['selection_source']==='admin' && $writer->writes===$writesBefore,'Saved pair survives scan and production rematch with zero rename writes and no print approval');
+config(['services.google_drive.rename_enabled'=>true]);
 try{$service->begin($midnightReload['token'],$admin->id,['midnight-front','midnight-back'],false);throw new LogicException('Reviewed standard pair submitted');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===422 && $writer->writes===$writesBefore,'Already accepted pair cannot be submitted for another rename');}
 $changedPair=$drive->index;$changedPair[1]['version']='2';
 $check($matcher->match($midnightRow,$changedPair)['match_status']==='MISSING','Changing the reviewed artwork still invalidates the saved pair');
@@ -468,5 +470,54 @@ $redPair=$midnightPair;$redPair[0]['name']='SRF-SUREFIRE OG-RED-FRONT.jpg';$redP
 $redProposal=$service->build([$midnightFolder,$redPair[0]],[$midnightRow],['midnight-front'=>['catalog_key'=>$midnightRow['catalog_key'],'side'=>'front','color'=>'BLACK']],[])[0];
 $check($redProposal['status']==='ready' && $redProposal['proposal']['target']!==$redPair[0]['name'],'An explicit wrong color token is not silently accepted by the absent-color exception');
 config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
+// A fresh Admin check must also populate orders after files were renamed elsewhere.
+config(['services.google_drive.rename_enabled'=>false]);
+$shopify->rows=[$midnightRow];$drive->index=[$midnightFolder];
+foreach(['front','back'] as $side)$drive->index[]=[...$source('fresh-black-'.$side,'LB-SRF-SOG-BLACK-'.strtoupper($side).'.jpg'),'parent_id'=>'srf','path'=>$midnightFolder['path'].' / LB-SRF-SOG-BLACK-'.strtoupper($side).'.jpg'];
+$refreshItem=ProductionItem::create(['line_item_id'=>'fresh-black-order',...array_intersect_key($midnightRow,array_flip(['sku','product','variant'])),'quantity'=>1,'match_status'=>'MISSING','matches'=>[],'is_custom'=>false]);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/scan','POST',['artwork_search'=>$midnightRow['product']]);$request->setUserResolver(fn()=>$admin);
+$readsBefore=$drive->reads;$writesBefore=$writer->writes;$response=$controller->scan($request);
+$refreshItem=$refreshItem->fresh('decision');
+$check($refreshItem->match_status==='REVIEW' && count($refreshItem->matches)===2 && !$refreshItem->decision,'Check files populates an empty Black order from current canonical Drive names, without print approval');
+$check($drive->reads===$readsBefore+1 && $writer->writes===$writesBefore && str_contains(session('ok'),'orders refreshed'),'Admin refresh reuses one fresh Drive scan and succeeds with renaming disabled');
+parse_str(parse_url($response->getTargetUrl(),PHP_URL_QUERY),$query);
+$check(($query['artwork_search']??null)===$midnightRow['product'],'Refresh keeps the blocked product search in the destination');
+$request=Illuminate\Http\Request::create('/admin/settings','GET',$query);$request->setUserResolver(fn()=>$admin);
+$html=$controller->index($request,$store)->render();
+$check(str_contains($html,'value="'.$midnightRow['product'].'"') && str_contains($html,'Filename cleanup') && !str_contains($html,'data-naming-open') && !str_contains($html,'name="ids[]"'),'Artwork matching retains product search without any filename rename action');
+$snapshot=function(){return collect(['users','production_items','verification_decisions','print_batches','batch_confirmations'])->mapWithKeys(fn($table)=>[$table=>Illuminate\Support\Facades\DB::table($table)->orderBy('id')->get()->toJson()])->all();};
+$beforeCatalogSync=$snapshot();$beforeSelections=$store->selections();$writesBefore=$writer->writes;
+$correctedGta=[...$row,'catalog_key'=>hash('sha256','corrected-gta'),'product'=>'Lucky Bags 2027 GTA','variant'=>'Luciano','sku'=>'2027-GTA-LUC-0001'];$shopify->rows=[$correctedGta];
+$request=Illuminate\Http\Request::create('/admin/data-sync','POST');$request->setUserResolver(fn()=>$admin);
+$response=$controller->syncSources($request);parse_str(parse_url($response->getTargetUrl(),PHP_URL_QUERY),$syncQuery);
+$newCatalog=$store->load($syncQuery['plan'],$admin->id);
+$check($newCatalog['catalog'][0]['sku']==='2027-GTA-LUC-0001' && $syncQuery['section']==='sync','Catalog-only sync replaces stale Shopify SKU data and returns to the Data sync menu');
+$check($snapshot()===$beforeCatalogSync && $store->selections()===$beforeSelections && $writer->writes===$writesBefore,'Catalog-only sync preserves every user, order, approval, batch, confirmation and saved artwork choice with zero Drive writes');
+$request=Illuminate\Http\Request::create('/admin/settings','GET',$syncQuery);$request->setUserResolver(fn()=>$admin);
+$html=$settings->index($request)->render();
+$check(str_contains($html,'catalog-sync-sources') && str_contains($html,'Last checked') && str_contains($html,'View artwork catalog') && !str_contains($html,'RESET PORTAL'),'Data sync renders organized source cards, status and actions separately from reset');
+$drive->fail=true;$request=Illuminate\Http\Request::create('/admin/data-sync','POST');$request->setUserResolver(fn()=>$admin);$response=$controller->syncSources($request);$drive->fail=false;
+$check(str_contains(session('error'),'Catalog sync failed') && $snapshot()===$beforeCatalogSync,'Catalog read failure reports an error without changing operational records');
+$route=app('router')->getRoutes()->getByName('admin.data-sync');
+$check(in_array('POST',$route->methods()) && in_array(App\Http\Middleware\RequireFeature::class,$route->gatherMiddleware()) && in_array(App\Http\Middleware\PortalWriteLock::class,$route->gatherMiddleware()),'Catalog sync requires an authenticated serialized admin POST');
+// The visual chooser must never save a BACK file as single-sided production art.
+$retro=[...$row,'product'=>'Lucky Bags 2027 Retro 7','variant'=>'Clovers','sku'=>'2027-RET7-CLV-0001','catalog_key'=>hash('sha256','retro-seven')];
+$retroFolder=['kind'=>'series_folder','id'=>'clv','name'=>'Clover','path'=>'GROUP B (Carpet) / Clover'];
+$retroBack=[...$source('retro-seven-file','CLV-RETRO 7 GRUNGE-BACK.jpg'),'parent_id'=>'clv','path'=>$retroFolder['path'].' / CLV-RETRO 7 GRUNGE-BACK.jpg'];
+$shopify->rows=[$retro];$drive->index=[$retroFolder,$retroBack];$retroPlan=$service->scan($admin->id);$beforeRetro=$snapshot();
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$retroPlan['token'],'catalog_key'=>$retro['catalog_key'],'file_id'=>$retroBack['id'],'side'=>'single','color'=>''],[],[],['HTTP_ACCEPT'=>'application/json']);$request->setUserResolver(fn()=>$admin);
+$response=$controller->revise($request);
+$check($response->getStatusCode()===422 && str_contains($response->getData(true)['message'],'labeled BACK') && $snapshot()===$beforeRetro,'Retro 7 BACK mismatch returns an actionable JSON error without saving a false single-sided choice');
+$drive->index[1]['name']='CLV-RETRO 7 GRUNGE-FRONT.jpg';$drive->index[1]['path']=$retroFolder['path'].' / '.$drive->index[1]['name'];
+config(['services.google_drive.reviewed_selections_enabled'=>true]);$matcher->refreshReviewedSelections();$retroPlan=$service->scan($admin->id);
+$request=Illuminate\Http\Request::create('/admin/artwork-names/review','POST',['plan'=>$retroPlan['token'],'catalog_key'=>$retro['catalog_key'],'file_id'=>$retroBack['id'],'side'=>'single','color'=>''],[],[],['HTTP_ACCEPT'=>'application/json']);$request->setUserResolver(fn()=>$admin);
+$response=$controller->revise($request);
+$check($response->getStatusCode()===200 && $response->getData(true)['status']==='ok' && $matcher->match($retro,$drive->index)['match_status']==='REVIEW','Verified FRONT file can be confirmed for a single-sided product with a clear saved result');
+$request->setUserResolver(fn()=>$operator);
+try{$controller->revise($request);throw new RuntimeException('Operator reached admin matching');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){$check($e->getStatusCode()===403,'Normal users cannot submit Admin artwork choices');}
+auth()->setUser($operator);$operatorCard=view('partials.artwork-review',['item'=>(object)[...$retro,...$matcher->match($retro,[]),'production_batch'=>null]])->render();
+$check(!str_contains($operatorCard,'Choose artwork for this product') && !str_contains(view('partials.account-menu')->render(),'Admin Settings'),'Normal users see neither the Admin matching link nor Admin Settings menu');
+config(['services.google_drive.reviewed_selections_enabled'=>false]);$matcher->refreshReviewedSelections();
+config(['services.google_drive.rename_enabled'=>true]);
 foreach(glob($directory.'/*.json') as $file)unlink($file);rmdir($directory);
 echo "$checks total admin naming/settings checks passed.\n";

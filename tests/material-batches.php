@@ -1,0 +1,53 @@
+<?php
+require __DIR__.'/factory-dispatch.php';
+use App\Services\{MaterialCatalog,PrintLabelService};
+use App\Models\{ProductionItem,PrintBatch};
+$catalog=new MaterialCatalog();$csv=file_get_contents(__DIR__.'/fixtures/lucky-bags-materials.csv');$rows=$catalog->parse($csv);
+$check($rows['PSN']['front']==='Rave9' && $rows['PSN']['back']==='Turbo6' && $rows['SRF']['type']==='double','Live sheet fixture preserves exact front/back assignments and single/double type');
+foreach([str_replace('"PSN"','"PSE"',$csv),str_replace('"Double"','"Unknown"',$csv),str_replace('"Turbo6"','""',$csv),str_replace('"Front Material"','"Front Fabric"',$csv)] as $invalid){try{$catalog->parse($invalid);throw new LogicException('Invalid sheet accepted');}catch(RuntimeException $e){$check(!($e instanceof LogicException),'Duplicate codes, invalid type or missing required columns block material loading');}}
+Illuminate\Support\Facades\Http::fake(['docs.google.com/*'=>Illuminate\Support\Facades\Http::sequence()->push($csv)->push(str_replace('"Rave9"','"NewFabric"',$csv))->push('unavailable',503)]);
+$live=new MaterialCatalog();$first=$live->rows(true);$second=$live->rows(true);
+$check($first['PSN']['front']==='Rave9' && $second['PSN']['front']==='NewFabric','Processing refresh reads updated sheet data instead of a hardcoded or stale fallback');
+try{$live->rows(true);throw new LogicException('Unavailable sheet accepted');}catch(Illuminate\Validation\ValidationException $e){$check($live->rows()===[],'Unavailable sheet blocks new work instead of retaining stale settings');}
+$check(Illuminate\Support\Facades\Http::recorded(fn($r)=>str_contains($r->url(),'/gviz/tq') && $r['sheet']==='Lucky Bags')->count()===3,'Only the Lucky Bags tab is read; Vibe is not mixed into material data');
+$create=function($line,$series,$type,$qty=1)use($svc,$user){$sides=$type==='single'?['single']:['front','back'];$matches=array_map(fn($side)=>['id'=>'drive-'.$line.'-'.$side,'side'=>$side,'name'=>$series.'-'.$line.'-'.$side.'.png','md5Checksum'=>str_repeat('a',32),'version'=>'7'],$sides);$item=ProductionItem::create(['line_item_id'=>$line,'order_number'=>'#9342','product'=>'Lucky Bags 2027 Stone','variant'=>'White','color'=>'White','quantity'=>$qty,'series_code'=>$series,'design_type'=>$type,'match_status'=>'REVIEW','artwork_review'=>['policy'=>App\Services\ArtworkMatcherService::POLICY],'matches'=>$matches]);$svc->verify($item,'CORRECT',$user->id);return $item;};
+$a=$create('sheet-double','PSN','double',2);$b=$create('sheet-single','PSE','single');$c=$create('sheet-second-double','SRF','double');
+$jobs=$svc->batchByMaterial($user->id,[$a->id,$b->id,$c->id]);
+$check(count($jobs)===4,'Mixed selected orders create separate Rave9, Turbo6, Rave8 and Embry batches');
+foreach($jobs as $job){$materials=[];foreach($job->payload['orders'] as $order)foreach($order['artworks'] as $art)$materials[]=$art['material'];$check(count(array_unique($materials))===1 && $materials[0]===$job->payload['material_group'],'Every batch contains only its declared print material');}
+$check(array_sum(array_map(fn($j)=>$j->artwork_file_count,$jobs))===5,'Both double sides are included once; single-sided backing adds no print file');
+$check(abs(array_sum(array_map(fn($j)=>(float)$j->total_yards,$jobs))-1.001)<.00001,'Printed yards account for each side quantity without adding blank backing prints');
+$summary=$svc->summary(collect([$a,$b,$c]));$check(isset($summary['printable_materials']['Cadid']) && $summary['printable_materials']['Cadid']['sides']===0,'Dashboard lists all sheet materials including zero print counts');
+$front=collect($jobs)->first(fn($j)=>$j->payload['material_group']==='Rave9');$back=collect($jobs)->first(fn($j)=>$j->payload['material_group']==='Turbo6');
+$front->update(['status'=>'PRINTED']);$index=$svc->batchIndex(true);
+$check($index[$a->line_item_id]['status']!=='PRINTED' && $index[$b->line_item_id]['status']==='PRINTED','Printing one material completes a single-sided order but not the double-sided order');
+$back->update(['status'=>'PRINTED']);$check($svc->batchIndex(true)[$a->line_item_id]['status']==='PRINTED','Double-sided order completes only when both material batches are printed');
+$d=$create('return-material-pair','PSN','double');$returnJobs=$svc->batchByMaterial($user->id,[$d->id]);$returner=new App\Services\BatchReturnService();
+$returnJobs[1]->update(['status'=>'CLAIMED','claimed_at'=>now()]);$reject(fn()=>$returner->returnItemToReview($returnJobs[0],$d,$user->id),409);
+$returnJobs[1]->update(['status'=>'QUEUED','claimed_at'=>null]);$returner->returnItemToReview($returnJobs[0],$d,$user->id);
+$check(collect($returnJobs)->every(fn($j)=>$j->fresh()->status==='CANCELLED') && !$d->fresh('decision')->decision,'Returning an untouched double-sided order cancels all its material sides atomically');
+$before=$front->fresh()->payload;
+$fixture=new class extends MaterialCatalog {public string $csv;public function rows(bool $fresh=false):array{return $this->parse($this->csv);}};$fixture->csv=str_replace('"Rave9"','"NewFabric"',$csv);app()->instance(MaterialCatalog::class,$fixture);
+$e=$create('updated-sheet-order','PSE','single');$updated=$svc->batchByMaterial($user->id,[$e->id]);
+$check($updated[0]->payload['material_group']==='NewFabric' && $front->fresh()->payload===$before,'Sheet edits apply to new queues and never rewrite approved historical batch materials');
+$publicItem=$create('public-material-pair','PSN','double');$beforeCount=PrintBatch::count();
+$queueRequest=Illuminate\Http\Request::create('/batches','POST',['items'=>[$publicItem->id],'dispatch_confirmed'=>'1']);$queueRequest->setUserResolver(fn()=>$user);
+$publicController=new App\Http\Controllers\ProductionController($svc);$publicController->batch($queueRequest);
+$publicJobs=PrintBatch::orderBy('id')->get()->slice($beforeCount);
+$check($publicJobs->count()===2 && $publicJobs->every(fn($j)=>$j->operator_dispatch_enabled && $j->automation_requested_at && $j->factory_agent_id===$id),'Public queue atomically authorizes both separate material batches for the listener');
+$blockedItem=$create('atomic-material-failure','PSN','double');$beforeCount=PrintBatch::count();$agent->update(['telemetry'=>['reporter_mode'=>'connection_only']]);
+$failedRequest=Illuminate\Http\Request::create('/batches','POST',['items'=>[$blockedItem->id],'dispatch_confirmed'=>'1']);$failedRequest->setUserResolver(fn()=>$user);
+$reject(fn()=>$publicController->batch($failedRequest),422);
+$check(PrintBatch::count()===$beforeCount && !$svc->processed($blockedItem),'Authorization failure rolls back every material side without a partial queue');
+$typeItem=$create('changed-type-order','PSE','single');$fixture->csv=str_replace('"PSE","NewFabric","Vmt","Single"','"PSE","NewFabric","Vmt","Double"',$fixture->csv);
+$match=(new App\Services\ArtworkMatcherService())->match(['sku'=>'2027-STONE-PSE-0001','variant'=>'Pro Sniper Elite','product'=>'Lucky Bags 2027 Stone'],[]);
+$check($match['design_type']==='double' && !$svc->ready($typeItem),'Sheet type edits drive matching and block stale single-side selections until reviewed again');
+$reject(fn()=>$svc->batchByMaterial($user->id,[$typeItem->id]),422);
+$agent->update(['telemetry'=>['agent_version'=>'1.5.0','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$v2=$publicJobs->first();$check($dispatch->readiness($v2)['state']==='agent_update_required','Prior agents are explicitly blocked from the new lower label policy');
+$begin=Illuminate\Http\Request::create('/begin','POST',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);$reject(fn()=>$dispatch->begin($begin,$v2,'prepare'),409);
+$v1=clone $v2;$payload=$v1->payload;$payload['print_label_policy']='BOTTOM_WHITE_V1';$v1->payload=$payload;
+$check($dispatch->readiness($v1)['state']==='ready','Previously approved V1 batches keep their original compatible agent minimum');
+$fixture->csv=str_replace('"Vmt"','""',$csv);$optional=$svc->summary(collect([new ProductionItem(['line_item_id'=>'optional-back','series_code'=>'PSE','design_type'=>'single','quantity'=>1])]));
+$check($optional['nonprint_yards']===0.0 && $optional['printable_sides']===1 && !isset($optional['printable_materials']['']),'Single-sided bags do not require a back print material or create empty material rows');
+echo "$checks combined live-material and split-batch checks passed.\n";

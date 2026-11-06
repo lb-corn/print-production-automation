@@ -1,12 +1,12 @@
 @if($loadError??null)<p class="admin-notice" role="alert">{{$loadError}}</p>@endif
 <section class="naming-simple-header">
 <div><strong>Shopify artwork matching</strong><span>All Bags collection · Active Shopify products only.</span></div>
-<form id="artwork-scan-form" method="post" action="{{route('admin.artwork-names.scan')}}">
-@csrf<button class="primary" type="submit" data-naming-scan>Check files</button></form>
+@if(auth()->user()->allows('admin.artwork.edit'))<form id="artwork-scan-form" method="post" action="{{route('admin.data-sync')}}" data-catalog-sync>
+@csrf<input type="hidden" name="artwork_search" value="{{$catalogSearch??''}}"><button class="primary" type="submit">Sync catalog</button></form>@endif
 </section>
 
 <div class="naming-status-row" aria-label="Artwork status">
-@foreach(['products'=>'Products','images'=>'Linked files','catalog_matched'=>'Variants found','catalog_missing'=>'Missing','catalog_ambiguous'=>'Review','ready'=>'To rename'] as $key=>$label)
+@foreach(['products'=>'Products','images'=>'Linked files','catalog_matched'=>'Variants found','catalog_missing'=>'Missing','catalog_ambiguous'=>'Review'] as $key=>$label)
 <span><b>{{$summary[$key]??'—'}}</b> {{$label}}</span>
 @endforeach
 <small>@if($summary)Last checked {{date('d M, H:i',$summary['checked_at'])}} · {{$summary['variants']}} variants @else Click Check files to load counts @endif</small>
@@ -36,13 +36,8 @@
 @if($plan)
 
 @php
-$counts=array_count_values(array_column($visibleEntries,'status'));
 $outdated=($plan['naming_policy']??null)!==\App\Services\ArtworkNamingService::POLICY;
 $preview=$plan['status']==='preview'&&!$outdated;
-$ready=$counts['ready']??0;
-$needsReview=($counts['review']??0)+($counts['conflict']??0);
-$protected=($counts['locked']??0)+($counts['standard']??0);
-$preselected=0;
 @endphp
 
 @if($outdated)
@@ -63,7 +58,8 @@ $preselected=0;
 
 
 <section class="artwork-worklist" aria-label="Shopify artwork matching">
-<div class="artwork-worklist-tools"><input type="search" data-catalog-search placeholder="Find a Shopify product or SKU…" aria-label="Search Shopify products" autocomplete="off"><select data-catalog-status aria-label="Product artwork status"><option value="attention">Needs artwork or review</option><option value="all">All products</option><option value="matched">Artwork found</option></select></div>
+<p class="muted">Choose a product’s Match artwork or View / change button, confirm its production files, then return to Artwork Verification to approve. Matching is available even when Drive renaming is disabled.</p>
+<div class="artwork-worklist-tools"><input type="search" data-catalog-search value="{{$catalogSearch??''}}" placeholder="Find a Shopify product or SKU…" aria-label="Search Shopify products" autocomplete="off"><select data-catalog-status aria-label="Product artwork status"><option value="attention">Needs artwork or review</option><option value="all" @selected($catalogSearch??'')>All products</option><option value="matched">Artwork found</option></select></div>
 <div class="naming-table-wrap"><table><thead><tr><th>Shopify product</th><th>Artwork</th><th></th></tr></thead><tbody>
 @foreach($catalogStatus as $row)
 <tr data-catalog-row data-artwork-status="{{$row['status']}}" @if($row['status']==='matched') hidden @endif>
@@ -74,7 +70,7 @@ $preselected=0;
 </section>
 @if($preview&&count($catalog))
 <dialog class="artwork-match-dialog" data-artwork-match-dialog aria-labelledby="artwork-match-heading">
-<form method="post" action="{{route('admin.artwork-names.review')}}" data-artwork-match-form>
+@if(auth()->user()->allows('admin.artwork.edit'))<form method="post" action="{{route('admin.artwork-names.review')}}" data-artwork-match-form>
 <div class="artwork-match-top">
 @csrf<input type="hidden" name="plan" value="{{$plan['token']}}">
 <div class="artwork-dialog-heading"><strong id="artwork-match-heading">Match artwork</strong><button type="button" class="chip" data-match-close>Close</button></div>
@@ -112,59 +108,11 @@ $preselected=0;
 <input type="hidden" name="color" data-naming-color>
 <label class="artwork-color-confirm" data-match-color-confirm hidden><input type="checkbox" name="color_correction_confirmed" value="1" data-match-color-checkbox disabled> I checked the artwork: its actual color matches Shopify; the filename color label is wrong.</label>
 <div class="artwork-match-footer"><label><input type="checkbox" name="reuse" value="1" checked> Remember for matching versions</label><button type="submit" class="primary" data-match-confirm disabled>Confirm this artwork</button></div>
-<small class="muted">Confirm only when the images show the same design. This saves your choice and refreshes unbatched matches. Print approval is still required.</small>
-</div></form></dialog>
+<p class="admin-notice" data-match-feedback role="status" aria-live="polite" hidden></p>
+<div class="artwork-review-alert" data-match-review-orders hidden><strong>Artwork saved · approval still required</strong><a class="artwork-cleanup-link" href="{{route('admin.settings',['section'=>'filenames'])}}">Continue to Filename cleanup →</a><small>Filename cleanup is optional. <a href="{{route('production')}}">Review and approve artwork</a> before printing.</small></div>
+<small class="muted artwork-match-help">Confirm only when the images show the same design. This saves your choice and refreshes unbatched matches.</small>
+</div></form>@endif</dialog>
 @endif
-<details class="naming-advanced"><summary>Filename changes · {{$ready}} ready to rename</summary>
-<div class="naming-table-tools naming-simple-tools">
-<div class="naming-view-filters"><button type="button" class="chip active" data-naming-mode="ready">Ready {{$ready}}</button><button type="button" class="chip" data-naming-mode="review">Linked files to review</button><button type="button" class="chip" data-naming-mode="all">Linked files</button></div>
-<input type="search" name="artwork_filename_filter" id="artwork-filename-filter" data-naming-search autocomplete="off" data-lpignore="true" data-1p-ignore="true" placeholder="Filter filenames" aria-label="Filter filenames">
-</div>
-<form id="artwork-naming-apply" method="post" action="{{route('admin.artwork-names.begin')}}" data-step-url="{{route('admin.artwork-names.step')}}">
-
-@csrf<input type="hidden" name="plan" value="{{$plan['token']}}"><input type="hidden" name="confirmation" value="RENAME"><input type="hidden" name="reviewed" value="1"><input type="hidden" name="username" autocomplete="username" value="{{auth()->user()?->email}}">
-<div class="naming-table-wrap"><table><thead><tr><th>Status</th><th>Current file</th><th>New name</th></tr></thead><tbody>
-
-@foreach($visibleEntries as $entry)
-<tr data-naming-row data-naming-status="{{$entry['status']}}"
-@if($entry['status']!=='ready') hidden
-@endif><td>
-@if($preview&&$entry['status']==='ready')<input type="checkbox" name="ids[]" value="{{$entry['id']}}" @checked($preselected++<500) aria-label="Rename {{$entry['source']['name']}}">
-@endif<span class="badge">{{ucfirst($entry['status'])}}</span></td>
-<td><a href="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" target="_blank" rel="noopener noreferrer">{{$entry['source']['name']}} ↗</a><small>{{$entry['folder']}}</small></td>
-<td><code>{{$entry['proposal']['target']??'Confirm design first'}}</code>
-@if($entry['reason']??null)<small>{{$entry['reason']}}</small>
 @endif
-@if($entry['artwork_duplicate']??false)<small>Duplicate artwork still needs review.</small>
 @endif
-<details class="naming-row-detail"><summary>Details</summary><small>{{$entry['proposal']['sku']??''}} · {{$entry['proposal']['product']??''}} · {{$entry['proposal']['variant']??''}} · {{$entry['proposal']['side']??''}}<br>{{$entry['basis']??''}}</small></details></td></tr>
-
-@endforeach
-</tbody></table><p class="naming-filter-empty" data-naming-empty hidden>No files in this view. <button type="button" data-naming-clear>Show all files</button></p></div>
-
-@if($preview)
-@if(!config('services.google_drive.rename_enabled'))<p class="admin-notice">Renaming is disabled on this server. Ask the administrator to enable GOOGLE_DRIVE_RENAME_ENABLED and refresh the Laravel configuration cache. Checking and matching artwork remain available.</p>@endif
-<div class="naming-simple-action"><button type="button" class="chip" data-naming-select hidden>Select all ready</button><span data-naming-selected>{{$ready>500?500:$ready}} ready files selected</span><button class="primary" type="button" data-naming-open data-naming-enabled="{{config('services.google_drive.rename_enabled')?'1':'0'}}" @disabled(!$ready||!config('services.google_drive.rename_enabled'))>Rename ready files</button></div>
-<dialog class="naming-confirm-dialog" data-naming-dialog>
-<h3>Rename <span data-naming-confirm-count></span> ready files?</h3><p>Only filenames change. File extensions, contents and print batches stay protected.</p>
-<label>Admin password<input name="password" type="password" required disabled autocomplete="current-password"></label>
-<label class="naming-dialog-check"><input type="checkbox" name="refresh" value="1" checked> Refresh unbatched artwork matches afterwards</label>
-<div><button type="button" class="chip" data-naming-cancel>Cancel</button><button class="primary" type="submit">Confirm rename</button></div>
-<p data-naming-progress role="status" aria-live="polite"></p>
-</dialog>
-
-@endif
-</form></details>
-
-@if($plan['events'])<details class="naming-advanced"><summary>Rename audit · {{count($plan['events'])}} events</summary>
-@foreach($plan['events'] as $event)<p><code>{{$event['old_name']}}</code> → <code>{{$event['new_name']}}</code> · {{$event['status']}} · {{$event['at']}}</p>
-@endforeach</details>
-@endif
-
-@endif
-
-@endif
-<details class="naming-advanced"><summary>Naming rules and setup</summary><p>Example: <code>LB-PSE-DUC-RED-SINGLE.jpg</code>. No year is added. Actual extensions are preserved. App-compatible filenames stay unchanged, including existing ID suffixes. New names do not add IDs. Shared design codes use the full product design name when a reviewed correction is needed.</p><p>Rename permission requires Editor access for the existing service account. Files in batches, mockups and nested folders are excluded. Uncertain network outcomes stop without automatic retries.</p>
-@if(!config('services.google_drive.rename_enabled'))<p>Applying renames is disabled by server configuration.</p>
-@endif</details>
 <script src="{{asset('js/artwork-names.js')}}?v={{filemtime(public_path('js/artwork-names.js'))}}" defer></script>

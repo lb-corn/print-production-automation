@@ -1,0 +1,21 @@
+<?php
+namespace App\Http\Middleware;
+use Closure;
+use Illuminate\Http\Request;
+use App\Services\RouteAccess;
+class RequireFeature {
+    public function handle(Request $request, Closure $next) {
+        $name=$request->route()?->getName() ?? '';
+        if(in_array($name,['logout','profile','docs'],true)) return $next($request);
+        if($name==='dashboard') {
+            if(!$request->user()->allows('bags.overview.view') && !$request->user()->allows('apparel.overview.view') && !$request->has('area')) return response()->view('dashboard.access');
+            $area=$request->query('area',$request->user()->allows('bags.overview.view')?'bags':'apparel');
+            abort_unless(in_array($area,['bags','apparel'],true) && $request->user()->allows($area.'.overview.view'),403);
+            if($area==='apparel') return response()->view('dashboard.apparel');
+            return $next($request);
+        }
+        $permission=$name==='admin.settings'?RouteAccess::section($request->query('section','artwork')):RouteAccess::permission($name);
+        abort_unless($permission && $request->user()?->allows($permission),403,'Your role does not allow this feature.');
+        return $next($request);
+    }
+}

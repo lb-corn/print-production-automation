@@ -2,7 +2,7 @@
 // Isolated in-memory database only. Never resets the configured portal database.
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach (glob(__DIR__.'/../database/migrations/*.php') as $file) (require $file)->up();
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Hash;
 
 $check = function ($ok, $label) { if (!$ok) throw new RuntimeException($label); echo "PASS: $label\n"; };
 $admin = User::create(['name'=>'Admin','email'=>'admin@example.test','password'=>'AdminPassword123','role'=>'admin']);
-$normal = User::create(['name'=>'Normal','email'=>'normal@example.test','password'=>'NormalPassword123','role'=>'operator']);
+$normal = User::create(['name'=>'Normal','email'=>'normal@example.test','password'=>'NormalPassword123','role'=>'manager']);
 $request = function ($data = [], $user = null) use ($app, $admin) {
     $r = Request::create('/admin/reset', 'POST', $data);
     $r->setUserResolver(fn () => $user ?? $admin);
@@ -38,28 +38,28 @@ catch (Symfony\Component\HttpKernel\Exception\HttpException $e) { $check($e->get
 finally { flock($handle, LOCK_UN); fclose($handle); }
 foreach (app('router')->getRoutes() as $route) {
     if (str_starts_with($route->getName() ?? '', 'admin.')) {
-        $check(in_array(App\Http\Middleware\RequireAdmin::class, $route->gatherMiddleware()), 'Admin route protected: '.$route->getName());
+        $check(in_array(App\Http\Middleware\RequireFeature::class, $route->gatherMiddleware()), 'Admin route protected: '.$route->getName());
     }
 }
 view()->share('errors', new Illuminate\Support\ViewErrorBag);
 Auth::login($admin);
 $controller = new AdminController;
-$data = ['name'=>'Mike','email'=>'MIKE@luckycornhole.com','role'=>'operator','password'=>'MikeReviewPassword123','password_confirmation'=>'MikeReviewPassword123'];
+$data = ['name'=>'Mike','email'=>'MIKE@luckycornhole.com','role'=>'manager','password'=>'MikeReviewPassword123','password_confirmation'=>'MikeReviewPassword123'];
 $controller->store($request($data));
 $mike = User::where('email','mike@luckycornhole.com')->firstOrFail();
-$check($mike->role === 'operator' && Hash::check($data['password'], $mike->password), 'Mike created as normal user with hashed password');
+$check($mike->role === 'manager' && Hash::check($data['password'], $mike->password), 'Mike created as Manager with hashed password');
 try { $controller->store($request($data)); throw new RuntimeException('Duplicate email admitted'); }
 catch (Illuminate\Validation\ValidationException $e) { $check(isset($e->errors()['email']), 'Duplicate email rejected'); }
 $oldPassword = $mike->password;
-$controller->update($request(['name'=>'Mike Updated','email'=>$mike->email,'role'=>'operator','password'=>'','password_confirmation'=>'']), $mike);
+$controller->update($request(['name'=>'Mike Updated','email'=>$mike->email,'role'=>'manager','password'=>'','password_confirmation'=>'']), $mike);
 $check($mike->fresh()->name === 'Mike Updated' && $mike->fresh()->password === $oldPassword, 'Edit preserves blank password');
-$controller->update($request(['name'=>$mike->name,'email'=>$mike->email,'role'=>'operator','password'=>'ChangedPassword123','password_confirmation'=>'ChangedPassword123']), $mike);
+$controller->update($request(['name'=>$mike->name,'email'=>$mike->email,'role'=>'manager','password'=>'ChangedPassword123','password_confirmation'=>'ChangedPassword123']), $mike);
 $check(Hash::check('ChangedPassword123', $mike->fresh()->password) && strlen($mike->fresh()->remember_token) === 60, 'Password update hashes password and rotates remember token');
 foreach ([['password'=>'short','password_confirmation'=>'short'], ['password_confirmation'=>'Mismatch12345']] as $bad) {
     try { $controller->store($request(array_replace($data, ['email'=>'new@example.test'], $bad))); throw new RuntimeException('Invalid password admitted'); }
     catch (Illuminate\Validation\ValidationException $e) { $check(isset($e->errors()['password']), 'Invalid or mismatched password rejected'); }
 }
-$controller->update($request(['name'=>'Admin','email'=>$admin->email,'role'=>'operator']), $admin);
+$controller->update($request(['name'=>'Admin','email'=>$admin->email,'role'=>'manager']), $admin);
 $check($admin->fresh()->role === 'admin', 'Self-demotion blocked');
 try { $controller->store($request(array_replace($data, ['email'=>'other@example.test','role'=>'superuser']))); throw new RuntimeException('Bad role admitted'); }
 catch (Illuminate\Validation\ValidationException $e) { $check(isset($e->errors()['role']), 'Invalid role rejected'); }
@@ -132,10 +132,10 @@ $history = DB::table('verification_decisions')->where('line_item_id','delete-his
 $check($history && $history->updated_by === null, 'Deleting user preserves production history');
 $check(!Auth::attempt(['email'=>$normal->email,'password'=>'NormalPassword123','is_active'=>true]), 'Deleted user cannot authenticate');
 app(App\Services\AccountRosterService::class)->replace('roster-admin@example.test', 'RosterAdminPass123', 'roster-mike@example.test', 'RosterMikePass123');
-$check(User::count() === 2 && User::where('role','admin')->count() === 1 && User::where('role','operator')->count() === 1, 'Roster replacement leaves exactly two active accounts');
+$check(User::count() === 2 && User::where('role','admin')->count() === 1 && User::where('role','manager')->count() === 1, 'Roster replacement leaves exactly two active accounts');
 $check(User::where('is_active',true)->count() === 2 && Hash::check('RosterAdminPass123', User::where('role','admin')->first()->password), 'Roster passwords hashed and accounts active');
 $check(DB::table('verification_decisions')->where('line_item_id','delete-history')->exists(), 'Roster cleanup preserves production records');
-$demo = User::create(['name'=>'Demo','email'=>'demo@lbprint.com','password'=>'DemoTestPassword123','role'=>'operator']);
+$demo = User::create(['name'=>'Demo','email'=>'demo@lbprint.com','password'=>'DemoTestPassword123','role'=>'manager']);
 $migration = require __DIR__.'/../database/migrations/2026_10_31_000004_assign_demo_viewer_role.php';
 $beforePassword = $demo->password;
 $migration->up();

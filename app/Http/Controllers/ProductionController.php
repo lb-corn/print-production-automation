@@ -16,7 +16,7 @@ class ProductionController extends Controller
 
     public function dashboard()
     {
-        $items = ProductionItem::with('decision')->get();
+        $items = $this->svc->activeItems();
 
         $ready = $items->filter(
             fn ($item) => $this->svc->ready($item)
@@ -24,25 +24,31 @@ class ProductionController extends Controller
 
         return view('dashboard.index', [
             'total' => $items->count(),
+            'openOrderCount'=>$items->pluck('order_number')->filter()->unique()->count(),
             'ready' => $ready->count(),
-            'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && !$this->svc->approved($item))->count(),
+            'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && (!$this->svc->approved($item) || !$this->svc->materialCompatible($item)))->count(),
             'custom' => $items->where('is_custom', true)->count(),
             'summary' => $this->svc->summary($ready),
+            'materialCatalogError'=>app(\App\Services\MaterialCatalog::class)->error(),
             'batches' => PrintBatch::latest()->limit(5)->get(),
         ]);
     }
 
     public function syncBacklog()
     {
+        // Only named local destinations are accepted; Overview keeps its existing behavior.
+        $destination = request('return_to') === 'production' ? 'production' : 'dashboard';
         try {
             $r = app(BacklogSyncService::class)->sync();
-            $response=redirect()->route('dashboard')->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
+            $response=redirect()->route($destination)->with('ok', sprintf('Shopify backlog refreshed: %d current · %d added · %d updated · %d unchanged · %d matched · %d missing · %d ambiguous · %d already in print/completed, skipped.', $r['shopify_items'], $r['added'], $r['updated'], $r['unchanged'], $r['matched'], $r['missing'], $r['ambiguous'], $r['processed_skipped']));
+            if(($r['custom_items']??0)>0)$response->with('ok',session('ok').' Custom bags: '.$r['custom_items'].' imported for direct artwork upload.');
             if(!($r['artwork_schema_ready']??true))$response->with('warning','Orders synced and artwork checked. The server still needs the artwork_review database migration before artwork approval and printing. You do not need to fix the whole catalog.');
             return $response;
         } catch (\Throwable $e) {
             if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
+            if ($e instanceof \Illuminate\Validation\ValidationException && isset($e->errors()['materials']))return redirect()->route($destination??'production')->with('error',$e->errors()['materials'][0]);
             report($e);
-            return redirect()->route('dashboard')->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
+            return redirect()->route($destination)->with('error', 'Shopify backlog refresh failed. No changes were saved. Check the integration logs and try again.');
         }
     }
 
@@ -57,6 +63,7 @@ class ProductionController extends Controller
                 $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
         } catch (\Throwable $e) {
             if ($e instanceof \App\Exceptions\ArtworkSchemaNotReady) return back()->with('error', $e->getMessage());
+            if ($e instanceof \Illuminate\Validation\ValidationException && isset($e->errors()['materials']))return redirect()->route($destination??'production')->with('error',$e->errors()['materials'][0]);
             report($e);
             return redirect()->route('production')->with('error', 'Artwork rematch failed. No changes were saved. Check the integration logs and try again.');
         }
@@ -64,7 +71,7 @@ class ProductionController extends Controller
 
     public function verification()
     {
-        $items = ProductionItem::with('decision')
+        $items = ProductionItem::with('decision')->when(\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active'),fn($q)=>$q->where('shopify_active',true))
             ->orderByRaw("
                 CASE match_status
                     WHEN 'REVIEW' THEN 0
@@ -174,18 +181,25 @@ class ProductionController extends Controller
         return view('production.queue', [
             'items' => $items,
             'summary' => $this->svc->summary($items),
-            'materials' => ProductionService::MATERIALS,
+            'materials' => $this->svc->materials(),
+            'materialCatalogError'=>app(\App\Services\MaterialCatalog::class)->error(),
+            'factoryReadiness'=>app(\App\Services\FactoryDispatchService::class)->readiness(),
+            'factoryQueueAvailable'=>app(\App\Services\FactoryDispatchService::class)->consentReady(),
+            'materialGroups'=>$items->groupBy(fn($item)=>\App\Services\PrintLabelService::group($item)),
         ]);
     }
 
     public function batch(Request $request)
     {
-        $batch = $this->svc->batch(
-            $request->user()->id
-        );
+        if(!app(\App\Services\FactoryDispatchService::class)->consentReady())return redirect()->route('queue')->with('error','Printing is temporarily unavailable until an administrator completes the server database update. Your approved items have not been queued.');
+        $data=$request->validate(['items'=>'required|array|min:1|max:1000','items.*'=>'required|integer|distinct','dispatch_confirmed'=>'required|accepted']);
+        $batch=\Illuminate\Support\Facades\DB::transaction(function()use($request,$data){
+            $jobs=$this->svc->batchByMaterial($request->user()->id,$data['items']);
+            foreach($jobs as $job)app(\App\Services\FactoryDispatchService::class)->request($job);return $jobs;
+        });
 
-        return redirect('/batches/'.$batch->id)
-            ->with('ok', 'Production batch created.');
+        return redirect('/batches/'.$batch[0]->id)
+            ->with('ok', count($batch).' material batch(es) queued separately. Each requires its own signed Handoff. Queue request recorded. Track preparation and waiting reasons here. This is not a physical-print confirmation.');
     }
 
     public function workspaceStatus()
@@ -196,7 +210,7 @@ class ProductionController extends Controller
     public function batches()
     {
         $query=PrintBatch::latest();
-        if (request('stage') === 'active') $query->whereIn('status',['QUEUED','CLAIMED','DOWNLOADING','PREPARED','HANDOFF_REQUESTED','SENT_TO_RIP']);
+        if (request('stage') === 'active') $query->whereIn('status',['QUEUED','CLAIMED','DOWNLOADING','PREPARED','HANDOFF_REQUESTED','DELIVERING','SENT_TO_RIP']);
         if (request('stage') === 'completed') $query->where('status','PRINTED');
         if (request('stage') === 'failed') $query->where('status','FAILED');
         return view('batches.index',['batches'=>$query->get()]);
@@ -205,7 +219,16 @@ class ProductionController extends Controller
     public function showBatch(PrintBatch $batch)
     {
         $itemIds=ProductionItem::whereIn('line_item_id',array_column($batch->payload['orders']??[],'line_item_id'))->pluck('id','line_item_id')->all();
-        return view('batches.show', compact('batch','itemIds'));
+        $factoryProgress=app(\App\Services\FactoryDispatchService::class)->progress($batch);
+        $relatedBatches=collect();if($batch->payload['dispatch_group']??null)$relatedBatches=PrintBatch::where('payload->dispatch_group',$batch->payload['dispatch_group'])->where('status','!=','CANCELLED')->orderBy('id')->get();
+        return view('batches.show', compact('batch','itemIds','factoryProgress','relatedBatches'));
+    }
+    public function batchProgress(PrintBatch $batch){return response()->json(app(\App\Services\FactoryDispatchService::class)->progress($batch))->header('Cache-Control','no-store');}
+    public function requestPreparation(Request $request,PrintBatch $batch){
+        if(!app(\App\Services\FactoryDispatchService::class)->consentReady())return redirect()->route('batch.show',$batch)->with('error','Automatic preparation is unavailable until an administrator completes the server database update. No preparation request was saved.');
+        $request->validate(['dispatch_confirmed'=>'required|accepted']);
+        \Illuminate\Support\Facades\DB::transaction(fn()=>app(\App\Services\FactoryDispatchService::class)->request($batch));
+        return redirect()->route('batch.show',$batch)->with('ok','Automatic preparation requested. The batch stays pending until an enabled listener can process it.');
     }
 
     /**
@@ -229,6 +252,7 @@ class ProductionController extends Controller
 
     public function requestEdgePrint(Request $request, PrintBatch $batch)
     {
+        if(app(\App\Services\FactoryDispatchService::class)->ready() && $batch->automation_requested_at)abort_if(collect($batch->payload['orders']??[])->contains(fn($row)=>(int)($row['quantity']??0)!==1),422,'Automatic hot-folder delivery supports quantity one only. Manual quantity handling is required.');
         return $this->confirmPrintAction($request, $batch, 'HANDOFF', 'PREPARED', 'HANDOFF_REQUESTED');
     }
 
@@ -255,6 +279,8 @@ class ProductionController extends Controller
                 (int)$data['confirmed_order_count'] === $locked->order_count &&
                 (int)$data['confirmed_artwork_file_count'] === $locked->artwork_file_count,
                 422,'Batch contents changed. Refresh and review the updated quantities.');
+            if($action==='HANDOFF' && $locked->automation_requested_at)app(\App\Services\FactoryDispatchService::class)->authorizeJob($locked);
+            if($action==='HANDOFF')app(\App\Services\FactoryDispatchService::class)->assertHandoffAllowed($locked);
             \App\Models\BatchConfirmation::create([
                 'print_batch_id'=>$locked->id,'user_id'=>$request->user()->id,
                 'account_name'=>$request->user()->name,'signer_name'=>trim($data['signer_name']),

@@ -6,13 +6,16 @@ use Illuminate\Http\Request;
 
 class ArtworkNamingController extends Controller
 {
-    private function actor(Request $request): int { abort_unless($request->user()?->role==='admin',403);return $request->user()->id; }
+    private function actor(Request $request): int { abort_unless($request->user()?->allows(\App\Services\RouteAccess::permission($request->route()?->getName() ?? '') ?? \App\Services\RouteAccess::section($request->query('section','artwork')) ?? ''),403);return $request->user()->id; }
     public function index(Request $request,ArtworkRenameStore $store)
     {
         $actor=$this->actor($request);
+        $catalogSearch=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
         $loadError=null;
         $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);
-        if(!$plan && !$request->query('plan')) {
+        $stalePlan=!empty($plan['catalog_stale']);
+        if($stalePlan)$plan=$store->latestPreview($actor);
+        if(!$plan && (!$request->query('plan') || $stalePlan)) {
             try{$plan=app(ArtworkNamingService::class)->scan($actor);}
             catch(\Throwable $e){report($e);$loadError='Artwork could not load automatically. Check Drive access and the Active All Bags collection, then retry Check files.';}
         }
@@ -54,13 +57,42 @@ class ArtworkNamingController extends Controller
             $entry['source_attributes']=$attributes;
             $reviewGroups[$entry['id']]=['entry'=>$entry,'count'=>1];
         }
-        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries','loadError'));
+        return view('admin.artwork-names',compact('plan','catalog','scope','reviewGroups','summary','catalogStatus','visibleEntries','loadError','catalogSearch'));
     }
     public function scan(Request $request)
     {
         $actor=$this->actor($request);
-        try{$plan=app(ArtworkNamingService::class)->scan($actor);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']]);}
+        $search=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
+        try{$plan=app(ArtworkNamingService::class)->scan($actor);}
         catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names')->with('error','Cannot load artwork from All Bags and Drive. Check that exactly one All Bags collection exists, Shopify read_products access, and Drive service-account access. No files were renamed.');}
+        $response=redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token'],'artwork_search'=>$search]);
+        try {
+            $counts=app(\App\Services\ArtworkRematchService::class)->rematch($plan['index']);
+            return $response->with('ok',sprintf('Current Drive files checked and unbatched orders refreshed: %d matched · %d missing · %d ambiguous · %d protected. Review artwork in Artwork Verification before approval. No files were renamed.',$counts['matched'],$counts['missing'],$counts['ambiguous'],$counts['skipped']));
+        } catch(\App\Exceptions\ArtworkSchemaNotReady $e) {
+            return $response->with('warning','Current Drive files checked, but orders could not refresh: '.$e->getMessage());
+        } catch(\Throwable $e) {
+            report($e);
+            return $response->with('error','Current Drive files checked, but order matches could not refresh. Run Rematch Artwork and check the integration logs if it fails. No files were renamed.');
+        }
+    }
+    public function standardize(Request $request)
+    {
+        $this->actor($request);
+        return redirect()->route('admin.settings',['section'=>'filenames']);
+    }
+    public function syncSources(Request $request)
+    {
+        $actor=$this->actor($request);
+        $search=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
+        // Ignore any displayed plan: catalog corrections must replace the saved snapshot.
+        try { $plan=app(ArtworkNamingService::class)->scan($actor); }
+        catch(\Throwable $e) {
+            report($e);
+            return redirect()->route('admin.settings',['section'=>'sync'])->with('error','Catalog sync failed while reading Shopify products or Drive artwork. Check integration access and try again.');
+        }
+        return redirect()->route('admin.settings',['section'=>'sync','plan'=>$plan['token'],'artwork_search'=>$search])
+            ->with('ok',sprintf('Catalog synced: %d Shopify variants · %d Drive artwork files. Open Artwork matching to review the refreshed data. Orders, approvals and print queues were not changed.',count($plan['catalog']),count(array_filter($plan['index'],fn($file)=>($file['kind']??'')==='artwork'))));
     }
     public function revise(Request $request)
     {
@@ -69,28 +101,35 @@ class ArtworkNamingController extends Controller
             if($request->boolean('pair_mode')) {
                 $data=$request->validate(['plan'=>'required|string|size:48','catalog_key'=>'required|string|size:64','front_file_id'=>'required|string|max:200','back_file_id'=>'required|string|max:200|different:front_file_id','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
                 $plan=app(ArtworkNamingService::class)->revisePair($data['plan'],$actor,$data['catalog_key'],$data['front_file_id'],$data['back_file_id'],(bool)($data['reuse']??false),$request->boolean('color_correction_confirmed'));
-                return $this->finishChoice($plan,$actor,$data['catalog_key'],[$data['front_file_id'],$data['back_file_id']]);
+                return $this->finishChoice($request,$plan,$actor,$data['catalog_key'],[$data['front_file_id'],$data['back_file_id']]);
             }
             $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','catalog_key'=>'required|string|size:64',
                 'side'=>'required|in:single,front,back','color'=>'nullable|string|max:40','reuse'=>'sometimes|boolean','color_correction_confirmed'=>'sometimes|accepted']);
             $plan=app(ArtworkNamingService::class)->revise($data['plan'],$actor,[$data['file_id']=>['catalog_key'=>$data['catalog_key'],'side'=>$data['side'],'color'=>$data['color']??'','color_correction_confirmed'=>$request->boolean('color_correction_confirmed')]],(bool)($data['reuse']??false));
             $entry=collect($plan['entries'])->firstWhere('id',$data['file_id']);
-            if(($entry['status']??'review')==='review')return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','This mapping does not match the folder, SKU, color or print side. Check it and update the preview.');
-            return $this->finishChoice($plan,$actor,$data['catalog_key'],[$data['file_id']]);
+            if(($entry['status']??'review')==='review')return $this->choiceResponse($request,$plan['token'],'error','This mapping does not match the folder, SKU, color or print side. Check it and update the preview.');
+            return $this->finishChoice($request,$plan,$actor,$data['catalog_key'],[$data['file_id']]);
         } catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             if(!in_array($e->getStatusCode(),[409,422],true))throw $e;
-            return redirect()->route('admin.artwork-names',['plan'=>$request->input('plan')])->with('error',$e->getMessage());
+            return $this->choiceResponse($request,$request->input('plan'),'error',$e->getMessage());
         }
     }
-    private function finishChoice(array $plan,int $actor,string $catalogKey,array $ids)
+    private function choiceResponse(Request $request,?string $token,string $status,string $message)
     {
+        $url=route('admin.settings',['section'=>'artwork','plan'=>$token]);
+        if($request->expectsJson())return response()->json(['status'=>$status,'message'=>$message,'url'=>$url],$status==='error'?422:200);
+        return redirect()->to($url)->with($status,$message);
+    }
+    private function finishChoice(Request $request,array $plan,int $actor,string $catalogKey,array $ids)
+    {
+        if(!config('services.google_drive.reviewed_selections_enabled',true))return $this->choiceResponse($request,$plan['token'],'warning','Preview saved only. Reviewed artwork choices are disabled on this server, so orders were not updated. Ask the server administrator to enable reviewed artwork choices.');
         if(config('services.google_drive.reviewed_selections_enabled',true)) {
             app(ArtworkNamingService::class)->saveReviewedChoice($plan,$actor,$catalogKey,$ids);
             try { app(\App\Services\ArtworkRematchService::class)->rematch(); }
-            catch(\App\Exceptions\ArtworkSchemaNotReady $e) { return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('warning','Artwork choice saved. Orders can sync, but the server needs the artwork_review migration before refreshing approval metadata and printing.'); }
-            catch(\Throwable $e) { report($e);return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('error','Your artwork choice was saved, but order matches could not refresh. Run Rematch Artwork.'); }
+            catch(\App\Exceptions\ArtworkSchemaNotReady $e) { return $this->choiceResponse($request,$plan['token'],'warning','Artwork choice saved. Orders can sync, but the server needs the artwork_review migration before refreshing approval metadata and printing.'); }
+            catch(\Throwable $e) { report($e);return $this->choiceResponse($request,$plan['token'],'warning','Your artwork choice was saved, but order matches could not refresh. Run Rematch Artwork.'); }
         }
-        return redirect()->route('admin.artwork-names',['plan'=>$plan['token']])->with('ok','Artwork choice saved and unbatched matches refreshed. Print approval is still required. Apply any filename changes separately.');
+        return $this->choiceResponse($request,$plan['token'],'ok','Artwork choice saved and unbatched matches refreshed. Return to Artwork Verification to review and approve.');
     }
     public function begin(Request $request)
     {

@@ -52,7 +52,7 @@ function namingChoiceFilter(select, query, product = false) {
     let count = 0;
     [...select.options].forEach(option => {
         const label = (option.textContent || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
-        const eligible = product || !catalog?.value || !catalog?.dataset.series || (catalog.dataset.scopeReady !== '0' && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.dataset.series === catalog.dataset.series && option.dataset.protected !== '1' && (catalog.dataset.type !== 'double' || option.dataset.side !== 'single') && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color || artworkColorCorrections.has(option.value)));
+        const eligible = product || !catalog?.value || !catalog?.dataset.series || (catalog.dataset.scopeReady !== '0' && (!catalog.dataset.folderId || option.dataset.parentId === catalog.dataset.folderId) && option.dataset.series === catalog.dataset.series && option.dataset.protected !== '1' && (catalog.dataset.type !== 'double' || option.dataset.side !== 'single') && (catalog.dataset.type !== 'single' || option.dataset.side !== 'back') && (!catalog.dataset.color || !option.dataset.color || option.dataset.color === catalog.dataset.color || artworkColorCorrections.has(option.value)));
         option.hidden = !!option.value && (!eligible || !terms.every(term => label.includes(term)));
         // Searching hides rows; only scope/variant incompatibility disables submission.
         option.disabled = !!option.value && !eligible;
@@ -318,8 +318,12 @@ function namingArtworkGallery() {
     const count = document.querySelector('[data-match-candidate-count]'); if (count) count.textContent = options.length + ' eligible files · choose by image, not filename alone';
 }
 if (artworkMatchDialog && sourceChoice) {
+    artworkMatchDialog.addEventListener('cancel',event=>{if(document.querySelector('[data-artwork-match-form]')?.dataset.submitting==='1')event.preventDefault();});
     sourceChoice.namingRefresh = namingArtworkGallery;
     document.querySelectorAll('[data-match-product]').forEach(button => button.addEventListener('click', () => {
+        const form=document.querySelector('[data-artwork-match-form]'); if(form){delete form.dataset.saved;delete form.dataset.savedUrl;delete form.dataset.submitting;}
+        const feedback=document.querySelector('[data-match-feedback]');if(feedback)feedback.hidden=true;
+        const orders=document.querySelector('[data-match-review-orders]');if(orders)orders.hidden=true;
         const help = document.querySelector('.artwork-find-help'); if (help) help.open = false;
         artworkColorCorrections.clear();
         const checkbox = document.querySelector('[data-match-color-checkbox]'); if (checkbox) checkbox.checked = false;
@@ -333,19 +337,49 @@ if (artworkMatchDialog && sourceChoice) {
         const link = document.querySelector('[data-match-folder-link]'); link.hidden = !option.dataset.folderUrl; link.href = option.dataset.folderUrl || '#';
         namingMatchSelection(); artworkMatchDialog.showModal(); search?.focus();
     }));
-    document.querySelector('[data-match-close]')?.addEventListener('click', () => artworkMatchDialog.close());
+    document.querySelector('[data-match-close]')?.addEventListener('click', () => {
+        const form=document.querySelector('[data-artwork-match-form]');
+        if(form?.dataset.submitting==='1')return;
+        if(form?.dataset.savedUrl)window.location.assign(form.dataset.savedUrl);else artworkMatchDialog.close();
+    });
     sourceChoice.addEventListener('change', namingMatchSelection);
     document.querySelector('[data-naming-side]')?.addEventListener('change', namingMatchSelection);
     document.querySelector('[data-artwork-match-form]')?.addEventListener('submit', event => {
+        event.preventDefault();
         const form = document.querySelector('[data-artwork-match-form]');
         if (form.dataset.submitting === '1') { event.preventDefault(); return; }
         namingMatchSelection(); const button = document.querySelector('[data-match-confirm]');
         if (button.disabled) { event.preventDefault(); return; }
-        form.dataset.submitting = '1';
-        button.disabled = true; button.textContent = 'Saving preview…';
+        if(form.dataset.saved==='1')return;
+        namingSaveChoice(form);
     });
 }
 namingCatalogFilter();
+
+async function namingSaveChoice(form) {
+    const button=document.querySelector('[data-match-confirm]');
+    const feedback=document.querySelector('[data-match-feedback]');
+    const orders=document.querySelector('[data-match-review-orders]');
+    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),45000);
+    form.dataset.submitting='1';button.disabled=true;button.textContent='Saving artwork…';
+    if(feedback){feedback.hidden=false;feedback.textContent='Saving your choice and checking current Drive files. This can take a moment.';}
+    try {
+        const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{Accept:'application/json'},signal:controller.signal});
+        const data=await response.json();
+        if(!response.ok)throw new Error(data.errors?Object.values(data.errors).flat().join(' '):(data.message||'Artwork could not be saved. Check the selection.'));
+        if(!['ok','warning'].includes(data.status))throw new Error('The save result could not be verified. Check Artwork Verification before trying again.');
+        form.dataset.saved='1';form.dataset.savedUrl=data.url;
+        if(feedback)feedback.textContent=data.message;
+        if(orders)orders.hidden=false;
+        button.textContent=data.status==='ok'?'Artwork saved':'Choice saved · refresh needed';
+    } catch(error) {
+        if(feedback)feedback.textContent=error.name==='AbortError'||error instanceof TypeError||error instanceof SyntaxError?'The save result is uncertain because the connection timed out or failed. Check Artwork Verification before submitting again.':error.message;
+        if(orders)orders.hidden=false;
+    } finally {
+        clearTimeout(timer);delete form.dataset.submitting;
+        if(form.dataset.saved!=='1')namingMatchSelection();
+    }
+}
 
 function namingArtworkExclusions() {
     const grid = document.querySelector('[data-artwork-excluded]'); if (!grid) return;
@@ -360,13 +394,14 @@ function namingArtworkExclusions() {
         if (option.dataset.thumbnail?.startsWith('https://')) image.src = option.dataset.thumbnail;
         image.onerror = () => { image.hidden = true; };
         const text = document.createElement('span'); text.textContent = option.textContent;
-        const reason = document.createElement('small'); reason.textContent = option.dataset.protected === '1' ? 'Protected: used by a print batch; cannot rename' : (catalog.dataset.type === 'double' && option.dataset.side === 'single') ? 'Filename says SINGLE; this variant needs FRONT and BACK' : 'Filename color: ' + (option.dataset.color || 'not named') + ' · Shopify color: ' + (catalog.dataset.color || 'not named');
+        const sideConflict=(catalog.dataset.type==='single' && option.dataset.side==='back') || (catalog.dataset.type==='double' && option.dataset.side==='single');
+        const reason = document.createElement('small'); reason.textContent = option.dataset.protected === '1' ? 'Protected: used by a print batch; cannot rename' : (catalog.dataset.type==='single' && option.dataset.side==='back') ? 'Filename says BACK; this product needs single-sided production artwork. Choose the front file, or verify and correct the filename in Drive, then sync the catalog.' : sideConflict ? 'Filename says SINGLE; this variant needs FRONT and BACK' : 'Filename color: ' + (option.dataset.color || 'not named') + ' · Shopify color: ' + (catalog.dataset.color || 'not named');
         text.append(reason); link.append(image, text);
         const actions = document.createElement('span'); actions.className = 'artwork-excluded-actions';
         const original = document.createElement('a'); original.textContent = 'Open image ↗'; original.target = '_blank'; original.rel = 'noopener noreferrer';
         if (option.dataset.url?.startsWith('https://drive.google.com/')) original.href = option.dataset.url;
         actions.append(original);
-        if (option.dataset.protected !== '1' && !(catalog.dataset.type === 'double' && option.dataset.side === 'single') && catalog.dataset.color && option.dataset.color && option.dataset.color !== catalog.dataset.color) {
+        if (option.dataset.protected !== '1' && !sideConflict && catalog.dataset.color && option.dataset.color && option.dataset.color !== catalog.dataset.color) {
             const use = document.createElement('button'); use.type = 'button'; use.className = 'chip'; use.textContent = 'Use & correct color'; use.dataset.artworkFile = option.value; use.setAttribute('aria-pressed', String(sourceChoice.value === option.value));
             use.addEventListener('click', () => namingChooseArtwork(option, true)); actions.append(use);
         }

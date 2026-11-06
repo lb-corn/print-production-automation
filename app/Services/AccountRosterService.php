@@ -21,7 +21,7 @@ class AccountRosterService
         }
         try {
             DB::transaction(function () use ($adminEmail, $adminPassword, $operatorEmail, $operatorPassword) {
-                foreach ([[$adminEmail, $adminPassword, 'Admin', 'admin'], [$operatorEmail, $operatorPassword, 'Mike', 'operator']] as [$email, $password, $name, $role]) {
+                foreach ([[$adminEmail, $adminPassword, 'Admin', 'admin'], [$operatorEmail, $operatorPassword, 'Mike', 'manager']] as [$email, $password, $name, $role]) {
                     $user = User::firstOrNew(['email'=>$email]);
                     $user->forceFill(['name'=>$name, 'password'=>$password, 'role'=>$role, 'is_active'=>true, 'remember_token'=>Str::random(60)])->save();
                 }
