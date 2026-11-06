@@ -19,7 +19,7 @@
 @if(auth()->user()->allows('apparel.overview.view'))
 <details name="{{$navAccordion ?? 'workspace'}}" class="production-nav-group" data-nav-group="apparel" data-nav-user="{{auth()->id()}}" @if(!request()->routeIs('admin.*') && (request()->routeIs('apparel.*') || request('area')==='apparel' || !auth()->user()->allows('bags.overview.view'))) open @endif>
 <summary><span class="nav-section-icon">@include('partials.nav-icon',['name'=>'apparel-production'])</span><span class="nav-section-label">Apparel Production</span><span class="nav-section-chevron">@include('partials.nav-icon',['name'=>'chevron'])</span></summary>
-<div class="production-nav-children"><a href="{{route('dashboard',['area'=>'apparel'])}}" class="{{request('area')==='apparel'?'active':''}}">@include('partials.nav-icon',['name'=>'overview'])<span>Apparel overview</span></a>
+<div class="production-nav-children">
 @if(auth()->user()->allows('apparel.orders.view'))
 <a href="{{route('apparel.orders.index')}}" class="{{request()->routeIs('apparel.*')?'active':''}}">@include('partials.nav-icon',['name'=>'apparel-production'])<span>Apparel orders</span></a>
 @endif

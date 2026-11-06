@@ -24,6 +24,7 @@
 <x-layouts.app heading="Apparel Orders" subheading="Jersey and hoodie production, tracking and remarks">
 <link rel="stylesheet" href="{{asset('css/apparel.css')}}?v={{filemtime(public_path('css/apparel.css'))}}">
 <div class="apparel-workspace">
+<div class="apparel-report-content">
 <section class="panel apparel-sync-toolbar"><div><strong>Shopify sync <span class="sync-health {{$syncHealth['class']}}">{{$syncHealth['label']}}</span></strong><p>{{$syncHealth['message']}}</p><small>Last successful sync: {{$lastSyncLabel}} @if($lastSyncRelative) &middot; {{$lastSyncRelative}} @endif</small></div>
 @if(auth()->user()->allows('apparel.sync.edit'))
 <form method="post" action="{{route('apparel.orders.sync')}}" data-sync-form>@csrf<button class="button button-primary" type="submit" data-default-label="Sync Orders" data-loading-label="Syncing..."><span class="button-spinner" aria-hidden="true"></span><span class="button-label">Sync Orders</span></button></form>
@@ -49,7 +50,9 @@
         </section>
 
         <section class="panel filter-card">
+            <div class="apparel-filter-heading"><h2>Filter orders</h2><span>Find orders by number, product or tracking</span></div>
             <form method="GET" action="{{ route('apparel.orders.index') }}" class="filters" data-filter-form>
+                <div class="apparel-filter-fields">
                 <label class="filter-search">
                     <span>Search</span>
                     <input type="search" name="search" value="{{ $filters['search'] ?? '' }}">
@@ -114,6 +117,7 @@
                     </select>
                 </label>
 
+                </div>
                 <div class="filter-actions">
                     <button type="submit" class="button button-primary" data-default-label="Apply" data-loading-label="Loading...">
                         <span class="button-spinner" aria-hidden="true"></span>
@@ -125,6 +129,7 @@
         </section>
 
         <section class="panel table-panel" data-table-panel>
+            <div class="apparel-report-heading"><div><h2>Apparel orders</h2><p>{{number_format($orders->total())}} matching order {{$orders->total()===1?'line':'lines'}}</p></div><span>{{str_replace('_',' ',($filters['fulfillment_status'] ?? 'UNFULFILLED')==='all'?'All statuses':$filters['fulfillment_status'])}}</span></div>
             <div class="table-wrap">
                 <table class="orders-table">
                     <thead>
@@ -219,10 +224,14 @@
                                         @csrf
                                         @method('PATCH')
                                         <input type="hidden" name="return_to" value="{{ $currentUri }}">
+                                        @if(!$locked)
                                         <div class="production-tracking-row">
                                             <input type="text" name="tracking_number" value="{{ $order->tracking_number }}" maxlength="255" placeholder="Enter tracking number" required @disabled($locked) aria-label="Tracking for {{$order->shopify_order_number}}">
                                             <button type="submit" class="button button-small button-save tracking-save-button" @disabled($locked)>Save</button>
                                         </div>
+                                        @else
+                                        <div class="apparel-tracking-readonly"><span>Tracking</span><strong>{{$order->tracking_number ?: 'Not added'}}</strong></div>
+                                        @endif
                                         @if ($order->shopify_fulfillment_status === ShopifyFulfillmentStatus::Fulfilled->value)
                                             <div class="tracking-helper tracking-helper-fulfilled">Fulfilled in Shopify</div>
                                         @elseif ($order->shopify_cancelled_at)
@@ -327,6 +336,7 @@
         </section>
 
 
+</div>
     @include('apparel.orders.partials.order-modal')
 
 <script src="{{asset('js/apparel-orders.js')}}?v={{filemtime(public_path('js/apparel-orders.js'))}}" defer></script>

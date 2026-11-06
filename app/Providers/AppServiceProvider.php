@@ -47,6 +47,7 @@ class AppServiceProvider extends ServiceProvider {
     });
   });
   \Illuminate\Support\Facades\View::composer('partials.workspace-status',function($view){
+   if(request()->routeIs('apparel.*') || request('area')==='apparel')return;
    if(!auth()->user()?->allows('bags.overview.view') || !auth()->user()?->allows('bags.batches.view'))return;
    $view->with('workspaceStats',app(\App\Services\ProductionService::class)->workspaceStats());
   });

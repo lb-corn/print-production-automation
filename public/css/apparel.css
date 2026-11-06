@@ -1642,3 +1642,388 @@ body.apparel-modal-open{overflow:hidden}
 .apparel-workspace .table-panel,.apparel-workspace .table-wrap{min-width:0;max-width:100%}
 .apparel-workspace .table-wrap{overflow-x:auto}
 @media(max-width:600px){.apparel-workspace .filters{grid-template-columns:repeat(2,minmax(0,1fr))}.apparel-workspace .filters .filter-search,.apparel-workspace .filters .filter-actions{grid-column:1/-1}}
+
+@container apparel-report (max-width:800px){.apparel-workspace .app-shell{
+        padding: 12px;
+    }
+.apparel-workspace .pagination{
+        align-items: stretch;
+        flex-direction: column;
+    }
+.apparel-workspace .topbar{
+        gap: 14px;
+        margin-bottom: 14px;
+        padding: 12px;
+        border-radius: 12px;
+    }
+.apparel-workspace .header-main{
+        gap: 12px;
+    }
+.apparel-workspace .header-title{
+        padding: 14px;
+    }
+.apparel-workspace .topbar h1{
+        font-size: 26px;
+    }
+.apparel-workspace .header-insights{
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+.apparel-workspace .header-insight{
+        min-height: auto;
+        padding: 12px;
+    }
+.apparel-workspace .top-actions,.apparel-workspace .pagination-controls{
+        width: 100%;
+    }
+.apparel-workspace .top-actions .button,.apparel-workspace .top-actions form,.apparel-workspace .pagination-controls .pagination-button{
+        flex: 1;
+    }
+.apparel-workspace .top-actions{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+.apparel-workspace .top-actions .button,.apparel-workspace .filter-actions .button{
+        min-height: 44px;
+    }
+.apparel-workspace .summary-grid{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+.apparel-workspace .summary-card{
+        min-height: 84px;
+        padding: 12px;
+    }
+.apparel-workspace .filters{
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px;
+    }
+.apparel-workspace .filter-search,.apparel-workspace .filter-actions{
+        grid-column: auto;
+    }
+.apparel-workspace .filter-actions{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+.apparel-workspace .filter-actions .button,.apparel-workspace .filter-actions a{
+        width: 100%;
+    }
+.apparel-workspace .table-panel{
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+.apparel-workspace .table-wrap{
+        overflow: visible;
+    }
+.apparel-workspace .orders-table{
+        table-layout: auto;
+    }
+.apparel-workspace thead{
+        display: none;
+    }
+.apparel-workspace .orders-table,.apparel-workspace .orders-table tbody,.apparel-workspace .orders-table tr,.apparel-workspace .orders-table td{
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+.apparel-workspace .orders-table,.apparel-workspace .orders-table tbody,.apparel-workspace .orders-table tr,.apparel-workspace .orders-table td{
+        display: block;
+    }
+.apparel-workspace .orders-table tbody{
+        display: grid;
+        gap: 12px;
+    }
+.apparel-workspace .orders-table th:nth-child(1),.apparel-workspace .orders-table th:nth-child(2),.apparel-workspace .orders-table th:nth-child(3),.apparel-workspace .orders-table th:nth-child(4),.apparel-workspace .orders-table td:nth-child(1),.apparel-workspace .orders-table td:nth-child(2),.apparel-workspace .orders-table td:nth-child(3),.apparel-workspace .orders-table td:nth-child(4),.apparel-workspace .orders-table th:last-child{
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        text-align: left;
+    }
+.apparel-workspace .orders-table tbody tr{
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        overflow: visible;
+    }
+.apparel-workspace .orders-table tbody tr:hover{
+        background: var(--surface);
+    }
+.apparel-workspace .orders-table tbody tr.remark-active-row,.apparel-workspace .orders-table tbody tr.remark-active-row:hover{
+        border-color: #efb5ae;
+        background: #fff7f6;
+    }
+.apparel-workspace .orders-table tbody tr.remark-processed-row,.apparel-workspace .orders-table tbody tr.remark-processed-row:hover{
+        border-color: #a8dbbb;
+        background: #f3fbf6;
+    }
+.apparel-workspace .orders-table td{
+        border-bottom: 1px solid #edf0ed;
+        padding: 14px 0;
+        vertical-align: top;
+    }
+.apparel-workspace .orders-table td:first-child{
+        padding-top: 0;
+    }
+.apparel-workspace .orders-table td:last-child{
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+.apparel-workspace .orders-table td::before{
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
+.apparel-workspace .empty-state::before{
+        display: none;
+    }
+.apparel-workspace .order-cell{
+        margin-bottom: 8px;
+    }
+.apparel-workspace .badge-stack.compact{
+        gap: 6px;
+    }
+.apparel-workspace .jersey-cell{
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+    }
+.apparel-workspace .jersey-cell img,.apparel-workspace .thumb-empty,.apparel-workspace .thumbnail-link{
+        width: 72px;
+        height: 72px;
+        flex: 0 0 72px;
+    }
+.apparel-workspace .product-content{
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+.apparel-workspace .product-title{
+        display: -webkit-box;
+        overflow: hidden;
+        line-height: 1.3;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+    }
+.apparel-workspace .storefront-link{
+        margin-top: 6px;
+    }
+.apparel-workspace .details-primary{
+        display: grid;
+        grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+        width: 100%;
+        min-width: 0;
+    }
+.apparel-workspace .details-primary::before{
+        content: attr(data-detail-label);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+.apparel-workspace .details-section .details-primary,.apparel-workspace .details-section .details-meta,.apparel-workspace .personalization-inline{
+        margin-top: 0;
+    }
+.apparel-workspace .details-meta,.apparel-workspace .personalization-inline{
+        display: flex;
+        gap: 4px 0;
+    }
+.apparel-workspace .details-meta{
+        font-size: 13px;
+    }
+.apparel-workspace .personalization-row{
+        font-size: 13px;
+    }
+.apparel-workspace .personalization-row span{
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+.apparel-workspace .details-primary,.apparel-workspace .details-meta > span,.apparel-workspace .personalization-row,.apparel-workspace .personalization-row strong{
+        overflow-wrap: break-word;
+        word-break: normal;
+        white-space: normal;
+        hyphens: none;
+    }
+.apparel-workspace .tracking-form,.apparel-workspace .production-stack,.apparel-workspace .production-tracking-row,.apparel-workspace .production-secondary-actions{
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+.apparel-workspace .tracking-form input{
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+    }
+.apparel-workspace .production-tracking-row{
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+.apparel-workspace .production-stack{
+        gap: 9px;
+    }
+.apparel-workspace .production-secondary-actions{
+        display: flex;
+        gap: 8px;
+    }
+.apparel-workspace .tracking-save-button,.apparel-workspace .production-secondary-actions .view-order{
+        width: 100%;
+        min-height: 44px;
+    }
+.apparel-workspace .order-modal-overlay{
+        padding: 8px;
+    }
+.apparel-workspace .order-modal{
+        width: calc(100vw - 16px);
+        max-width: none;
+        height: calc(100vh - 16px);
+        max-height: none;
+        border-radius: 12px;
+    }
+.apparel-workspace .order-modal-body{
+        overflow-x: hidden;
+        padding: 12px;
+    }
+.apparel-workspace .order-modal-grid,.apparel-workspace .order-modal-main{
+        grid-template-columns: 1fr;
+    }
+.apparel-workspace .order-modal-aside{
+        position: static;
+        order: -1;
+    }
+.apparel-workspace .order-modal-definition-grid{
+        grid-template-columns: 1fr;
+    }
+.apparel-workspace .order-modal-image-link,.apparel-workspace .order-modal-jersey-image,.apparel-workspace .order-modal-image-empty{
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        max-height: 240px;
+        aspect-ratio: 1 / 1;
+    }}
+
+/* Organized report layout, sized to the workspace on desktop and mobile. */
+.apparel-report-content{container-name:apparel-report;container-type:inline-size;min-width:0}
+.apparel-workspace .apparel-sync-toolbar{padding:14px 18px;gap:18px;margin-bottom:14px}
+.apparel-sync-toolbar p{margin:5px 0;font-size:12px}
+.apparel-workspace .summary-grid{gap:10px;margin-bottom:16px}
+.apparel-workspace .summary-card{padding:16px 18px;background:#fff;box-shadow:none;border:1px solid var(--line);border-top:3px solid #d8e7ed;border-radius:12px}
+.apparel-workspace .summary-card:nth-child(1){border-top-color:#e9ba52}
+.apparel-workspace .summary-card:nth-child(2){border-top-color:#eea56d}
+.apparel-workspace .summary-card:nth-child(3){border-top-color:#41a997}
+.apparel-workspace .summary-card:nth-child(4){border-top-color:#8ca7ce}
+.apparel-workspace .summary-card strong{font-size:28px;margin-top:9px}
+.apparel-workspace .filter-card{padding:18px;margin-bottom:16px}
+.apparel-filter-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+.apparel-filter-heading h2,.apparel-report-heading h2{font-size:14px;margin:0;font-weight:700;color:var(--ink)}
+.apparel-filter-heading>span{font-size:11px;color:var(--muted)}
+.apparel-workspace .filters{display:block}
+.apparel-filter-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;align-items:end}
+.apparel-workspace .apparel-filter-fields>label{display:block;margin:0;min-width:0}
+.apparel-workspace .apparel-filter-fields>.filter-search{grid-column:span 2}
+.apparel-workspace .apparel-filter-fields input,.apparel-workspace .apparel-filter-fields select{width:100%;min-width:0;min-height:40px;font-size:12px;border-color:#d7e3e8}
+.apparel-workspace .apparel-filter-fields label>span{font-size:11px;font-weight:600;margin-bottom:6px;line-height:1.4}
+.apparel-workspace .filters .filter-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px;padding-top:12px;border-top:1px solid #edf2f4}
+.apparel-workspace .filter-actions .button{min-height:36px;padding:8px 16px;font-size:12px}
+.apparel-workspace .table-panel{padding:0;overflow:hidden;border-radius:14px}
+.apparel-report-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 18px;border-bottom:1px solid #e2ebef}
+.apparel-report-heading p{font-size:11px;color:var(--muted);margin:5px 0 0}
+.apparel-report-heading>span{font-size:10px;font-weight:600;color:#547282;background:#f0f6f8;border:1px solid #e1eaee;border-radius:6px;padding:5px 8px;white-space:nowrap}
+.apparel-workspace .orders-table{margin:0;width:100%;table-layout:fixed;border-collapse:collapse}
+.apparel-workspace .orders-table th{padding:12px 16px;font-size:10px;letter-spacing:.4px}
+.apparel-workspace .orders-table td{padding:17px 16px;vertical-align:top;border-bottom:1px solid #e3ebef}
+.apparel-workspace .orders-table th:nth-child(1),.apparel-workspace .orders-table td:nth-child(1){width:13%}
+.apparel-workspace .orders-table th:nth-child(2),.apparel-workspace .orders-table td:nth-child(2){width:28%}
+.apparel-workspace .orders-table th:nth-child(3),.apparel-workspace .orders-table td:nth-child(3){width:25%}
+.apparel-workspace .orders-table th:nth-child(4),.apparel-workspace .orders-table td:nth-child(4){width:34%}
+.apparel-workspace .jersey-cell{align-items:flex-start;gap:10px}
+.apparel-workspace .product-title{line-height:1.5;overflow-wrap:anywhere}
+.apparel-workspace .details-primary{line-height:1.5;margin-bottom:6px}
+.apparel-workspace .personalization-inline{display:grid;gap:4px;margin-top:8px;white-space:normal}
+.apparel-workspace .personalization-row{display:flex;flex-wrap:wrap;gap:4px;line-height:1.5}
+.apparel-workspace .personalization-row::after,.apparel-workspace .personalization-row::before{content:none}
+.apparel-workspace .production-stack{gap:10px}
+.apparel-workspace .production-tracking-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.apparel-workspace .production-tracking-row input{min-width:0;min-height:36px;font-size:12px}
+.apparel-workspace .tracking-save-button{min-height:36px;padding:7px 12px;width:auto}
+.apparel-workspace .tracking-helper{line-height:1.5;margin-top:6px}
+.apparel-tracking-readonly{display:grid;gap:5px;padding:9px 11px;border:1px solid #e0e9ed;background:#f7fafb;border-radius:8px}
+.apparel-tracking-readonly>span{font-size:10px;color:var(--muted);font-weight:600}
+.apparel-tracking-readonly>strong{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.apparel-workspace .production-secondary-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px}
+.apparel-workspace .remark-popover{position:relative;min-width:0;max-width:100%}
+.apparel-workspace .remark-tooltip{position:static;width:100%;min-width:0;max-width:100%;margin-top:8px;padding:10px;background:#f6fafb;box-shadow:none;transform:none}
+.apparel-workspace .remark-tooltip::before,.apparel-workspace .remark-tooltip::after{display:none}
+.apparel-workspace .remark-form textarea{width:100%;max-width:100%;min-height:82px;font:inherit;font-size:12px;line-height:1.5}
+.apparel-workspace .remark-inline-summary{padding:9px 10px;line-height:1.5}
+.apparel-workspace .remark-inline-text{white-space:normal;overflow-wrap:anywhere}
+.apparel-workspace .remark-checkbox-row{display:flex;align-items:center;gap:6px;line-height:1.5}
+.apparel-workspace .remark-checkbox-row>span{margin:0;font-size:11px}
+.apparel-workspace .remark-checkbox-row input{width:14px;height:14px;min-height:0;margin:0;flex:none}
+.apparel-workspace .pagination{padding:13px 18px;border-top:0;margin:0}
+@container apparel-report (max-width:800px){
+.apparel-workspace .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.apparel-filter-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.apparel-workspace .orders-table{display:block;table-layout:auto}
+.apparel-workspace .orders-table tbody{display:grid;gap:12px;padding:12px}
+.apparel-workspace .orders-table thead{display:none}
+.apparel-workspace .orders-table tr.order-card{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;margin:0;padding:16px;border:1px solid #dce7ec;border-radius:12px;background:#fff;box-shadow:none}
+.apparel-workspace .orders-table tr.order-card td{display:block;width:auto!important;padding:0;border:0;min-width:0}
+.apparel-workspace .orders-table .order-section{grid-column:1;grid-row:1}
+.apparel-workspace .orders-table .jersey-section{grid-column:2;grid-row:1}
+.apparel-workspace .orders-table .details-section{grid-column:1/-1;grid-row:2;padding-top:12px;border-top:1px solid #e7eef1}
+.apparel-workspace .orders-table .production-section{grid-column:1/-1;grid-row:3;padding-top:12px;border-top:1px solid #e7eef1}
+.apparel-workspace .orders-table td::before{display:none}
+.apparel-workspace .orders-table .thumbnail-link,.apparel-workspace .orders-table .thumb-empty{width:54px;height:54px;flex-basis:54px}
+.apparel-workspace .personalization-inline{display:flex;flex-wrap:wrap;gap:6px 14px}
+.apparel-workspace .production-secondary-actions .button,.apparel-workspace .remark-tag{min-height:36px}
+.apparel-filter-heading{align-items:flex-start;flex-direction:column;gap:5px}
+}
+@media(max-width:500px){
+.apparel-workspace .filter-card{padding:14px}
+.apparel-workspace .apparel-sync-toolbar{padding:14px;align-items:stretch;gap:12px}
+.apparel-workspace .apparel-sync-toolbar form,.apparel-workspace .apparel-sync-toolbar button{width:100%}
+.apparel-workspace .summary-card{padding:13px}
+.apparel-workspace .summary-label{font-size:11px}
+.apparel-workspace .filters .filter-actions>.button{flex:1;justify-content:center}
+.apparel-report-heading{padding:14px}
+.apparel-report-heading>span{font-size:9px}
+.apparel-workspace .order-modal{width:calc(100vw - 20px);max-height:calc(100dvh - 20px);border-radius:12px}
+}
+
+.apparel-workspace .personalization-inline .personalization-row::before,.apparel-workspace .personalization-inline .personalization-row::after{content:none!important}
+@media(max-width:600px){
+.apparel-workspace .production-tracking-row input,.apparel-workspace .tracking-save-button{min-height:42px}
+.apparel-workspace .production-secondary-actions .button,.apparel-workspace .remark-tag,.apparel-workspace .remark-checkbox-row{min-height:40px}
+}
+
+/* Give product names their own row on phones instead of squeezing beside order badges. */
+@container apparel-report (max-width:500px){
+.apparel-workspace .orders-table tr.order-card{grid-template-columns:minmax(0,1fr);gap:12px}
+.apparel-workspace .orders-table tr.order-card .order-section{grid-column:1;grid-row:1;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.apparel-workspace .orders-table .order-section .badge-stack{align-items:flex-end;margin:0;flex:none}
+.apparel-workspace .orders-table .jersey-section{grid-column:1;grid-row:2}
+.apparel-workspace .orders-table .details-section{grid-column:1;grid-row:3}
+.apparel-workspace .orders-table .production-section{grid-column:1;grid-row:4}
+.apparel-workspace .orders-table .product-content{min-width:0;flex:1}
+.apparel-workspace .orders-table .product-title{display:block;-webkit-line-clamp:unset;line-clamp:unset;white-space:normal;overflow:visible;max-height:none;line-height:1.5;overflow-wrap:anywhere}
+}
+
+@media(max-width:700px){
+.apparel-workspace .order-modal-aside:has(.order-modal-image-empty){display:none}
+.apparel-workspace .order-modal-jersey-image{height:auto;max-height:190px;object-fit:contain}
+.apparel-workspace .order-modal-body{padding:12px}
+}

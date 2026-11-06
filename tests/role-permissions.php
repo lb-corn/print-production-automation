@@ -67,4 +67,9 @@ $response=app(Illuminate\Contracts\Debug\ExceptionHandler::class)->render($jsonR
 check($response->getStatusCode()===403 && str_contains($response->getContent(),'Your role does not allow this feature.'),'Denied JSON requests return actionable HTTP 403');
 check(Illuminate\Support\Facades\DB::table('access_audits')->where('action','role.created')->exists(),'Role creation is audited');
 check(!str_contains(json_encode(Illuminate\Support\Facades\DB::table('access_audits')->get()),'password'),'Access audit does not store passwords');
+foreach([[$bag,true,false],[$apparel,false,true],[$manager,true,true],[$demo,true,false]] as [$account,$bagsTab,$apparelTab]) {
+    Illuminate\Support\Facades\Auth::setUser($account);
+    $tabs=view('partials.overview-tabs')->render();
+    check(str_contains($tabs,'id="overview-tab-bags"')===$bagsTab && str_contains($tabs,'id="overview-tab-apparel"')===$apparelTab,'Overview tabs match assigned area access: '.$account->role);
+}
 echo "SUCCESS $checks checks; in-memory database only\n";

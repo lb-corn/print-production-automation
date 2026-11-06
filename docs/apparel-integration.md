@@ -23,3 +23,9 @@ This branch has not been merged into main or deployed. After approval, deploymen
 Source behavior intentionally adapted: the existing shared login replaces the source's separate accounts; source fixed role names become granular permissions; routes are namespaced under /apparel; the detail report retains its behavior inside the application theme; users with both edit and process permissions can do both, rather than hiding processing behind the source's mutually exclusive role condition. No source customer records or credentials were copied.
 
 The source sync-health comparison was corrected to report failures even when failure and last success occur within the same second; a successful sync still clears the prior error. The report filter layout is responsive to the available app workspace rather than assuming a standalone full-width page.
+
+## Responsive UI review
+
+The duplicate Apparel overview sidebar link was removed; Overview tabs remain permission-based. The order report now has a structured filter grid, explicit results heading, aligned tracking/actions, read-only tracking for locked records, and full product names in phone cards. Bag-only factory and production-status widgets are hidden on apparel screens. Browser checks at desktop width, 390 px and 320 px verified no horizontal page overflow; the mobile details dialog was checked as well. The standard browser viewport was restored afterward. The role suite explicitly tests tab visibility for Manager, Bag Production, Apparel Production and Demo.
+
+Deployment follow-up: shared theme packaging and database-independent view fixtures were published separately to main (00d8929 includes both fixes). Apparel UI changes remain on this integration branch and are not deployed to production by that main update.
