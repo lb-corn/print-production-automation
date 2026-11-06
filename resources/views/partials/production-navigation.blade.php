@@ -26,15 +26,3 @@
 </div>
 </details>
 @endif
-@php($settingsSection=collect(['artwork','sync','filenames','roles','users','agent','reset'])->first(fn($section)=>auth()->user()->allows(\App\Services\RouteAccess::section($section))))
-@if($settingsSection || auth()->user()->allows('admin.roles.edit'))
-<details name="{{$navAccordion ?? 'workspace'}}" class="production-nav-group admin-nav-group" data-nav-group="admin" data-nav-user="{{auth()->id()}}" @if(request()->routeIs('admin.*')) open @endif>
-<summary><span class="nav-section-icon">@include('partials.nav-icon',['name'=>'admin'])</span><span class="nav-section-label">Admin</span><span class="nav-section-chevron">@include('partials.nav-icon',['name'=>'chevron'])</span></summary>
-<div class="production-nav-children">
-@if($settingsSection)
-<a href="{{auth()->user()->role==='admin' ? route('admin.settings') : route('admin.settings',['section'=>$settingsSection])}}" class="{{request()->routeIs('admin.*')?'active':''}}">@include('partials.nav-icon',['name'=>'settings'])<span>Admin Settings</span></a>
-@endif
-
-</div>
-</details>
-@endif

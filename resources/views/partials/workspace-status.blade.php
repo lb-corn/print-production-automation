@@ -1,9 +1,17 @@
-@if(!request()->routeIs('apparel.*') && request('area')!=='apparel' && auth()->user()?->allows('bags.overview.view') && auth()->user()?->allows('bags.batches.view'))
-<div class="workspace-stat-tiles" data-workspace-stats data-status-url="{{route('workspace.status')}}">
-    @if(auth()->user()->allows('bags.queue.view'))<a href="{{route('queue')}}" class="workspace-stat-ready"><strong data-workspace-count="ready">{{$workspaceStats['ready']}}</strong><span>Ready</span></a>@endif
-    <a href="{{route('batches',['stage'=>'active'])}}" class="workspace-stat-print"><strong data-workspace-count="in_print">{{$workspaceStats['in_print']}}</strong><span>In print</span></a>
-    <a href="{{route('batches',['stage'=>'completed'])}}" class="workspace-stat-done"><strong data-workspace-count="completed">{{$workspaceStats['completed']}}</strong><span>Completed</span></a>
+@if(!empty($productionSummary['areas']))
+<section class="production-snapshot" aria-label="Authorized production summary" data-workspace-stats data-status-url="{{route('workspace.status')}}">
+<div class="production-snapshot-heading"><strong>Production summary</strong><span data-workspace-live>Live</span></div>
+@foreach($productionSummary['areas'] as $area=>$values)
+<div class="production-snapshot-row" data-summary-area="{{$area}}">
+<a class="production-snapshot-area" href="{{route('dashboard',['area'=>$area])}}">{{$area==='bags'?'Bags':'Apparel'}}</a>
+@foreach($values as $key=>$value)
+@php($label=($key==='ready'?'Ready':($key==='waiting'?'Waiting':($key==='active'?($area==='bags'?'Print':'Partial'):'Done'))))
+<span class="production-snapshot-metric" title="{{$area==='bags'?'Bag order lines':'Non-cancelled apparel order lines'}}: {{$label}}"><b data-summary-count="{{$area}}.{{$key}}">{{$value===null?'—':number_format($value)}}</b><small>{{$label}}</small></span>
+@endforeach
 </div>
-<a class="workspace-guide-link" href="{{route('docs')}}">Quick guide →</a>
-
+@endforeach
+<a class="production-snapshot-guide" href="{{route('docs')}}">Quick guide &rarr;</a>
+</section>
+@else
+<a class="production-summary-guide" href="{{route('docs')}}">Quick guide &rarr;</a>
 @endif

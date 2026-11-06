@@ -194,6 +194,13 @@ signedPrintForm?.addEventListener('submit', event => {
 signedPrintForm?.elements.confirmation_phrase.addEventListener('input', event => event.target.setCustomValidity(''));
 
 function updateWorkspaceStats(stats) {
+    const areaStats = stats.areas || (Number.isInteger(stats.ready) ? {bags:{ready:stats.ready,active:stats.in_print,done:stats.completed}} : {});
+    for (const [area, values] of Object.entries(areaStats)) {
+        for (const [key, value] of Object.entries(values)) {
+            if (value !== null && (!Number.isInteger(value) || value < 0)) continue;
+            document.querySelectorAll(`[data-summary-count="${area}.${key}"]`).forEach(element => element.textContent = value === null ? '\u2014' : value.toLocaleString());
+        }
+    }
     for (const [key, value] of Object.entries(stats)) {
         if (!Number.isInteger(value) || value < 0) continue;
         document.querySelectorAll(`[data-workspace-count="${key}"]`).forEach(element => element.textContent = value);

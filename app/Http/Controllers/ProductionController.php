@@ -204,7 +204,7 @@ class ProductionController extends Controller
 
     public function workspaceStatus()
     {
-        return response()->json($this->svc->workspaceStats(true))->header('Cache-Control','no-store');
+        return response()->json(app(\App\Services\ProductionSummaryService::class)->forUser(auth()->user(),true))->header('Cache-Control','no-store');
     }
 
     public function batches()

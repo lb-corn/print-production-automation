@@ -7,7 +7,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 
 class AppServiceProvider extends ServiceProvider {
- public function register():void {$this->app->scoped(\App\Services\MaterialCatalog::class);$this->app->scoped(\App\Services\ProductionService::class);$this->app->scoped(\App\Services\FactoryDispatchService::class);}
+ public function register():void {$this->app->scoped(\App\Services\ProductionSummaryService::class);$this->app->scoped(\App\Services\MaterialCatalog::class);$this->app->scoped(\App\Services\ProductionService::class);$this->app->scoped(\App\Services\FactoryDispatchService::class);}
  public function boot():void {
   $this->loadViewsFrom(base_path('packages/ui-theme/resources/views'),'lucky-theme');
   RateLimiter::for('admin-reset',fn(Request $request)=>Limit::perMinute(3)->by('admin-reset:'.($request->user()?->id??$request->ip()))->response(function(Request $request,array $headers){$message='Please wait '.max(1,(int)($headers['Retry-After']??60)).' seconds before another reset attempt. No reset was performed.';return $request->expectsJson()?response()->json(['message'=>$message],429,$headers):redirect()->route('admin.settings',['section'=>'reset'])->with('error',$message)->withHeaders($headers);}));
@@ -47,9 +47,7 @@ class AppServiceProvider extends ServiceProvider {
     });
   });
   \Illuminate\Support\Facades\View::composer('partials.workspace-status',function($view){
-   if(request()->routeIs('apparel.*') || request('area')==='apparel')return;
-   if(!auth()->user()?->allows('bags.overview.view') || !auth()->user()?->allows('bags.batches.view'))return;
-   $view->with('workspaceStats',app(\App\Services\ProductionService::class)->workspaceStats());
+   $view->with('productionSummary',auth()->user() ? app(\App\Services\ProductionSummaryService::class)->forUser(auth()->user()) : ['areas'=>[]]);
   });
  }
 }

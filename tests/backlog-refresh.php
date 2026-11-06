@@ -2,6 +2,7 @@
 // Fake sync and empty view fixtures only: no database, Shopify, Drive or print requests.
 require __DIR__.'/../vendor/autoload.php';
 $app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();require __DIR__.'/material-fixture.php';
+require __DIR__.'/summary-fixture.php';
 set_exception_handler(function(Throwable $e):void{fwrite(STDERR,'FAIL: '.$e->getMessage().PHP_EOL);exit(1);});
 config(['session.driver'=>'array','logging.default'=>'backlog_test','logging.channels.backlog_test'=>['driver'=>'monolog','handler'=>Monolog\Handler\NullHandler::class]]);
 $check=function($ok,$message){if(!$ok)throw new RuntimeException($message);echo 'PASS: '.$message.PHP_EOL;};

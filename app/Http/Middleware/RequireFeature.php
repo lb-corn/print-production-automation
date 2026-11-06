@@ -7,6 +7,10 @@ class RequireFeature {
     public function handle(Request $request, Closure $next) {
         $name=$request->route()?->getName() ?? '';
         if(in_array($name,['logout','profile','docs'],true)) return $next($request);
+        if($name==='workspace.status') {
+            abort_unless($request->user()->allows('bags.overview.view') || $request->user()->allows('apparel.overview.view'),403,'Your role does not allow production summaries.');
+            return $next($request);
+        }
         if($name==='dashboard') {
             if(!$request->user()->allows('bags.overview.view') && !$request->user()->allows('apparel.overview.view') && !$request->has('area')) return response()->view('dashboard.access');
             $area=$request->query('area',$request->user()->allows('bags.overview.view')?'bags':'apparel');

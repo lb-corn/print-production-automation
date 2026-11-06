@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/../vendor/autoload.php';$app=require __DIR__.'/../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+require __DIR__.'/summary-fixture.php';
 set_exception_handler(function(Throwable $e){fwrite(STDERR,'FAIL: '.$e.PHP_EOL);exit(1);});
 use Illuminate\Support\Facades\Http;use App\Services\MaterialCatalog;
 $check=function($ok,$message){if(!$ok)throw new RuntimeException($message);echo 'PASS: '.$message.PHP_EOL;};
