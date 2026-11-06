@@ -22,11 +22,11 @@ foreach([['production','production'],[null,'dashboard'],['https://example.invali
 }
 $app->instance('request',Illuminate\Http\Request::create('/production'));
 view()->share('errors',new Illuminate\Support\ViewErrorBag());
-$user=new App\Models\User(['name'=>'Test operator','email'=>'operator@example.test','role'=>'manager']);auth()->setUser($user);
+$user=new App\Models\User(['name'=>'Test operator','email'=>'operator@example.test','role'=>'manager']);$user->setRelation('accessRole',new App\Models\Role(['name'=>'Manager','permissions'=>App\Services\AccessCatalog::defaults()['manager'][1]]));auth()->setUser($user);
 $data=['errors'=>new Illuminate\Support\ViewErrorBag(),'items'=>collect(),'reviewSummary'=>array_fill_keys(['approved','rejected','pending','in_print','completed','failed'],0)];
 $html=view('production.verification',$data)->render();
 $check(str_contains($html,'data-backlog-form') && str_contains($html,'name="return_to" value="production"') && str_contains($html,'data-rematch-form'),'Operators can refresh backlog and rematch from Artwork Verification');
 if(in_array('--preview',$argv,true))file_put_contents(__DIR__.'/../tmp/backlog-preview.html',$html);
-$user->role='demo';$demo=view('production.verification',$data)->render();
+$user->role='demo';$user->setRelation('accessRole',new App\Models\Role(['name'=>'Demo','permissions'=>App\Services\AccessCatalog::defaults()['demo'][1]]));$demo=view('production.verification',$data)->render();
 $check(!str_contains($demo,'data-backlog-form') && !str_contains($demo,'data-rematch-form'),'Read-only demo users are not offered either refresh action');
 echo "Backlog refresh checks passed.\n";
