@@ -28,7 +28,7 @@ filters.forEach(button => {
         if (empty) empty.hidden = visible > 0 || cards.length === 0;
     });
 });
-const selectedInputs = () => [...document.querySelectorAll('.review-select')];
+const selectedInputs = () => [...document.querySelectorAll('.review-select')].filter(input => !input.disabled);
 const visibleInputs = () => selectedInputs().filter(input => !input.closest('.job-card').hidden);
 const selectVisible = document.querySelector('[data-select-visible]');
 function updateSelection() {
@@ -86,6 +86,22 @@ function applyReviewResult(result) {
         card.dataset.workflow = item.workflow;
         card.dataset.ready = item.ready ? 'yes' : 'no';
         card.dataset.decision = item.decision || '';
+        if (item.backing_locked !== undefined) {
+            card.dataset.backingLocked = String(item.backing_locked);
+            const backing = card.querySelector('[data-backing-review]');
+            if (backing) {
+                backing.dataset.locked = String(item.backing_locked);
+                backing.querySelectorAll('select, button').forEach(control => control.disabled = item.backing_locked);
+                if (item.backing_locked) {
+                    const message = backing.querySelector('[data-backing-message]');
+                    if (message) message.textContent = 'Approved · return to review to change.';
+                    const details = backing.querySelector('details');if (details) details.open = false;
+                }
+            }
+            const actions = card.querySelector('.individual-actions');if (actions) actions.hidden = item.backing_locked;
+            const returnForm = card.querySelector('[data-review-return]');if (returnForm) returnForm.hidden = !item.backing_locked;
+        }
+
         card.classList.toggle('approved-card', item.workflow === 'approved');
         card.classList.toggle('wrong-card', item.workflow === 'rejected');
         const label = item.workflow === 'approved' ? 'Verified' : item.workflow === 'rejected' ? 'Rejected' : 'Not verified';
@@ -110,6 +126,11 @@ async function saveReview(form, submitter) {
         : [form.closest('.job-card')];
     if (!affected.length || document.querySelector('[data-review-saving]')) return;
     const data = new FormData(form);
+    if (isBulk) affected.forEach(card => {
+        const select = card.querySelector('[data-backing-color]'), context = card.querySelector('[data-backing-context]');
+        if (select && context) {data.set(`backing[${card.dataset.itemId}][color]`, select.value);data.set(`backing[${card.dataset.itemId}][context]`, context.value);}
+    });
+
     if (submitter?.name) data.set(submitter.name, submitter.value);
     affected.forEach(card => { card.dataset.reviewSaving = 'yes'; card.setAttribute('aria-busy', 'true'); reviewFeedback(card, 'Saving…'); });
     const controls = [...document.querySelectorAll('.individual-actions button, [data-bulk-action], .review-select, [data-select-visible], [data-clear-selection], [data-filter]')];
@@ -129,7 +150,7 @@ async function saveReview(form, submitter) {
         affected.forEach(card => reviewFeedback(card, error.message || 'Connection interrupted. Refresh to check the status before retrying.', true));
         // Keep selections and previous decisions available for retry.
     } finally {
-        controls.forEach((control, index) => control.disabled = disabled[index]);
+        controls.forEach((control, index) => control.disabled = disabled[index] || control.closest?.('.job-card')?.dataset.backingLocked === 'true');
         affected.forEach(card => { delete card.dataset.reviewSaving; card.removeAttribute('aria-busy'); });
         updateSelection();
     }

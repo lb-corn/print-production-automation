@@ -113,14 +113,19 @@ class ProductionController extends Controller
 
     public function verify(Request $request, ProductionItem $item)
     {
-        $decision = $request->validate([
+        $data = $request->validate([
             'decision' => 'required|in:CORRECT,WRONG',
-        ])['decision'];
+            'backing_color'=>'nullable|string|max:100',
+            'backing_context'=>'nullable|string|size:64',
+        ]);
+        $decision=$data['decision'];
+        if($decision==='CORRECT' && \App\Services\BackingColorService::required($item))app(\App\Services\MaterialCatalog::class)->rows(true);
 
         $this->svc->verify(
             $item,
             $decision,
-            $request->user()->id
+            $request->user()->id,
+            $decision==='CORRECT' && \App\Services\BackingColorService::required($item)?['color'=>$data['backing_color']??'','context'=>$data['backing_context']??'']:null
         );
 
         if ($request->expectsJson()) return $this->reviewResponse([$item->id]);
@@ -133,14 +138,29 @@ class ProductionController extends Controller
         );
     }
 
+    public function returnReadyToReview(Request $request,ProductionItem $item)
+    {
+        \Illuminate\Support\Facades\DB::transaction(function()use($item){
+            $locked=ProductionItem::lockForUpdate()->findOrFail($item->id);
+            abort_if(isset($this->svc->batchIndex(true)[$locked->line_item_id]),409,'Use the print batch return action for an item already queued.');
+            abort_unless($locked->decision?->decision==='CORRECT',409,'This item is no longer approved.');
+            \App\Models\VerificationDecision::where('line_item_id',$locked->line_item_id)->delete();
+        });
+        return redirect()->to(route('production').'#backing-review-'.$item->id)->with('ok','Returned to Artwork Review. Update the backing color and approve again.');
+    }
+
     public function bulkVerify(Request $request)
     {
         $data = $request->validate([
             'decision' => 'required|in:CORRECT,WRONG',
             'items' => 'required|array|min:1|max:500',
             'items.*' => 'required|integer|distinct|exists:production_items,id',
+            'backing'=>'sometimes|array',
+            'backing.*.color'=>'nullable|string|max:100',
+            'backing.*.context'=>'nullable|string|size:64',
         ]);
 
+        if($data['decision']==='CORRECT' && config('services.backing_colors.enabled'))app(\App\Services\MaterialCatalog::class)->rows(true);
         \Illuminate\Support\Facades\DB::transaction(function () use ($data, $request) {
             $items = ProductionItem::whereIn('id', $data['items'])->lockForUpdate()->get();
             abort_if($items->count() !== count($data['items']), 422, 'Some selected orders are no longer available. Refresh and try again.');
@@ -149,7 +169,7 @@ class ProductionController extends Controller
                     'Only stock orders with matched Drive artwork can be verified in bulk.');
             }
             foreach ($items as $item) {
-                $this->svc->verify($item, $data['decision'], $request->user()->id);
+                $this->svc->verify($item, $data['decision'], $request->user()->id,\App\Services\BackingColorService::required($item) && $data['decision']==='CORRECT'?($data['backing'][$item->id]??['color'=>'','context'=>'']):null);
             }
         });
 
@@ -168,6 +188,7 @@ class ProductionController extends Controller
                 'workflow' => $item->workflow_state,
                 'ready' => (bool) $item->ready_for_print,
                 'decision' => $item->decision?->decision,
+                'backing_locked'=>\App\Services\BackingColorService::required($item) && $item->decision?->decision==='CORRECT',
             ])->values(),
             'summary' => $data['reviewSummary'],
             'workspace' => $this->svc->workspaceStats(true),

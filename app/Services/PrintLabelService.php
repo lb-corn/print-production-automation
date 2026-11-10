@@ -15,7 +15,8 @@ class PrintLabelService {
         $back=app(MaterialCatalog::class)->row($item->series_code)['back']??'';
         if($item->design_type==='single' && $back!==''){
             $parts[]=self::token($back,40);
-            if(trim((string)$item->color)!=='')$parts[]=self::token($item->color,24);
+            $backingColor=BackingColorService::color($item);
+            if($backingColor!==null)$parts[]=self::token($backingColor,24);
         }
         return implode(' ',$parts);
     }

@@ -3,11 +3,11 @@
 <section class="production-refresh" aria-labelledby="production-refresh-heading">
 <div class="production-refresh-heading"><h2 id="production-refresh-heading">Orders &amp; artwork</h2><p>Print batches stay locked. Changed artwork needs approval again.</p></div>
 <div class="production-refresh-actions">
-@if(auth()->user()->allows('bags.overview.view'))<a class="chip" href="{{route('dashboard')}}#order-sync-status">Order sync in Overview →</a>@endif
+@if(auth()->user()->allows('bags.overview.view'))<a class="production-tool-link" href="{{route('dashboard')}}#order-sync-status"><span class="tool-icon">@include('partials.nav-icon',['name'=>'sync'])</span><span class="tool-copy"><strong>Order sync</strong><small>Update bags &amp; apparel in Overview</small></span>@include('partials.nav-icon',['name'=>'chevron'])</a>@endif
 
 @if(auth()->user()->allows('bags.artwork.edit'))<form method="post" action="{{route('production.rematch')}}" data-rematch-form>
 @csrf<input type="hidden" name="confirm_rematch" value="1">
-<div><strong>Drive artwork</strong><p>Recheck artwork for orders already in this portal.</p></div>
+<span class="tool-icon">@include('partials.nav-icon',['name'=>'artwork'])</span><div class="tool-copy"><strong>Drive artwork</strong><p>Recheck artwork matches for current orders.</p></div>
 <button type="submit" class="chip">Rematch Artwork</button>
 </form>@endif
 </div>
@@ -56,7 +56,7 @@
 @endphp
 <details data-item-id="{{$item->id}}" class="job-card {{$approved?'approved-card':($rejected?'wrong-card':($item->workflow_state === 'completed'?'completed-card':($item->production_batch?'in-print-card':'')))}}" {{ (!$approved && !$rejected && !$item->production_batch) ? 'open' : '' }} data-workflow="{{$item->workflow_state}}" data-type="{{$item->design_type}}" data-custom="{{$item->is_custom?'yes':'no'}}" data-ready="{{$item->ready_for_print?'yes':'no'}}" data-decision="{{$item->decision?->decision??''}}" data-status="{{$item->match_status}}">
 <summary class="job-title">
-@if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<input class="review-select" type="checkbox" name="items[]" value="{{$item->id}}" form="bulk-review" aria-label="Select {{$item->order_number}} {{$item->product}} {{$item->variant}}">
+@if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<input class="review-select" @disabled(\App\Services\BackingColorService::required($item) && $item->decision?->decision==='CORRECT') type="checkbox" name="items[]" value="{{$item->id}}" form="bulk-review" aria-label="Select {{$item->order_number}} {{$item->product}} {{$item->variant}}">
 @endif<div>
 <span>{{$item->order_number}}</span>
 <h2>{{$item->product}}</h2>
@@ -97,10 +97,10 @@
 <b>{{$item->color?:'—'}}</b>
 </div>
 </div>
-<div class="compare {{count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">
+<div class="compare {{!$item->production_batch && \App\Services\BackingColorService::required($item)?'compare-backing':''}} {{count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">
 <div class="art">
 <label>{{$item->is_custom?'CUSTOM ORDER PREVIEW':'SHOPIFY ORDER IMAGE'}}</label>
-@if($item->shopify_image)<img src="{{$item->shopify_image}}" alt="Shopify order artwork for {{$item->product}}" loading="lazy">
+@if($item->shopify_image)<div class="backing-source-image"><img src="{{$item->shopify_image}}" alt="Shopify order artwork for {{$item->product}}" loading="lazy"><span data-backing-crop hidden></span></div>
 @else<div class="placeholder">No Shopify image</div>
 @endif<p>{{$item->product}}</p>
 </div>
@@ -119,6 +119,7 @@
 @empty<div class="placeholder">{{$item->is_custom?'Custom artwork pending':'No Drive artwork matched'}}</div>
 @endforelse
 @endif</div>
+@if(!$item->production_batch && \App\Services\BackingColorService::required($item))<div class="backing-review-column"><label>BACKING COLOR</label>@include('partials.backing-color-review')</div>@endif
 </div>
 <div class="job-actions">
 <div class="decision" role="status" aria-live="polite">
@@ -128,18 +129,19 @@
 @elseif($item->decision && !$item->approval_current)<span class="warn">⚠ ARTWORK CHANGED — RE-VERIFY</span>
 @else NOT VERIFIED
 @endif</div>
+@if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && \App\Services\BackingColorService::required($item))<form method="post" action="{{route('production.return-review',$item)}}" data-review-return @if($item->decision?->decision!=='CORRECT') hidden @endif>@csrf<button class="chip" type="submit">Return to review</button></form>@endif
 @if(auth()->user()->allows('bags.batches.edit') && ($item->production_batch['can_return']??false))
 <form method="post" action="{{route('batch.return-item',[$item->production_batch['id'],$item->id])}}" data-return-batch data-return-scope="item" data-batch-id="{{$item->production_batch['id']}}">
 @csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button><small class="muted">This item only</small>
 </form>
-@elseif(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<div class="individual-actions">
+@elseif(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<div class="individual-actions" @if(\App\Services\BackingColorService::required($item) && $item->decision?->decision==='CORRECT') hidden @endif>
 <form method="post" action="/production/{{$item->id}}/verify">
 @csrf<input type="hidden" name="decision" value="WRONG">
-<button class="reject">✕ Reject artwork</button>
+<button class="reject" aria-label="Reject artwork"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg><span>Reject</span></button>
 </form>
-<form method="post" action="/production/{{$item->id}}/verify">
+<form id="approve-artwork-{{$item->id}}" method="post" action="/production/{{$item->id}}/verify">
 @csrf<input type="hidden" name="decision" value="CORRECT">
-<button class="approve">✓ Approve artwork</button>
+<button class="approve" aria-label="Approve artwork"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 8 3 3 7-7"/></svg><span>Approve</span></button>
 </form>
 </div>
 @elseif(!$item->production_batch && $item->is_custom)<span class="muted">Confirm the uploaded artwork above.</span>

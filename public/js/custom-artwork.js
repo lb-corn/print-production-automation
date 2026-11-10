@@ -43,7 +43,9 @@
             update('Connecting directly to Print PC…');
             await pc.setLocalDescription(await pc.createOffer());await gather(pc);
             if (signal?.aborted) throw new Error('Transfer cancelled.');
-            await request(root.dataset.createUrl, csrf, {id, ...options, file: undefined, offer: pc.localDescription.sdp});created = true;
+            const backing = root.closest('.job-card')?.querySelector('[data-backing-review]');
+            const backingFields = backing ? {backing_color:backing.querySelector('[data-backing-color]')?.value,backing_context:backing.querySelector('[data-backing-context]')?.value} : {};
+            await request(root.dataset.createUrl, csrf, {id, ...options, ...backingFields, file: undefined, offer: pc.localDescription.sdp});created = true;
             const statusUrl = `${root.dataset.statusBase}/${id}`;
             const start = Date.now();let answered = false;
             while (dc.readyState !== 'open') {
@@ -106,7 +108,7 @@
         }
         confirm?.addEventListener('click', async () => {
             if (confirm.disabled) return;confirm.disabled = true;const result = root.querySelector('[data-custom-result]');result.textContent = 'Confirming artwork…';
-            try {const uploads = Object.fromEntries(slots.map(slot => [slot.dataset.side, slot.dataset.uploadId]));const data = await request(root.dataset.confirmUrl, root.dataset.csrf, {confirm_custom: true, uploads});result.textContent = data.message;window.location.reload();}
+            try {const uploads = Object.fromEntries(slots.map(slot => [slot.dataset.side, slot.dataset.uploadId]));const data = await request(root.dataset.confirmUrl, root.dataset.csrf, {confirm_custom: true, uploads,backing_color:root.closest('.job-card')?.querySelector('[data-backing-color]')?.value,backing_context:root.closest('.job-card')?.querySelector('[data-backing-context]')?.value});result.textContent = data.message;window.location.reload();}
             catch (error) {result.textContent = error.message;updateConfirm();}
         });updateConfirm();
     });

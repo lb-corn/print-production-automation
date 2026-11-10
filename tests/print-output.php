@@ -2,7 +2,7 @@
 require __DIR__.'/print-job-consent.php';
 use App\Services\PrintLabelService;
 $sample=new App\Models\ProductionItem(['line_item_id'=>'line-9342','order_number'=>'#9342','product'=>'Lucky Bags 2027 Grey Stone','color'=>'Grey','series_code'=>'PSE','design_type'=>'single']);
-$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 LB9342 VMT GREY','Print labels show printed material, job number and backing with color');
+$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 LB9342 VMT','Print labels omit the general design color when no backing color is confirmed');
 $sample->color=null;$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 LB9342 VMT','Missing colors are omitted');
 $sample->order_number=null;$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 VMT','Missing job numbers are omitted without inventing a job ID');
 $sample->design_type='double';$sample->color='Charcoal';$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9','Double-sided artwork does not include unprinted backing details');
@@ -32,7 +32,7 @@ $syncItem=$make('sync-unapproved');$match=$syncItem->matches;$match[0]['md5Check
 $syncItem->decision()->delete();
 $metadata=$factory->syncArtwork($request,$dispatch)->getData(true);
 $found=collect($metadata['orders'])->firstWhere('line_item_id','sync-unapproved');
-$check($found && $found['artworks'][0]['print_label']==='RAVE9 LB42 VMT WHITE','Synced matched orders can request private PC labels before approval, with pinned Drive metadata only');
+$check($found && $found['artworks'][0]['print_label']==='RAVE9 LB42 VMT','Synced matched orders can request private PC labels before approval, with pinned Drive metadata only');
 $check(!str_contains(json_encode($metadata),'data:image') && !isset($metadata['images']),'Sync artwork API carries no image binaries or hosted image files');
 $syncItem->update(['is_custom'=>true]);
 $check(!collect($factory->syncArtwork($request,$dispatch)->getData(true)['orders'])->firstWhere('line_item_id','sync-unapproved'),'Custom or unresolved artwork is not automatically prepared');

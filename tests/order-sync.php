@@ -66,7 +66,7 @@ foreach(['bags','apparel'] as $area){
     $view=$area==='bags'?app(App\Http\Controllers\ProductionController::class)->dashboard():app(App\Http\Controllers\ApparelOverviewController::class)->index();
     $html=$view->render();
     check(substr_count($html,'data-order-sync-form>')===1 && strpos($html,'<section class="order-sync-card"')<strpos($html,'<section class="overview-workspace"'),'One standalone sync card appears before '.$area.' tabs');
-    check(str_contains($html,'16</b> current order lines') && str_contains($html,'27</b> order lines checked'),'Both integration counts appear above '.$area.' panel');
+    check(str_contains($html,'<b>16</b><span>Current lines') && str_contains($html,'<b>27</b><span>Lines checked'),'Both integration counts appear above '.$area.' panel');
     if(in_array('--preview',$argv,true))file_put_contents(__DIR__.'/../tmp/order-sync-'.$area.'.html',$html);
 }
 Auth::setUser($apparel);$html=view('partials.order-sync-card')->render();check(!str_contains($html,'<strong>Bags</strong>') && str_contains($html,'<strong>Apparel</strong>'),'Area-specific status preserves visibility permissions');

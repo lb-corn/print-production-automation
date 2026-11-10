@@ -56,3 +56,8 @@ Route::middleware(['auth','auth.session',\App\Http\Middleware\RequireFeature::cl
     Route::patch('/orders/{jerseyOrder}/remark/processed',[\App\Http\Controllers\JerseyOrderRemarkProcessedController::class,'update'])->name('orders.remark.processed.update');
     Route::post('/orders/sync',[\App\Http\Controllers\ShopifySyncController::class,'store'])->middleware('throttle:3,1')->name('orders.sync');
 });
+
+Route::middleware(['auth','auth.session',\App\Http\Middleware\RequireFeature::class,\App\Http\Middleware\ReadOnlyDemo::class,\App\Http\Middleware\PortalWriteLock::class])->group(function(){
+    Route::post('/production/{item}/return-review',[\App\Http\Controllers\ProductionController::class,'returnReadyToReview'])->name('production.return-review');
+    Route::get('/production/{item}/backing-suggestion',[\App\Http\Controllers\BackingColorController::class,'suggest'])->middleware('throttle:12,1')->name('backing.suggest');
+});

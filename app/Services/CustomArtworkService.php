@@ -17,12 +17,12 @@ class CustomArtworkService {
   }return null;
  }
  public static function context($item):string {
-  $value=is_array($item)?$item:(method_exists($item,'toArray')?$item->toArray():get_object_vars($item));return hash('sha256',json_encode(array_map(fn($k)=>$value[$k]??null,['line_item_id','product','variant','sku','quantity','series_code','design_type','color','shopify_image'])));
+  $value=is_array($item)?$item:(method_exists($item,'toArray')?$item->toArray():get_object_vars($item));$context=array_map(fn($k)=>$value[$k]??null,['line_item_id','product','variant','sku','quantity','series_code','design_type','color','shopify_image']);if(!empty($value['backing_selection']))$context[]=$value['backing_selection'];return hash('sha256',json_encode($context));
  }
  public static function match(array $row,?ProductionItem $previous=null):array {
   $code=self::series($row['sku']??null,$row['product']??null);$definition=app(MaterialCatalog::class)->row($code);$type=$definition['type']??null;
   $result=['series_code'=>$code,'design_type'=>$type,'color'=>null,'is_custom'=>true,'match_status'=>'CUSTOM','confidence'=>null,'matches'=>[]];
-  $context=self::context([...$row,...$result]);
+  $context=self::context([...$row,...$result,'backing_selection'=>$previous?->backing_selection]);
   if($previous && ($previous->artwork_review['context_sha256']??null)===$context)$result['matches']=$previous->matches??[];
   $result['artwork_review']=['policy'=>self::POLICY,'context_sha256'=>$context,'issues'=>$code?[]:['Custom bag SKU does not identify a bag code in the Lucky Bags material sheet.']];return $result;
  }

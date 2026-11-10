@@ -72,6 +72,7 @@ class FactoryController extends Controller
         $catalog=app(\App\Services\MaterialCatalog::class);$catalog->rows(true);$map=$catalog->map();
         $orders=[];
         foreach($items as $item){
+            if(!\App\Services\BackingColorService::confirmed($item))continue;
             if((int)$item->quantity<1 || (int)$item->quantity>10000 || isset($processed[$item->line_item_id]) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset($map[$item->series_code]))continue;
             if(($catalog->row($item->series_code)['type']??null)!==$item->design_type)continue;
             $materials=$map[$item->series_code];$arts=[];
