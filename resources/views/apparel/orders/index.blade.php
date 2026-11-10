@@ -25,17 +25,8 @@
 <link rel="stylesheet" href="{{asset('css/apparel.css')}}?v={{filemtime(public_path('css/apparel.css'))}}">
 <div class="apparel-workspace">
 <div class="apparel-report-content">
-<section class="panel apparel-sync-toolbar" aria-label="Shopify synchronization">
-<div class="apparel-sync-copy">
-<div class="apparel-sync-title"><strong>Shopify sync</strong><span class="sync-health {{$syncHealth['class']}}" title="{{$syncHealth['message']}}" aria-label="{{$syncHealth['label']}}. {{$syncHealth['message']}}">{{$syncHealth['label']}}</span><span class="apparel-sync-timestamp">Last sync: {{$lastSyncLabel}} @if($lastSyncRelative) &middot; {{$lastSyncRelative}} @endif</span></div>
-@if($syncHealth['state']==='error')
-<p class="apparel-sync-error" role="alert">{{$syncHealth['message']}}</p>
-@endif
-</div>
-@if(auth()->user()->allows('apparel.sync.edit'))
-<form method="post" action="{{route('apparel.orders.sync')}}" data-sync-form>@csrf<button class="button button-primary" type="submit" data-default-label="Sync Orders" data-loading-label="Syncing..."><span class="button-spinner" aria-hidden="true"></span><span class="button-label">Sync Orders</span></button></form>
-@endif
-</section>
+@if(auth()->user()->allows('apparel.overview.view'))<p class="muted apparel-sync-link">Order synchronization is now shared. <a href="{{route('dashboard',['area'=>'apparel'])}}#order-sync-status">View sync status in Overview →</a></p>@endif
+
         <section class="summary-grid" aria-label="Filter by fulfillment status">
             @foreach([
                 'UNFULFILLED'=>['Unfulfilled','unfulfilled','dot-warning'],
@@ -109,6 +100,15 @@
                     </select>
                 </label>
 
+                <label>
+                    <span>Needs attention</span>
+                    <select name="attention">
+                        <option value="">Any</option>
+                        @foreach(['open'=>'Open production','pending_remarks'=>'Pending remarks','missing_tracking'=>'In progress without tracking'] as $value=>$label)
+                        <option value="{{$value}}" @selected(($filters['attention'] ?? '')===$value)>{{$label}}</option>
+                        @endforeach
+                    </select>
+                </label>
                 <label>
                     <span>Per page</span>
                     <select name="per_page">

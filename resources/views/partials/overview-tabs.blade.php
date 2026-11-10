@@ -1,4 +1,5 @@
 @php($selectedArea=request('area',auth()->user()->allows('bags.overview.view')?'bags':'apparel'))
+<div class="overview-toolbar">
 <nav class="overview-tabs" role="tablist" aria-label="Production overview" data-overview-tabs>
 @foreach(['bags'=>['Bag Production','bag-production'],'apparel'=>['Apparel Production','apparel-production']] as $area=>[$label,$icon])
 @if(auth()->user()->allows($area.'.overview.view'))
@@ -8,3 +9,5 @@
 @endif
 @endforeach
 </nav>
+
+</div>

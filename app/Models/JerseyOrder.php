@@ -140,6 +140,18 @@ class JerseyOrder extends Model
             ->where(fn (Builder $query) => $query->whereNull('shopify_financial_status')->orWhereRaw('UPPER(shopify_financial_status) <> ?', ['REFUNDED']));
     }
 
+    public function scopeNeedsAttention(Builder $query, ?string $attention): Builder
+    {
+        if (!$attention) return $query;
+        $query->eligibleForProduction();
+        return match ($attention) {
+            'open' => $query->whereIn('shopify_fulfillment_status', ['UNFULFILLED','PARTIALLY_FULFILLED']),
+            'pending_remarks' => $query->whereNotNull('remark')->where('remark','!=','')->whereNull('remark_processed_at'),
+            'missing_tracking' => $query->where('shopify_fulfillment_status','PARTIALLY_FULFILLED')->where(fn($q) => $q->whereNull('tracking_number')->orWhere('tracking_number','')),
+            default => $query,
+        };
+    }
+
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
         $search = trim((string) $search);

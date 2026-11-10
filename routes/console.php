@@ -48,4 +48,4 @@ Artisan::command('production:replace-users {admin_email} {operator_email}', func
     return 0;
 })->purpose('Explicitly replace the user roster; passwords entered through hidden prompts, never command arguments');
 
-\Illuminate\Support\Facades\Schedule::command('shopify:sync-jerseys --source=scheduled')->everyTenMinutes()->withoutOverlapping(15)->name('shopify-jersey-orders-sync')->onFailure(function(){\Illuminate\Support\Facades\Log::error('Scheduled Shopify apparel orders sync failed.');});
+\Illuminate\Support\Facades\Schedule::command('shopify:sync-orders --source=scheduled')->everyTenMinutes()->withoutOverlapping(30)->name('shopify-production-orders-sync')->onFailure(function(){\Illuminate\Support\Facades\Log::error('Scheduled Shopify production orders sync failed.');});

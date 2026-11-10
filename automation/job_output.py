@@ -48,7 +48,10 @@ def atomic_json(path, value):
 
 def render_label(source, destination, label, max_bytes, policy='BOTTOM_WHITE_V2'):
     from PIL import Image, ImageDraw, ImageFont
-    if not re.fullmatch(r'[A-Z0-9][A-Z0-9-]{1,119}', label):
+    if policy not in {'BOTTOM_WHITE_V1', 'BOTTOM_WHITE_V2', 'BOTTOM_WHITE_V3'}:
+        raise ValueError('Unsupported print label policy')
+    pattern = r'[A-Z0-9][A-Z0-9 -]{0,119}' if policy == 'BOTTOM_WHITE_V3' else r'[A-Z0-9][A-Z0-9-]{1,119}'
+    if not re.fullmatch(pattern, label):
         raise ValueError('Invalid locked production label')
     source, destination = guarded(source), guarded(destination)
     if source.suffix.lower() not in {'.jpg','.jpeg','.png','.tif','.tiff'}:
@@ -67,7 +70,7 @@ def render_label(source, destination, label, max_bytes, policy='BOTTOM_WHITE_V2'
             raise ValueError('Unsupported production image color mode')
         draw = ImageDraw.Draw(image)
         draw.fontmode = "1"
-        size = max(6, min(64, round(height * .012)))
+        size = max(6, round(height * .034)) if policy == 'BOTTOM_WHITE_V3' else max(6, min(64, round(height * .012)))
         pad = max(1, round(height * .002))
         while True:
             font = ImageFont.load_default(size=size)
@@ -78,13 +81,15 @@ def render_label(source, destination, label, max_bytes, policy='BOTTOM_WHITE_V2'
             size -= 1
             if size < 6:
                 raise ValueError('Label cannot fit the production image legibly')
-        plate_width, plate_height = text_width + 2 * pad, text_height + 2 * pad
+        plate_width = max(text_width + 2 * pad, round(width * .56)) if policy == 'BOTTOM_WHITE_V3' else text_width + 2 * pad
+        plate_height = text_height + 2 * pad
         left = (width - plate_width) // 2
-        bottom = height - max(1, round(height * (.04 if policy == 'BOTTOM_WHITE_V1' else .015)))
+        gap = {'BOTTOM_WHITE_V1': .04, 'BOTTOM_WHITE_V2': .015, 'BOTTOM_WHITE_V3': .0025}[policy]
+        bottom = height - max(1, round(height * gap))
         top = bottom - plate_height
         white, black = ((0, 0, 0, 0), (0, 0, 0, 255)) if image.mode == 'CMYK' else ((255, 255, 255, 255), (0, 0, 0, 255)) if image.mode == 'RGBA' else ((255, 255, 255), (0, 0, 0)) if image.mode == 'RGB' else (255, 0)
         draw.rectangle((left, top, left + plate_width, bottom), fill=white)
-        draw.text((left + pad - box[0], top + pad - box[1]), label, font=font, fill=black)
+        draw.text((left + (plate_width - text_width) // 2 - box[0], top + pad - box[1]), label, font=font, fill=black)
         settings = {'format': 'TIFF', 'compression': 'tiff_lzw'}
         if info.get('icc_profile'):
             settings['icc_profile'] = info['icc_profile']

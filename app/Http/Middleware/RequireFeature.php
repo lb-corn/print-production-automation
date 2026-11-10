@@ -7,7 +7,11 @@ class RequireFeature {
     public function handle(Request $request, Closure $next) {
         $name=$request->route()?->getName() ?? '';
         if(in_array($name,['logout','profile','docs'],true)) return $next($request);
-        if($name==='workspace.status') {
+        if($name==='orders.sync') {
+            abort_unless($request->user()->allows('bags.sync.edit') || $request->user()->allows('apparel.sync.edit'),403);
+            return $next($request);
+        }
+        if(in_array($name,['workspace.status','orders.sync-status'],true)) {
             abort_unless($request->user()->allows('bags.overview.view') || $request->user()->allows('apparel.overview.view'),403,'Your role does not allow production summaries.');
             return $next($request);
         }

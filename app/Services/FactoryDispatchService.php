@@ -71,7 +71,7 @@ class FactoryDispatchService {
         $batch=PrintBatch::whereNotNull('automation_requested_at')->where(fn($q)=>$q->whereNull('factory_agent_id')->orWhere('factory_agent_id',$id))->whereIn('status',['QUEUED','HANDOFF_REQUESTED']);
         if(!$agent->processing_enabled){if(!$this->consentReady())return null;$batch->where('operator_dispatch_enabled',true);}
         if($agent->handoff_blocked)$batch->where('status','QUEUED');
-        foreach(['BOTTOM_WHITE_V1'=>'1.5.0',PrintLabelService::POLICY=>'1.5.1'] as $policy=>$minimum)if(version_compare($agent->telemetry['agent_version']??'0.0.0',$minimum,'<'))$batch->where(fn($q)=>$q->whereNull('payload->print_label_policy')->orWhere('payload->print_label_policy','!=',$policy));
+        foreach(['BOTTOM_WHITE_V1'=>'1.5.0','BOTTOM_WHITE_V2'=>'1.5.1',PrintLabelService::POLICY=>'1.6.2'] as $policy=>$minimum)if(version_compare($agent->telemetry['agent_version']??'0.0.0',$minimum,'<'))$batch->where(fn($q)=>$q->whereNull('payload->print_label_policy')->orWhere('payload->print_label_policy','!=',$policy));
         if(version_compare($agent->telemetry['agent_version']??'0.0.0','1.6.0','<'))$batch->where(fn($q)=>$q->whereNull('payload->contains_custom_artwork')->orWhere('payload->contains_custom_artwork',false));
         $batch=$batch->oldest()->first();
         return $batch?['id'=>$batch->id,'phase'=>$batch->status==='QUEUED'?'prepare':'handoff']:null;
@@ -85,7 +85,7 @@ class FactoryDispatchService {
             abort_if(PrintBatch::where('factory_agent_id',$id)->where('id','!=',$batch->id)->where(function($q){$q->whereIn('status',['CLAIMED','DOWNLOADING','DELIVERING'])->orWhere(fn($q)=>$q->where('status','HANDOFF_REQUESTED')->where('agent_operation_phase','handoff')->whereNotNull('agent_operation_token'));})->exists(),409,'Another operation for this Factory PC is still active.');
             $locked=PrintBatch::lockForUpdate()->findOrFail($batch->id);
             abort_unless($agent->processing_enabled || ($this->consentReady() && $locked->operator_dispatch_enabled),409,'This batch needs user authorization from the print screen.');
-            $minimum=($locked->payload['contains_custom_artwork']??false)?'1.6.0':match($locked->payload['print_label_policy']??null){null=>'0.0.0','BOTTOM_WHITE_V1'=>'1.5.0',PrintLabelService::POLICY=>'1.5.1',default=>'9999.0.0'};
+            $minimum=max(($locked->payload['contains_custom_artwork']??false)?'1.6.0':'0.0.0',match($locked->payload['print_label_policy']??null){null=>'0.0.0','BOTTOM_WHITE_V1'=>'1.5.0','BOTTOM_WHITE_V2'=>'1.5.1',PrintLabelService::POLICY=>'1.6.2',default=>'9999.0.0'});
             abort_unless(version_compare($agent->telemetry['agent_version']??'0.0.0',$minimum,'>='),409,'Update the Factory Agent before preparing this labeled job.');
             abort_unless($locked->automation_requested_at && (!$locked->factory_agent_id || $locked->factory_agent_id===$id),409,'This batch is not authorized for this Factory PC.');
             abort_unless($locked->status===($phase==='prepare'?'QUEUED':'HANDOFF_REQUESTED'),409,'The batch phase has changed.');
@@ -113,7 +113,7 @@ class FactoryDispatchService {
         if(!$this->online($agent))return ['state'=>'offline','message'=>'Waiting for the Factory PC. It may be switched off, signed out, disconnected, or its background listener may be stopped. Nothing is confirmed as processing.'];
         if(!$this->capable($agent))return ['state'=>'connection_only','message'=>'Only a connection reporter is running. It cannot prepare or hand off this batch. Start the installed portal listener through the one-time PC setup.'];
         if(!$this->consentReady())return ['state'=>'setup_required','message'=>'The server needs the batch dispatch consent migration before new jobs can be authorized.'];
-        $minimum=$batch?(($batch->payload['contains_custom_artwork']??false)?'1.6.0':match($batch->payload['print_label_policy']??null){null=>'0.0.0','BOTTOM_WHITE_V1'=>'1.5.0',PrintLabelService::POLICY=>'1.5.1',default=>'9999.0.0'}):'1.5.1';
+        $minimum=$batch?max(($batch->payload['contains_custom_artwork']??false)?'1.6.0':'0.0.0',match($batch->payload['print_label_policy']??null){null=>'0.0.0','BOTTOM_WHITE_V1'=>'1.5.0','BOTTOM_WHITE_V2'=>'1.5.1',PrintLabelService::POLICY=>'1.6.2',default=>'9999.0.0'}):'1.6.2';
         if(version_compare($agent->telemetry['agent_version']??'0.0.0',$minimum,'<'))return ['state'=>'agent_update_required','message'=>'Update the Printer PC agent to '.$minimum.' or later for this print layout. Queued jobs wait safely until the update.'];
         if($agent->handoff_blocked)return ['state'=>'ready','message'=>'The listener is connected and preparation is available. Handoff to Epson is currently blocked by an administrator.'];
         return ['state'=>'ready','message'=>'The listener is ready. Authorized queue requests launch a temporary worker; it exits after the requested phase.'];

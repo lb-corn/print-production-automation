@@ -2,8 +2,10 @@
 require __DIR__.'/print-job-consent.php';
 use App\Services\PrintLabelService;
 $sample=new App\Models\ProductionItem(['line_item_id'=>'line-9342','order_number'=>'#9342','product'=>'Lucky Bags 2027 Grey Stone','color'=>'Grey','series_code'=>'PSE','design_type'=>'single']);
-$check(PrintLabelService::label($sample,'Rave 9')==='LBSH9342-RAVE9-GREY-GREY-STONE','Print labels use LBSH, order number, printed-side material, color and bag name');
-$sample->color=null;$check(str_contains(PrintLabelService::label($sample,'Rave 9'),'-NA-'),'Missing colors are explicit rather than guessed');
+$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 LB9342 VMT GREY','Print labels show printed material, job number and backing with color');
+$sample->color=null;$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 LB9342 VMT','Missing colors are omitted');
+$sample->order_number=null;$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9 VMT','Missing job numbers are omitted without inventing a job ID');
+$sample->design_type='double';$sample->color='Charcoal';$check(PrintLabelService::label($sample,'Rave 9')==='RAVE9','Double-sided artwork does not include unprinted backing details');
 $request=Illuminate\Http\Request::create('/completion','GET',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);
 $check($factory->completion($request,$job->fresh(),$dispatch)->getData(true)['cleanup_authorized']===false,'Delivery alone never authorizes local file deletion');
 $job->update(['status'=>'PRINTED','completed_at'=>now()]);
@@ -20,7 +22,7 @@ $agent->refresh()->update(['handoff_blocked'=>false,'telemetry'=>['agent_version
 $item=$make('requires-label-update');$new=$svc->batch($user->id,[$item->id]);Illuminate\Support\Facades\DB::transaction(fn()=>$dispatch->request($new));
 $check($dispatch->next($id)===null && $dispatch->readiness($new->fresh())['state']==='agent_update_required','Old PC agents cannot silently print jobs without their required labels');
 $r=Illuminate\Http\Request::create('/begin','POST',[],[],[],['HTTP_X_FACTORY_AGENT_ID'=>$id]);$reject(fn()=>$dispatch->begin($r,$new,'prepare'),409);
-$agent->update(['telemetry'=>['agent_version'=>'1.5.1','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$agent->update(['telemetry'=>['agent_version'=>'1.6.2','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $first=$make('material-one');$other=$make('material-two');$other->update(['series_code'=>'LUC']);$count=App\Models\PrintBatch::count();
 $reject(fn()=>$svc->batch($user->id,[$first->id,$other->id]),422);
 $check(App\Models\PrintBatch::count()===$count,'Mixed printed-material groups cannot be queued together or partially batched');
@@ -30,7 +32,7 @@ $syncItem=$make('sync-unapproved');$match=$syncItem->matches;$match[0]['md5Check
 $syncItem->decision()->delete();
 $metadata=$factory->syncArtwork($request,$dispatch)->getData(true);
 $found=collect($metadata['orders'])->firstWhere('line_item_id','sync-unapproved');
-$check($found && $found['artworks'][0]['print_label']==='LBSH42-RAVE9-WHITE-SELECTED-ARTWORK','Synced matched orders can request private PC labels before approval, with pinned Drive metadata only');
+$check($found && $found['artworks'][0]['print_label']==='RAVE9 LB42 VMT WHITE','Synced matched orders can request private PC labels before approval, with pinned Drive metadata only');
 $check(!str_contains(json_encode($metadata),'data:image') && !isset($metadata['images']),'Sync artwork API carries no image binaries or hosted image files');
 $syncItem->update(['is_custom'=>true]);
 $check(!collect($factory->syncArtwork($request,$dispatch)->getData(true)['orders'])->firstWhere('line_item_id','sync-unapproved'),'Custom or unresolved artwork is not automatically prepared');

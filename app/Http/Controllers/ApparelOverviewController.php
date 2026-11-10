@@ -1,14 +1,27 @@
 <?php
 namespace App\Http\Controllers;
+
 use App\Models\JerseyOrder;
-use App\Services\Shopify\JerseyOrderSyncService;
-use Illuminate\Support\Facades\Cache;
-class ApparelOverviewController extends Controller {
-    public function index() {
-        $summary=['unfulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','UNFULFILLED')->count(),'partially_fulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','PARTIALLY_FULFILLED')->count(),'fulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','FULFILLED')->count(),'total'=>JerseyOrder::count(),'pending_remarks'=>JerseyOrder::eligibleForProduction()->whereNotNull('remark')->whereNull('remark_processed_at')->count()];
-        $lastSync=Cache::get(JerseyOrderSyncService::LAST_SUCCESSFUL_SYNC_CACHE_KEY_V2) ?? JerseyOrder::max('last_synced_at');
-        try{$lastSync=$lastSync ? \Illuminate\Support\Carbon::parse($lastSync) : null;}catch(\Throwable){$lastSync=null;}
-        $numberSort=JerseyOrder::query()->getConnection()->getDriverName()==='mysql' ? "CAST(REPLACE(shopify_order_number, '#', '') AS UNSIGNED) DESC" : "CAST(REPLACE(shopify_order_number, '#', '') AS INTEGER) DESC";
-        return view('dashboard.apparel',['summary'=>$summary,'recentOrders'=>JerseyOrder::eligibleForProduction()->orderByDesc('ordered_at')->orderByRaw($numberSort)->orderByDesc('id')->limit(8)->get(),'lastSync'=>$lastSync]);
+
+class ApparelOverviewController extends Controller
+{
+    public function index()
+    {
+        $open = JerseyOrder::needsAttention('open');
+        $summary = [
+            'unfulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','UNFULFILLED')->count(),
+            'partially_fulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','PARTIALLY_FULFILLED')->count(),
+            'fulfilled'=>JerseyOrder::eligibleForProduction()->where('shopify_fulfillment_status','FULFILLED')->count(),
+            'total'=>JerseyOrder::count(),
+            'pending_remarks'=>JerseyOrder::needsAttention('pending_remarks')->count(),
+            'missing_tracking'=>JerseyOrder::needsAttention('missing_tracking')->count(),
+            'open_lines'=>(clone $open)->count(),
+            'open_units'=>(int)(clone $open)->sum('quantity'),
+        ];
+        return view('dashboard.apparel', [
+            'summary'=>$summary,
+            'attentionOrders'=>(clone $open)->orderByRaw('CASE WHEN ordered_at IS NULL THEN 1 ELSE 0 END')->orderBy('ordered_at')->orderBy('id')->limit(6)->get(),
+            'pendingRemarks'=>JerseyOrder::needsAttention('pending_remarks')->orderBy('remark_updated_at')->orderBy('id')->limit(3)->get(),
+        ]);
     }
 }

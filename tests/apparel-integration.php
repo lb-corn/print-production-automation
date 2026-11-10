@@ -68,7 +68,7 @@ check($filtered->getData()['orders']->total()===29,'Product, color and size filt
 try{$report->index(Request::create('/apparel/orders?per_page=999'));throw new LogicException('Invalid page size accepted');}catch(Illuminate\Validation\ValidationException $e){check(isset($e->errors()['per_page']),'Page-size whitelist retained');}
 Auth::setUser($manager);view()->share('errors',new Illuminate\Support\ViewErrorBag);
 $html=$view->render();
-foreach(['order-modal','data-filter-form','data-sync-form','data-preview-product','First Name','Last Name','pagination-controls'] as $hook)check(str_contains($html,$hook),'Shared-theme report retains '.$hook);
+foreach(['order-modal','data-filter-form','apparel-sync-link','data-preview-product','First Name','Last Name','pagination-controls'] as $hook)check(str_contains($html,$hook),'Shared-theme report retains '.$hook);
 check(str_contains($report->index(Request::create('/apparel/orders?search=SAFE'))->render(),'remark-processed-row'),'Processed remarks retain their report highlight');
 check(!str_contains($html,'Private technical value'),'Internal personalization does not leak into report rows');
 $payload=$report->show($order->fresh())->getData(true);
@@ -76,8 +76,8 @@ check($payload['order']['shopify_order_gid'] && $payload['order']['custom_fields
 Auth::setUser($approver);$html=$report->index(Request::create('/apparel/orders?fulfillment_status=all&per_page=100'))->render();
 check(str_contains($html,'Remark processed') && !str_contains($html,'Save Remark') && !str_contains($html,'data-sync-form'),'Approver view exposes processing without editing or sync');
 $overview=app(App\Http\Controllers\ApparelOverviewController::class)->index();check($overview->getData()['summary']['total']===29,'Apparel overview uses real local order totals');
-$event=collect(app(Illuminate\Console\Scheduling\Schedule::class)->events())->first(fn($e)=>str_contains($e->command ?? '','shopify:sync-jerseys'));
-check($event && $event->expression==='*/10 * * * *' && $event->withoutOverlapping && !str_contains($event->command,'--full'),'Ten-minute incremental schedule retained');
+$event=collect(app(Illuminate\Console\Scheduling\Schedule::class)->events())->first(fn($e)=>str_contains($e->command ?? '','shopify:sync-orders'));
+check($event && $event->expression==='*/10 * * * *' && $event->withoutOverlapping && !str_contains($event->command,'--full'),'Ten-minute combined order schedule uses overlap protection');
 $roleRequest=apparelRequest($admin,['name'=>'Granular remark approver','permissions'=>['apparel.remarks.approve']]);$roles->store($roleRequest);$new=Role::where('name','Granular remark approver')->firstOrFail();
 check(in_array('apparel.orders.view',$new->permissions,true) && !in_array('apparel.tracking.edit',$new->permissions,true),'Approval grant includes order view without tracking edit');
 check(App\Models\ProductionItem::count()===0 && App\Models\PrintBatch::count()===0,'Apparel integration leaves bag production records untouched');

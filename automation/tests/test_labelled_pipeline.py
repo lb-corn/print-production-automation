@@ -48,14 +48,14 @@ class LabelledPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='lb-sync-') as temporary:
             root=Path(temporary);workspace=root/'workspace';workspace.mkdir();hot=root/'incoming';hot.mkdir()
             art={'side':'PRINT','material':'Rave 9','filename':'source.png','drive_file_id':'source_drive_42',
-                 'md5_checksum':'a'*32,'drive_version':'7','print_label':'LBSH42-RAVE9-WHITE-STONE'}
+                 'md5_checksum':'a'*32,'drive_version':'7','print_label':'RAVE9 LB42 VMT WHITE'}
             order={'line_item_id':'line-42','order':'#42','quantity':1,'artworks':[art]}
             batch={'id':42,'batch_id':'LB-SYNC-42','status':'CLAIMED','payload':{'batch_id':'LB-SYNC-42',
-                   'print_label_policy':'BOTTOM_WHITE_V2','order_count':1,'artwork_file_count':1,'orders':[order]}}
+                   'print_label_policy':'BOTTOM_WHITE_V3','order_count':1,'artwork_file_count':1,'orders':[order]}}
             def download(service,file,destination):
                 destination.parent.mkdir(parents=True,exist_ok=True)
                 Image.new('RGB',(1000,1000),(30,60,90)).save(destination,dpi=(300,300))
-            with patch.object(agent,'OUT',workspace),patch.object(agent,'HOT',str(hot)),patch.object(agent,'PORTAL_MODE',True),patch.object(agent,'ACTIVE_OPERATION',{'token':'test'}),patch.object(agent,'status'),patch.object(agent,'drive'),patch.object(agent,'download',side_effect=download) as fetch,patch.object(agent,'scan_file'),patch.object(agent,'api',return_value={'orders':[order],'next_after':0}) as api:
+            with patch.object(agent,'OUT',workspace),patch.object(agent,'HOT',str(hot)),patch.object(agent,'PORTAL_MODE',True),patch.object(agent,'ACTIVE_OPERATION',{'token':'test'}),patch.object(agent,'status'),patch.object(agent,'drive'),patch.object(agent,'download',side_effect=download) as fetch,patch.object(agent,'scan_file'),patch.object(agent,'api',return_value={'print_label_policy':'BOTTOM_WHITE_V3','orders':[order],'next_after':0}) as api:
                 agent.sync_cache_once()
                 self.assertEqual(fetch.call_count,1)
                 self.assertEqual(list(hot.iterdir()),[])

@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.6.2",
+    "file": "LuckyBags-Factory-Agent-v1.6.2.zip",
+    "sha256": "4a930f8b8fda0b28abe3342eb01e40241849383b204a7f515077c97e3e76aa8a",
+    "bytes": 57020,
+    "published_at": "2026-11-10T03:24:17.957795+00:00",
+    "summary": "Larger bottom print labels with material, job number and optional backing color."
+  },
+  {
     "version": "1.6.1",
     "file": "LuckyBags-Factory-Agent-v1.6.1.zip",
     "sha256": "df4172a5563ec4e9093dd48e4f03451393824a6f37bae8acce5ebb0272113071",
@@ -30,13 +38,5 @@
     "bytes": 48877,
     "published_at": "2026-11-04T12:47:12Z",
     "summary": "Printed artwork labels and retention until print confirmation."
-  },
-  {
-    "version": "1.4.1",
-    "file": "LuckyBags-Factory-Agent-v1.4.1.zip",
-    "sha256": "311bb197092c12351ea7104aa0e51927199a93b70cbbed4101fed20c0d4d3e87",
-    "bytes": 40828,
-    "published_at": "2026-11-03T08:36:04Z",
-    "summary": "Reliable background startup and connection reporting."
   }
 ]

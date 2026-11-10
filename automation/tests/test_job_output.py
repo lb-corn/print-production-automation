@@ -116,3 +116,17 @@ class JobOutputTests(unittest.TestCase):
         self.assertEqual(old['label_bounds'][3],960)
         self.assertEqual(new['label_bounds'][3],985)
         self.assertGreater(new['label_bounds'][1],old['label_bounds'][1])
+
+    def test_v3_readable_label_is_larger_and_at_bottom(self):
+        source=self.root/'placement.png';Image.new('RGB',(2250,2250),'navy').save(source,dpi=(300,300))
+        old=output.render_label(source,self.root/'v2.tif','LBSH4303-RAVE9-CHARCOAL-STONE',10000000,'BOTTOM_WHITE_V2')
+        new=output.render_label(source,self.root/'v3.tif','RAVE9 LB4303 VMT CHARCOAL',10000000,'BOTTOM_WHITE_V3')
+        self.assertGreater(new['label_font_pixels'],old['label_font_pixels']*2)
+        self.assertEqual(new['label_bounds'][3],2244)
+        self.assertGreaterEqual(new['label_bounds'][2]-new['label_bounds'][0],1260)
+        self.assertEqual(new['pixels'],[2250,2250])
+        with Image.open(source) as original, Image.open(self.root/'v3.tif') as printed:
+            x0,y0,x1,y1=new['label_bounds']
+            self.assertEqual(printed.crop((0,0,2250,y0)).tobytes(),original.crop((0,0,2250,y0)).tobytes())
+        with self.assertRaises(ValueError):
+            output.render_label(source,self.root/'invalid.tif','RAVE9\nLB4303',10000000,'BOTTOM_WHITE_V3')

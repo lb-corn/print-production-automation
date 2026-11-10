@@ -1,7 +1,7 @@
 <?php
 require __DIR__.'/factory-dispatch.php';
 // Continue in the isolated in-memory DB; no PC, Drive or printer is contacted.
-$agent->refresh()->update(['processing_enabled'=>false,'last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.5.1','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
+$agent->refresh()->update(['processing_enabled'=>false,'last_seen_at'=>now(),'telemetry'=>['agent_version'=>'1.6.2','reporter_mode'=>'listener','process_status'=>'running','stage'=>'idle']]);
 $check($dispatch->readiness()['state']==='ready','Connected listener is available without an Admin enable switch');
 $check($dispatch->next($id)===null && !$blocked->fresh()->operator_dispatch_enabled,'Existing paused queue entries are not released by the new flow');
 $controller=new App\Http\Controllers\ProductionController($svc);

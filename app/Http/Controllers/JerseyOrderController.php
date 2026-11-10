@@ -32,6 +32,7 @@ class JerseyOrderController extends Controller
 
         $query = JerseyOrder::query()
             ->with(['trackingUpdatedBy', 'remarkUpdatedBy', 'remarkProcessedBy'])
+            ->needsAttention($filters['attention'] ?? null)
             ->search($filters['search'] ?? null)
             ->forProduct($filters['product'] ?? null)
             ->forVariant($filters['variant'] ?? null)
@@ -104,6 +105,7 @@ class JerseyOrderController extends Controller
             'color' => ['nullable', 'string', 'max:255'],
             'size' => ['nullable', 'string', 'max:255'],
             'fulfillment_status' => ['nullable', 'string', 'max:255'],
+            'attention' => ['nullable', Rule::in(['open','pending_remarks','missing_tracking'])],
             'per_page' => ['nullable', Rule::in($this->allowedPerPage)],
             'page' => ['nullable', 'integer', 'min:1'],
         ])->validate();

@@ -150,6 +150,9 @@ jobs:
           node tests/production-summary-controls.cjs
           php tests/production-summary.php
           php tests/apparel-integration.php
+          php tests/order-sync.php
+          php tests/print-preview.php
+          node tests/order-sync-controls.cjs
           php tests/role-permissions.php
           php tests/admin-controls.php
           php tests/reset-flow.php

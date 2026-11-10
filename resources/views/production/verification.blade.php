@@ -3,11 +3,8 @@
 <section class="production-refresh" aria-labelledby="production-refresh-heading">
 <div class="production-refresh-heading"><h2 id="production-refresh-heading">Orders &amp; artwork</h2><p>Print batches stay locked. Changed artwork needs approval again.</p></div>
 <div class="production-refresh-actions">
-@if(auth()->user()->allows('bags.sync.edit'))<form method="post" action="{{route('production.sync-backlog')}}" data-backlog-form>
-@csrf<input type="hidden" name="return_to" value="production">
-<div><strong>Shopify backlog</strong><p>Pull current orders and match their Drive artwork.</p></div>
-<button type="submit" class="primary">Refresh backlog</button>
-</form>@endif
+@if(auth()->user()->allows('bags.overview.view'))<a class="chip" href="{{route('dashboard')}}#order-sync-status">Order sync in Overview →</a>@endif
+
 @if(auth()->user()->allows('bags.artwork.edit'))<form method="post" action="{{route('production.rematch')}}" data-rematch-form>
 @csrf<input type="hidden" name="confirm_rematch" value="1">
 <div><strong>Drive artwork</strong><p>Recheck artwork for orders already in this portal.</p></div>

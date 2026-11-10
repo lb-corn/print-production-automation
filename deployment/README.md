@@ -89,3 +89,9 @@ Enter and confirm the intended password at the hidden prompts. The command hashe
 FTPS uploads use up to four parallel workers, with per-worker progress every 100 files. Unchanged files are skipped. The inventory is published only after all workers succeed; a failed upload remains retryable. The first vendor upload still transfers many files and will take longer than subsequent deployments.
 
 The web package includes only the Google Drive API from `google/apiclient-services`; other Google API modules are excluded from staging. The Google client and shared dependencies remain included. Reading existing orders does not initialize integration clients; credentials are required when syncing.
+
+## Combined order synchronization
+
+The Laravel schedule now runs `shopify:sync-orders --source=scheduled` every ten minutes (bags with Drive artwork matching, then incremental jersey/hoodie orders). Keep the existing server cron invoking `php artisan schedule:run` every minute. If an older cron invokes `shopify:sync-jerseys` directly, replace that invocation with `shopify:sync-orders --source=scheduled`; do not run both order-import schedules. The legacy jersey command remains available for targeted maintenance.
+
+Overview has the common manual Sync orders action and separate results/counts. The next expected time follows ten-minute boundaries in the application timezone. It is an expectation, not confirmation that cron is installed: Overview shows an unconfirmed/overdue notice until a recent scheduled combined run is observed. Scheduled imports share the portal write lock and a common sync lock with manual imports. Each area reports its own failure so one failed integration does not hide a successful import in the other area. No new database migration is required.

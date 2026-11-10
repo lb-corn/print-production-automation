@@ -21,7 +21,7 @@ $catalog=app(\App\Services\MaterialCatalog::class);$materialNames=$catalog->mate
 @php
 $side=$match['side']??'single';$material=$materials[$item->series_code][$side==='back'?1:0]??'Material';$printLabel=\App\Services\PrintLabelService::label($item,$material);
 @endphp
-<figure>@if(($match['source']??null)==='pc_custom')@include('partials.custom-artwork-preview',['uploadId'=>$match['upload_id'],'side'=>$side,'previewItem'=>$item])@else<div class="queue-artwork-preview"><img src="https://drive.google.com/thumbnail?id={{$match['id']}}&sz=w800" alt="Approved {{$side}} artwork"><span class="queue-label-overlay">{{$printLabel}}</span></div>@endif<figcaption>{{strtoupper($side)}} · {{$material}}</figcaption></figure>
+<figure>@if(($match['source']??null)==='pc_custom')@include('partials.custom-artwork-preview',['uploadId'=>$match['upload_id'],'side'=>$side,'previewItem'=>$item])@else<button type="button" class="queue-preview-open" data-labeled-preview-open aria-label="Open labeled {{$side}} print preview for {{$item->order_number}}"><span class="queue-artwork-preview" data-labeled-artwork><img src="https://drive.google.com/thumbnail?id={{$match['id']}}&sz=w800" alt="Approved {{$side}} artwork"><span class="queue-label-overlay">{{$printLabel}}</span></span><span class="queue-preview-hint">Open labeled preview ↗</span></button>@endif<figcaption>{{strtoupper($side)}} · {{$material}}</figcaption></figure>
 @endforeach
 </div>
 <div class="queue-item-info"><div class="queue-item-heading"><div><span class="muted">{{$item->order_number}}</span><h2>{{$item->product}}</h2></div><span class="badge">{{$item->design_type==='double'?'FRONT + BACK':'SINGLE'}}</span></div><dl class="queue-item-facts"><div><dt>Variant</dt><dd>{{$item->variant?:'—'}}</dd></div><div><dt>Quantity</dt><dd>{{$item->quantity}}</dd></div><div><dt>Printed material</dt><dd>{{$groupName}}</dd></div><div><dt>Color</dt><dd>{{$item->color?:'Not specified'}}</dd></div></dl>
@@ -39,4 +39,9 @@ $side=$match['side']??'single';$material=$materials[$item->series_code][$side===
 <dialog class="print-confirmation" data-queue-dialog aria-labelledby="queue-confirm-title"><h2 id="queue-confirm-title">Queue selected artwork?</h2><p><strong data-selected-count></strong> orders · <strong data-selected-material></strong></p><p class="admin-notice">{{$factoryReadiness['message']??'Check Factory connection before processing.'}}</p><p>Each material receives a separate batch containing only its print sides. The worker prepares labeled copies of the approved originals. Review and sign Handoff before delivery to Epson. Files are retained until signed physical print completion.</p><div class="confirmation-actions"><button type="button" class="chip" data-queue-cancel>Cancel</button><button type="button" class="primary" data-queue-confirm @disabled(!$queueAvailable)>Queue &amp; prepare</button></div></dialog>
 @endif
 </div>
+<dialog class="labeled-preview-dialog" data-labeled-preview-dialog aria-labelledby="labeled-preview-title">
+<div class="labeled-preview-heading"><div><h2 id="labeled-preview-title">Labeled print preview</h2><p>The print copy includes this label. Approved Drive source files remain unchanged.</p></div><button type="button" class="chip" data-labeled-preview-close aria-label="Close labeled preview">Close</button></div>
+<div class="labeled-preview-stage"><span class="queue-artwork-preview" data-labeled-artwork><img data-labeled-preview-image alt="Enlarged labeled print preview"><span class="queue-label-overlay" data-labeled-preview-label></span></span></div>
+<p class="labeled-preview-caption" data-labeled-preview-caption></p>
+</dialog>
 </x-layouts.app>

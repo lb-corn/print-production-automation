@@ -416,3 +416,78 @@ document.querySelectorAll('[data-overview-tabs]').forEach(tablist => {
         tabs[next].click();
     });
 });
+
+// Shared sync feedback stays above either overview panel.
+(() => {
+    let status = document.querySelector('[data-order-sync-state]');
+    if (!status) return;
+    const form = document.querySelector('[data-order-sync-form]');
+    const button = form?.querySelector('[data-order-sync-button]');
+    let submitting = false;
+    const updateButton = () => {
+        if (!button) return;
+        button.disabled = submitting || status.dataset.orderSyncState === 'running';
+        button.textContent = button.disabled ? 'Syncing…' : 'Sync orders';
+        form.setAttribute('aria-busy', button.disabled ? 'true' : 'false');
+    };
+    form?.addEventListener('submit', event => {
+        if (submitting || status.dataset.orderSyncState === 'running') { event.preventDefault(); return; }
+        submitting = true;
+        updateButton();
+    });
+    window.addEventListener('pageshow', () => { submitting = false; updateButton(); });
+    updateButton();
+    let checking = false;
+    window.setInterval(async () => {
+        if (document.hidden || submitting || checking) return;
+        checking = true;
+        try {
+            const response = await fetch(status.dataset.statusUrl, {headers:{'Accept':'text/html'}, credentials:'same-origin'});
+            if (!response.ok || response.redirected) return;
+            const html = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const next = html.querySelector('[data-order-sync-state]');
+            if (!next) return;
+            if (status.dataset.orderSyncState === 'running' && next.dataset.orderSyncState !== 'running') { window.location.reload(); return; }
+            status.replaceWith(next);
+            status = next;
+            updateButton();
+        } catch (_) { /* Keep the last confirmed status when the connection drops. */ }
+        finally { checking = false; }
+    }, 15000);
+})();
+
+// Size the preview label against the artwork, including when the image is enlarged.
+(() => {
+    const artworks = document.querySelectorAll('[data-labeled-artwork]');
+    const resizeLabel = artwork => {
+        const img = artwork.querySelector('img');
+        const label = artwork.querySelector('.queue-label-overlay');
+        if (!img || !label || !img.clientHeight || !img.clientWidth) return;
+        let size = img.clientHeight * .034;
+        const pad = Math.max(.5, img.clientHeight * .002);
+        artwork.style.setProperty('--print-label-pad', `${pad}px`);
+        label.style.fontSize = `${size}px`;
+        while (label.scrollWidth > img.clientWidth * .94 && size > 1) { size -= .25; label.style.fontSize = `${size}px`; }
+    };
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(entries => entries.forEach(entry => resizeLabel(entry.target))) : null;
+    artworks.forEach(artwork => {
+        observer?.observe(artwork);
+        artwork.querySelector('img')?.addEventListener('load', () => resizeLabel(artwork));
+        resizeLabel(artwork);
+    });
+    const dialog = document.querySelector('[data-labeled-preview-dialog]');
+    if (!dialog) return;
+    const image = dialog.querySelector('[data-labeled-preview-image]');
+    const label = dialog.querySelector('[data-labeled-preview-label]');
+    document.querySelectorAll('[data-labeled-preview-open]').forEach(button => button.addEventListener('click', () => {
+        const source = button.querySelector('img');
+        label.textContent = button.querySelector('.queue-label-overlay').textContent;
+        image.src = source.currentSrc || source.src;
+        image.alt = source.alt;
+        dialog.querySelector('[data-labeled-preview-caption]').textContent = label.textContent;
+        dialog.showModal();
+        resizeLabel(image.parentElement);
+    }));
+    dialog.querySelector('[data-labeled-preview-close]').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
+})();
