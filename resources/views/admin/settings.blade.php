@@ -37,6 +37,9 @@
 </nav>
 @php($sectionTitle=['artwork'=>'Artwork matching','filenames'=>'Filename cleanup','sync'=>'Data sync','roles'=>'Roles and permissions','users'=>'Manage Users','agent'=>'Factory connection','reset'=>'Reset portal data'][$section])
 <section class="admin-settings-content" aria-label="{{$sectionTitle}}">
+@if(in_array($section,['artwork','sync','filenames']))
+@include('partials.partner-filter',['companyPanel'=>true])
+@endif
 @if($section!=='agent')<div class="admin-settings-section-title"><div>@if($section==='reset')<span>DANGER ZONE</span>@endif<h2>{{$sectionTitle}}</h2></div></div>@endif
 @if($section==='artwork')
 @include('admin.settings.artwork')

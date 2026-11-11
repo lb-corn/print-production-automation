@@ -45,6 +45,9 @@
             <div class="apparel-filter-heading"><h2>Filter orders</h2><span>Find orders by number, product or tracking</span></div>
             <form method="GET" action="{{ route('apparel.orders.index') }}" class="filters" data-filter-form>
                 <div class="apparel-filter-fields">
+                @if(count(\App\Services\PartnerContext::allowed(auth()->user()))>1)
+                @include('partials.company-field',['companyAutoSubmit'=>false])
+                @endif
                 <label class="filter-search">
                     <span>Search</span>
                     <input type="search" name="search" value="{{ $filters['search'] ?? '' }}">
@@ -329,7 +332,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr>
+                        <tr class="apparel-empty-row">
                             <td colspan="4" class="empty-state">No apparel orders found.</td>
                         </tr>
                     @endforelse

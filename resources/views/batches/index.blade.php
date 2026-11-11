@@ -1,5 +1,6 @@
 <x-layouts.app heading="Print Batches" subheading="Factory queue, signed handoffs and print history">
 <section class="panel batch-list-panel">
+    @include('partials.partner-filter',['companyPanel'=>true])
     <div class="panel-head"><div><h2>Batch history</h2><p>{{$batches->count()}} batches · Open a batch to review progress and signed confirmations</p></div><a class="chip" href="{{route('queue')}}">Ready-to-print orders →</a></div>
     <div class="toolbar batch-stage-filters"><a class="chip {{!request('stage')?'active':''}}" href="{{route('batches')}}">All batches</a><a class="chip {{request('stage')==='active'?'active':''}}" href="{{route('batches',['stage'=>'active'])}}">In progress</a><a class="chip {{request('stage')==='completed'?'active':''}}" href="{{route('batches',['stage'=>'completed'])}}">Completed</a><a class="chip {{request('stage')==='failed'?'active':''}}" href="{{route('batches',['stage'=>'failed'])}}">Needs attention</a></div><div class="batch-list-heading" aria-hidden="true"><span>Batch</span><span>Stage</span><span>Items / Files</span><span>Created · Sri Lanka</span><span></span></div>
     <div class="batch-list">

@@ -4,6 +4,7 @@ $catalog=app(\App\Services\MaterialCatalog::class);$materialNames=$catalog->mate
 @endphp
 <x-layouts.app heading="Ready for Print" subheading="Choose a material, review approved artwork and queue a job">
 <div class="queue-workspace">
+@include('partials.partner-filter',['companyPanel'=>true])
 @include('partials.material-catalog-status')
 @if(!$queueAvailable)<div class="progress-failure" role="alert"><strong>Printing is waiting for a server update.</strong><p>Your approved items are saved. An administrator must complete the database update before queueing.</p>@if(auth()->user()?->role==='admin')<p>Run <code>bash deployment/post-deploy.sh</code> in the hosting application folder, then refresh.</p>@endif</div>@endif
 <div class="queue-summary"><span><b>{{$summary['approved_orders']}}</b> approved items</span><span><b>{{$summary['total_sets']}}</b> sets</span><span><b>{{$summary['artwork_files']}}</b> artwork files</span><span><b>{{number_format($summary['printable_yards'],3)}} yd</b> printed fabric</span></div>

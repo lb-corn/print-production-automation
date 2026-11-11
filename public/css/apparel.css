@@ -2192,3 +2192,5 @@ body.apparel-modal-open{overflow:hidden}
 .apparel-workspace .apparel-order-tiles .production-secondary-actions .button,
 .apparel-workspace .apparel-order-tiles .remark-tag{height:40px;min-height:40px;font-size:11px}
 }
+/* Empty results span the entire grid instead of the first order column. */
+.apparel-workspace .apparel-order-tiles tbody tr.apparel-empty-row{display:block;grid-column:1/-1;width:100%;min-width:0;padding:0;margin:0;border:0;box-sizing:border-box}.apparel-workspace .apparel-order-tiles tr.apparel-empty-row>.empty-state{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;min-height:110px;padding:24px 16px;box-sizing:border-box;text-align:center;white-space:normal}.apparel-workspace .apparel-order-tiles tr.apparel-empty-row>.empty-state::before{display:none}
