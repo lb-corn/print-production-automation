@@ -7,7 +7,7 @@
         @if(auth()->user()->allows('bags.sync.edit') || auth()->user()->allows('apparel.sync.edit'))
         <form class="overview-sync-action" method="post" action="{{route('orders.sync')}}" data-order-sync-form>
             @csrf<input type="hidden" name="area" value="{{$syncArea}}">
-            <button type="submit" class="primary" data-order-sync-button>Sync orders</button>
+            <x-production-ui::button type="submit" data-order-sync-button>Sync orders</x-production-ui::button>
         </form>
         @endif
         </div>

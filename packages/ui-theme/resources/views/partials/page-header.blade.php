@@ -1,0 +1,1 @@
+<header class="page-header"><div><div class="eyebrow">OPERATIONS / {{strtoupper(\App\Services\PartnerContext::label())}}</div><h1>{{ $heading ?? 'Production Dashboard' }}</h1><p>{{ $subheading ?? 'Manufacturing control' }}</p></div><div class="header-account-tools">@include('partials.factory-connection')@include('partials.account-menu')</div></header>
