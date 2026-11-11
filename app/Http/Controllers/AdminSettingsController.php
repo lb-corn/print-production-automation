@@ -16,7 +16,8 @@ class AdminSettingsController extends Controller
         if($section==='users')return app(AdminController::class)->index();
         if($section==='filenames')return app(FilenameCleanupController::class)->index($request);
         if($section==='sync') {
-            $plan=$request->query('plan')?app(ArtworkRenameStore::class)->load((string)$request->query('plan'),$request->user()->id,true):null;
+            try{$plan=$request->query('plan')?app(ArtworkRenameStore::class)->load((string)$request->query('plan'),$request->user()->id,true):null;}
+            catch(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e){return redirect()->route('admin.settings',['section'=>'sync','partner'=>\App\Services\PartnerContext::current()])->with('warning','This catalog preview is unavailable for the selected company. Sync the catalog again.');}
             $summary=$plan?ArtworkRenameStore::summary($plan):app(ArtworkRenameStore::class)->latestSummary($request->user()->id);
             return view('admin.settings',['section'=>'sync','plan'=>$plan,'summary'=>$summary]);
         }

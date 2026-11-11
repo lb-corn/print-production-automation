@@ -11,7 +11,7 @@ Route::middleware(['auth', 'auth.session', \App\Http\Middleware\RequireFeature::
     Route::get('/settings', [\App\Http\Controllers\AdminSettingsController::class, 'index'])->name('settings');
     Route::post('/filename-cleanup/process', [\App\Http\Controllers\FilenameCleanupController::class, 'process'])->middleware('throttle:filename-cleanup')->name('filename-cleanup.process');
     Route::post('/data-sync', [\App\Http\Controllers\ArtworkNamingController::class, 'syncSources'])->middleware('throttle:catalog-sync')->name('data-sync');
-    Route::get('/artwork-names', fn(\Illuminate\Http\Request $request)=>redirect()->route('admin.settings',array_filter(['section'=>'artwork','plan'=>$request->query('plan')])))->name('artwork-names');
+    Route::get('/artwork-names', fn(\Illuminate\Http\Request $request)=>redirect()->route('admin.settings',array_filter(['section'=>'artwork','plan'=>$request->query('plan'),'partner'=>\App\Services\PartnerContext::current()])))->name('artwork-names');
     Route::post('/artwork-names/scan', [\App\Http\Controllers\ArtworkNamingController::class, 'scan'])->name('artwork-names.scan');
     Route::post('/artwork-names/standardize', [\App\Http\Controllers\ArtworkNamingController::class, 'standardize'])->middleware('throttle:catalog-sync')->name('artwork-names.standardize');
     Route::post('/artwork-names/review', [\App\Http\Controllers\ArtworkNamingController::class, 'revise'])->name('artwork-names.review');

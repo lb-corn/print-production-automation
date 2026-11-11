@@ -22,7 +22,7 @@ class FilenameCleanupController extends Controller
     {
         $actor=$this->actor($request);
         $data=$request->validate(['plan'=>'required|string|size:48','file_id'=>'required|string|max:200','suggested_name'=>'sometimes|required|string|max:255']);
-        $back=redirect()->route('admin.settings',['section'=>'filenames']);
+        $back=redirect()->route('admin.settings',['section'=>'filenames','partner'=>\App\Services\PartnerContext::current()]);
         try {
             $plan=app(ArtworkRenameStore::class)->load($data['plan'],$actor);
             abort_unless(!empty($plan['standardize']),422,'Refresh the filename list before processing a suggestion.');

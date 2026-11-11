@@ -236,7 +236,7 @@ class ArtworkNamingService
         $folders=array_column(array_filter($index,function($folder){
             if(($folder['kind']??'')!=='series_folder')return false;
             $parts=array_map('trim',explode('/',$folder['path']??''));
-            return count($parts)===2 && in_array($parts[0],config('services.google_drive.allowed_root_folders',[]),true)
+            return count($parts)===2 && in_array($parts[0],PartnerContext::artworkRoots(),true)
                 && $parts[1]===($folder['name']??null) && ArtworkMatcherService::seriesForFolder($folder['name'])!==null;
         }),null,'id');
         $designOwners=[];

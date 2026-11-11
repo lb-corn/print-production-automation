@@ -133,6 +133,7 @@ class GoogleDriveService
      */
     public function manufacturingRoots(): array
     {
+        if(PartnerContext::directSeries())return [['id'=>$this->partnerRoot(),'name'=>PartnerContext::label(),'mimeType'=>'application/vnd.google-apps.folder']];
         return collect(
             $this->listChildren($this->partnerRoot())
         )

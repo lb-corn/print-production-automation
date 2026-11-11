@@ -12,7 +12,8 @@ class ArtworkNamingController extends Controller
         $actor=$this->actor($request);
         $catalogSearch=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
         $loadError=null;
-        $plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);
+        try{$plan=$request->query('plan')?$store->load((string)$request->query('plan'),$actor,true):$store->latestPreview($actor);}
+        catch(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e){return redirect()->route('admin.settings',['section'=>'artwork','partner'=>\App\Services\PartnerContext::current()])->with('warning','This artwork preview is unavailable for the selected company. Check files again.');}
         $stalePlan=!empty($plan['catalog_stale']);
         if($stalePlan)$plan=$store->latestPreview($actor);
         if(!$plan && (!$request->query('plan') || $stalePlan)) {
@@ -41,7 +42,7 @@ class ArtworkNamingController extends Controller
             }
         }
         $scope=[];
-        foreach(config('services.google_drive.allowed_root_folders',[]) as $root)$scope[$root]=[];
+        foreach(\App\Services\PartnerContext::artworkRoots() as $root)$scope[$root]=[];
         if($plan)foreach($plan['index'] as $entry) {
             if(($entry['kind']??'')!=='series_folder')continue;
             $parts=array_map('trim',explode('/',$entry['path']));
@@ -64,8 +65,8 @@ class ArtworkNamingController extends Controller
         $actor=$this->actor($request);
         $search=$request->validate(['artwork_search'=>'sometimes|nullable|string|max:255'])['artwork_search']??'';
         try{$plan=app(ArtworkNamingService::class)->scan($actor);}
-        catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names')->with('error','Cannot load artwork from All Bags and Drive. Check that exactly one All Bags collection exists, Shopify read_products access, and Drive service-account access. No files were renamed.');}
-        $response=redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token'],'artwork_search'=>$search]);
+        catch(\Throwable $e){report($e);return redirect()->route('admin.artwork-names',['partner'=>\App\Services\PartnerContext::current()])->with('error','Cannot load artwork from All Bags and Drive. Check that exactly one All Bags collection exists, Shopify read_products access, and Drive service-account access. No files were renamed.');}
+        $response=redirect()->route('admin.settings',['section'=>'artwork','plan'=>$plan['token'],'artwork_search'=>$search,'partner'=>\App\Services\PartnerContext::current()]);
         try {
             $counts=app(\App\Services\ArtworkRematchService::class)->rematch($plan['index']);
             return $response->with('ok',sprintf('Current Drive files checked and unbatched orders refreshed: %d matched · %d missing · %d ambiguous · %d protected. Review artwork in Artwork Verification before approval. No files were renamed.',$counts['matched'],$counts['missing'],$counts['ambiguous'],$counts['skipped']));
@@ -79,7 +80,7 @@ class ArtworkNamingController extends Controller
     public function standardize(Request $request)
     {
         $this->actor($request);
-        return redirect()->route('admin.settings',['section'=>'filenames']);
+        return redirect()->route('admin.settings',['section'=>'filenames','partner'=>\App\Services\PartnerContext::current()]);
     }
     public function syncSources(Request $request)
     {
@@ -89,9 +90,9 @@ class ArtworkNamingController extends Controller
         try { $plan=app(ArtworkNamingService::class)->scan($actor); }
         catch(\Throwable $e) {
             report($e);
-            return redirect()->route('admin.settings',['section'=>'sync'])->with('error','Catalog sync failed while reading Shopify products or Drive artwork. Check integration access and try again.');
+            return redirect()->route('admin.settings',['section'=>'sync','partner'=>\App\Services\PartnerContext::current()])->with('error','Catalog sync failed while reading Shopify products or Drive artwork. Check integration access and try again.');
         }
-        return redirect()->route('admin.settings',['section'=>'sync','plan'=>$plan['token'],'artwork_search'=>$search])
+        return redirect()->route('admin.settings',['section'=>'sync','plan'=>$plan['token'],'artwork_search'=>$search,'partner'=>\App\Services\PartnerContext::current()])
             ->with('ok',sprintf('Catalog synced: %d Shopify variants · %d Drive artwork files. Open Artwork matching to review the refreshed data. Orders, approvals and print queues were not changed.',count($plan['catalog']),count(array_filter($plan['index'],fn($file)=>($file['kind']??'')==='artwork'))));
     }
     public function revise(Request $request)
@@ -116,7 +117,7 @@ class ArtworkNamingController extends Controller
     }
     private function choiceResponse(Request $request,?string $token,string $status,string $message)
     {
-        $url=route('admin.settings',['section'=>'artwork','plan'=>$token]);
+        $url=route('admin.settings',['section'=>'artwork','plan'=>$token,'partner'=>\App\Services\PartnerContext::current()]);
         if($request->expectsJson())return response()->json(['status'=>$status,'message'=>$message,'url'=>$url],$status==='error'?422:200);
         return redirect()->to($url)->with($status,$message);
     }
@@ -148,6 +149,6 @@ class ArtworkNamingController extends Controller
     private function progress(array $plan): array
     {
         return ['status'=>$plan['status'],'renamed'=>$plan['renamed']??0,'remaining'=>count($plan['pending']??[]),'warning'=>$plan['warning']??null,
-            'url'=>route('admin.artwork-names',['plan'=>$plan['token']])];
+            'url'=>route('admin.artwork-names',['plan'=>$plan['token'],'partner'=>\App\Services\PartnerContext::current()])];
     }
 }

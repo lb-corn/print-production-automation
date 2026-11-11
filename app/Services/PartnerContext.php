@@ -24,6 +24,8 @@ class PartnerContext
         return self::current()==='lucky'?(string)config('services.google_drive.artwork_root_id'):(string)config('services.partners.'.self::current().'.drive_root_id');
     }
     public static function tab():string {return self::current()==='lucky'?(string)config('services.materials.sheet_tab','Lucky'):(string)config('services.materials.partner_tabs.'.self::current());}
+    public static function directSeries():bool {return config('services.partners.'.self::current().'.drive_layout','groups')==='series';}
+    public static function artworkRoots():array {return self::directSeries()?[self::label()]:config('services.google_drive.allowed_root_folders',[]);}
     public static function allowed($user):array {
         if(!$user)return [];
         return array_values(array_filter(array_keys(config('services.partners',[])),fn($p)=>$user->allows('partners.'.$p.'.view')));

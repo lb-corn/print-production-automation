@@ -160,6 +160,7 @@ jobs:
           php tests/role-permissions.php
           php tests/partner-integration.php
           php tests/dashboard-charts.php
+          php tests/company-admin-flows.php
           php tests/admin-controls.php
           php tests/reset-flow.php
           php tests/backlog-reconciliation.php

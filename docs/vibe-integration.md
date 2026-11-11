@@ -45,7 +45,7 @@ Both artwork roots use the existing allowed manufacturing group folders, with di
 Read-only audit on November 11, 2026:
 
 - Lucky: after copying the missing originals, all ten series folders are populated and 243 eligible originals are indexed. The local rematch found 49 matches and ten items needing review, with five custom/locked items skipped. Copied files may retain a former ID suffix in their descriptive filename; matching accepts this while current metadata and operator approval establish identity.
-- Vibe: the root currently exposes Backside Scan Materials, including Macarena scans, but no manufacturing artwork groups/originals. Add the intended folders and originals, then rematch.
+- Vibe: the current company root has nine direct series folders and 96 eligible originals. The scanner supports this layout with `VIBE_DRIVE_LAYOUT=series` (the default); Lucky continues to use its Group A/Group B folders. Only sheet-recognized series are eligible; backing scans, unrelated folders and mockups are excluded. The live catalog contains 68 variants. Use the existing artwork picker to confirm the correct originals; discovery does not approve or rename files.
 - Ensure every Vibe variant SKU contains its actual sheet series code, for example `VB-BEL-…-001` for Believe and `VB-PRE-…-001` for Premiere. Some catalog variants were observed using another series' code; correct those in Shopify before relying on matching. Missing or ambiguous artwork stays in review.
 - Backing labels use the exact allowed color name from the selected partner's sheet. Where scans are unavailable or comparison is uncertain, choose the sheet color in verification and approve once; the app does not invent color names or approve automatically.
 

@@ -10,7 +10,7 @@ class ArtworkRenameStore
     public function __construct(?string $directory=null) { $this->directory=$directory ?? storage_path('app/private/artwork-names'.(PartnerContext::current()==='lucky'?'':'/'.PartnerContext::current())); }
     public function create(int $actor, array $data): array
     {
-        $plan=['token'=>bin2hex(random_bytes(24)),'actor'=>$actor,'created_at'=>time(),'expires_at'=>time()+1800,'status'=>'preview','events'=>[],...$data];
+        $plan=['token'=>bin2hex(random_bytes(24)),'actor'=>$actor,'created_at'=>time(),'expires_at'=>time()+1800,'status'=>'preview','events'=>[],...$data,'partner'=>PartnerContext::current()];
         $this->save($plan); return $plan;
     }
     public function load(string $token,int $actor,bool $allowExpired=false): array
@@ -18,6 +18,7 @@ class ArtworkRenameStore
         $path=$this->path($token);
         abort_unless(is_file($path),404,'Artwork naming plan not found. Scan again.');
         $plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
+        abort_unless(!isset($plan['partner']) || $plan['partner']===PartnerContext::current(),404,'Artwork naming plan not found for this company.');
         abort_unless(($plan['actor']??null)===$actor,403);
         abort_if(!$allowExpired && !empty($plan['catalog_stale']),422,'A Drive filename changed. Refresh the artwork page before continuing.');
         abort_if(!$allowExpired && ($plan['expires_at']??0)<time(),422,'This preview expired. Scan again.');
@@ -30,7 +31,7 @@ class ArtworkRenameStore
         foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json')?:[] as $path) {
             if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
             try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
-            if(!empty($plan['standardize']) || !empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
+            if((isset($plan['partner']) && $plan['partner']!==PartnerContext::current()) || !empty($plan['standardize']) || !empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY || ($plan['status']??null)!=='preview' || ($plan['expires_at']??0)<time() || ($plan['created_at']??0)<time()-120)continue;
             if(!$latest || $plan['created_at']>$latest['created_at'])$latest=$plan;
         }
         return $latest;
@@ -41,7 +42,7 @@ class ArtworkRenameStore
         foreach(glob($this->directory.DIRECTORY_SEPARATOR.'*.json') ?: [] as $path) {
             if(!preg_match('/^[a-f0-9]{48}\.json$/D',basename($path)))continue;
             try{$plan=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);}catch(\JsonException $e){continue;}
-            if(!empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY)continue;
+            if((isset($plan['partner']) && $plan['partner']!==PartnerContext::current()) || !empty($plan['catalog_stale']) || ($plan['actor']??null)!==$actor || ($plan['naming_policy']??null)!==ArtworkNamingService::POLICY)continue;
             if($latest===null || ($plan['created_at']??0)>($latest['created_at']??0))$latest=$plan;
         }
         return $latest ? self::summary($latest) : null;

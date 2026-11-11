@@ -25,7 +25,7 @@ $item=ProductionItem::create(['line_item_id'=>'cleanup-order','quantity'=>1,...a
 $batchesBefore=PrintBatch::all()->toJson();
 $processRequest=function($token,$id,$user) { $r=Illuminate\Http\Request::create('/admin/filename-cleanup/process','POST',['plan'=>$token,'file_id'=>$id]);$r->setUserResolver(fn()=>$user);return $r; };
 $response=$cleanup->process($processRequest($data['plan']['token'],$work['id'],$admin));$item=$item->fresh('decision');
-$check($response->isRedirect(route('admin.settings',['section'=>'filenames'])) && $writer->writes===$writesBefore+1 && $item->matches[0]['name']===$standardName('LB-PSE-DUC-RED-SINGLE',$work['id']) && !$item->decision && str_contains(session('ok'),'Renamed PSE-DUC-RED.jpg'),'One-click action updates Drive and the order with a clear success result and fresh approval requirement');
+$check($response->isRedirect(route('admin.settings',['section'=>'filenames','partner'=>'lucky'])) && $writer->writes===$writesBefore+1 && $item->matches[0]['name']===$standardName('LB-PSE-DUC-RED-SINGLE',$work['id']) && !$item->decision && str_contains(session('ok'),'Renamed PSE-DUC-RED.jpg'),'One-click action updates Drive and the order with a clear success result and fresh approval requirement');
 $check(PrintBatch::all()->toJson()===$batchesBefore,'One-click cleanup never changes existing queues or batch snapshots');
 $refreshedCatalog=$store->latestPreview($admin->id);
 $refreshedFile=collect($refreshedCatalog['index'])->firstWhere('id',$work['id']);

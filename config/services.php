@@ -13,7 +13,7 @@ return [
 
     'partners'=>[
         'lucky'=>['enabled'=>true,'label'=>'Lucky','prefix'=>'LB','drive_folder'=>env('LB_DRIVE_FOLDER','LuckyBags'),'drive_root_id'=>env('GOOGLE_DRIVE_ARTWORK_ROOT_ID')],
-        'vibe'=>['enabled'=>(bool)env('VIBE_SHOP'),'label'=>'Vibe','prefix'=>'VB','drive_folder'=>env('VIBE_DRIVE_FOLDER','Vibe'),'drive_root_id'=>env('VIBE_DRIVE_ARTWORK_ROOT_ID'),'backing_folder_map'=>json_decode(env('VIBE_BACKING_SWATCH_FOLDER_MAP','{}'),true)?:[],'shopify'=>['store'=>env('VIBE_SHOP'),'client_id'=>env('VIBE_CLIENT_ID'),'client_secret'=>env('VIBE_CLIENT_SECRET'),'api_version'=>env('VIBE_API_VERSION','2026-07'),'artwork_collection'=>env('VIBE_ARTWORK_COLLECTION','All Bags')]],
+        'vibe'=>['enabled'=>(bool)env('VIBE_SHOP'),'label'=>'Vibe','prefix'=>'VB','drive_layout'=>env('VIBE_DRIVE_LAYOUT','series'),'drive_folder'=>env('VIBE_DRIVE_FOLDER','Vibe'),'drive_root_id'=>env('VIBE_DRIVE_ARTWORK_ROOT_ID'),'backing_folder_map'=>json_decode(env('VIBE_BACKING_SWATCH_FOLDER_MAP','{}'),true)?:[],'shopify'=>['store'=>env('VIBE_SHOP'),'client_id'=>env('VIBE_CLIENT_ID'),'client_secret'=>env('VIBE_CLIENT_SECRET'),'api_version'=>env('VIBE_API_VERSION','2026-07'),'artwork_collection'=>env('VIBE_ARTWORK_COLLECTION','All Bags')]],
     ],
     'bag_product_types'=>['lucky'=>array_filter(explode('|',env('LB_BAG_PRODUCT_TYPES','ACL Pro Stamped 2026|ACL Pro Stamped 2027|ACL Pro Stamped 2028'))),'vibe'=>array_filter(explode('|',env('VIBE_BAG_PRODUCT_TYPES','Vibe Bags')))],
 

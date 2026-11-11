@@ -84,7 +84,7 @@ class ArtworkMatcherService
         if($parts){$year=$parts['year'];$design=$parts['design'];}
         [$variantKnown, $color] = $this->variant($row['variant'] ?? '', $series);
         $custom = stripos($row['product'] ?? '', 'custom') !== false;
-        $review = ['policy'=>self::POLICY, 'expected_folder'=>$series ? 'Approved Group A / Group B / '.$series : 'Unknown series',
+        $review = ['policy'=>self::POLICY, 'expected_folder'=>$series ? (PartnerContext::directSeries()?PartnerContext::label():'Approved Group A / Group B').' / '.$series : 'Unknown series',
             'folder_url'=>null, 'suggested_filenames'=>[], 'issues'=>[], 'candidates'=>[], 'corrections'=>[], 'mismatches'=>[]];
         $result = ['series_code'=>$series,'design_type'=>$type,'design'=>$design,'color'=>$color,'is_custom'=>$custom,
             'match_status'=>$custom ? 'CUSTOM' : 'MISSING','confidence'=>null,'matches'=>[]];
@@ -250,7 +250,7 @@ class ArtworkMatcherService
         $index = []; $folders = [];
         foreach ($files as $file) {
             $parts = array_map('trim', explode('/', $file['path'] ?? ''));
-            if (count($parts) < 3 || !in_array($parts[0], config('services.google_drive.allowed_root_folders', []), true)
+            if (count($parts) < 3 || !in_array($parts[0], PartnerContext::artworkRoots(), true)
                 || !in_array($this->norm($parts[1]), self::folders()[$series], true)
                 || end($parts) !== ($file['name'] ?? '') || empty($file['id'])
                 || preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVES?)(?:$|[^A-Z0-9])/i',implode('/',array_slice($parts,2,-1)))) continue;
