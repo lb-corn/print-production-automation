@@ -91,7 +91,7 @@ $preview=$plan['status']==='preview'&&!$outdated;
 @foreach($reviewGroups as $group)
 @php($entry=$group['entry'])
 @php($source=$entry['source_attributes'])
-<option value="{{$entry['id']}}" data-parent-id="{{$entry['source']['parent_id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="https://drive.google.com/thumbnail?id={{rawurlencode($entry['id'])}}&amp;sz=w160" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" data-protected="{{$entry['status']==='locked'?'1':'0'}}" data-linked="{{$entry['proposal']['product']??''}}">{{$entry['source']['name']}}</option>
+<option value="{{$entry['id']}}" data-parent-id="{{$entry['source']['parent_id']}}" data-series="{{$source['series']??''}}" data-side="{{$source['side']??''}}" data-color="{{$source['color']??''}}" data-thumbnail="{{\App\Http\Controllers\ArtworkPreviewController::url($entry['id'])}}" data-url="https://drive.google.com/file/d/{{rawurlencode($entry['id'])}}/view" data-protected="{{$entry['status']==='locked'?'1':'0'}}" data-linked="{{$entry['proposal']['product']??''}}">{{$entry['source']['name']}}</option>
 @endforeach
 </select>
 <div class="artwork-candidate-grid" data-artwork-candidates role="group" aria-label="Drive artwork choices"></div>

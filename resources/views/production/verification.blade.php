@@ -112,7 +112,7 @@
 @else
 @forelse($item->display_matches??[] as $m)<div class="art">
 <label>DRIVE {{strtoupper($m['side']??'ARTWORK')}}</label>
-<img src="https://drive.google.com/thumbnail?id={{$m['id']}}&sz=w800" alt="Drive {{$m['side']??'artwork'}}: {{$m['name']??'Artwork'}}" loading="lazy">
+<img src="{{\App\Http\Controllers\ArtworkPreviewController::url($m['id'])}}" alt="Drive {{$m['side']??'artwork'}}: {{$m['name']??'Artwork'}}" loading="lazy">
 @include('partials.artwork-filename',['filename'=>$m['name']??''])<small>{{$item->production_batch ? 'Locked batch artwork' : ($item->valid_artwork ? (($item->artwork_review['selection_source']??'')==='admin'?'Admin-reviewed artwork choice · operator approval required':'Exact filename match · operator approval required') : 'Saved artwork preview · rematch to verify')}}</small>
 <a target="_blank" rel="noopener noreferrer" href="{{$m['webViewLink']??'#'}}">Open original</a>
 </div>

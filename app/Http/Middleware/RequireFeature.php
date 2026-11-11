@@ -7,6 +7,10 @@ class RequireFeature {
     public function handle(Request $request, Closure $next) {
         $name=$request->route()?->getName() ?? '';
         if(in_array($name,['logout','profile','docs'],true)) return $next($request);
+        if($name==='artwork.preview'){
+            abort_unless(collect(['bags.artwork.view','bags.queue.view','bags.batches.view','admin.artwork.view'])->contains(fn($permission)=>$request->user()->allows($permission)),403);
+            return $next($request);
+        }
         if($name==='orders.sync') {
             abort_unless($request->user()->allows('bags.sync.edit') || $request->user()->allows('apparel.sync.edit'),403);
             return $next($request);
