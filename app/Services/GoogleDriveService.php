@@ -151,7 +151,7 @@ class GoogleDriveService
             ->all();
     }
 
-    /** Only direct files in direct series folders are eligible. Never descend further. */
+    /** Search every production subfolder within the selected partner's approved series. */
     public function artworkIndex(): array
     {
         $results = [];
@@ -161,14 +161,27 @@ class GoogleDriveService
                 if (preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:$|[^A-Z0-9])/i', $folder['name'])) continue;
                 $path = $root['name'].' / '.$folder['name'];
                 $results[] = ['kind'=>'series_folder','id'=>$folder['id'],'name'=>$folder['name'],'path'=>$path];
-                foreach ($this->listChildren($folder['id']) as $file) {
-                    if ($file['mimeType'] === 'application/vnd.google-apps.folder' || $file['mimeType'] === 'application/vnd.google-apps.shortcut') continue;
-                    if (!in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['jpg','jpeg','png','tif','tiff','webp','psd','pdf'], true)) continue;
-                    if (preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:$|[^A-Z0-9])/i', $file['name'])) continue;
-                    $results[] = [...$file,'kind'=>'artwork','parent_id'=>$folder['id'],'path'=>$path.' / '.$file['name']];
-                }
+                $visited=[];
+                $this->collectArtwork($folder['id'],$folder['id'],$path,$results,$visited);
             }
         }
         return $results;
+    }
+
+    private function collectArtwork(string $parent,string $series,string $path,array &$results,array &$visited):void
+    {
+        if(isset($visited[$parent]))return;
+        $visited[$parent]=true;
+        foreach($this->listChildren($parent) as $file){
+            if($file['mimeType']==='application/vnd.google-apps.shortcut')continue;
+            if(preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVES?)(?:$|[^A-Z0-9])/i',$file['name']))continue;
+            $filePath=$path.' / '.$file['name'];
+            if($file['mimeType']==='application/vnd.google-apps.folder'){
+                $this->collectArtwork($file['id'],$series,$filePath,$results,$visited);
+                continue;
+            }
+            if(!in_array(strtolower(pathinfo($file['name'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true))continue;
+            $results[]=[...$file,'kind'=>'artwork','parent_id'=>$parent,'series_folder_id'=>$series,'path'=>$filePath];
+        }
     }
 }

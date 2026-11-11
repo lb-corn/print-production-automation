@@ -112,7 +112,7 @@ class ArtworkMatcherService
         $designs = $this->designs($row, $design, $year);
         $bySide = []; $seen = [];
         foreach ($index as $file) {
-            if (($file['kind'] ?? '') !== 'artwork' || ($file['parent_id'] ?? null) !== $folder['id'] || empty($file['id']) || isset($seen[$file['id']])) continue;
+            if (($file['kind'] ?? '') !== 'artwork' || ($file['series_folder_id'] ?? $file['parent_id'] ?? null) !== $folder['id'] || empty($file['id']) || isset($seen[$file['id']])) continue;
             if (!in_array(strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)), ['jpg','jpeg','png','tif','tiff','webp','psd','pdf'], true)) continue;
             $name = $this->norm(pathinfo($file['name'], PATHINFO_FILENAME));
             if (preg_match('/(?:^|-)(?:MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/', $name)) continue;
@@ -139,7 +139,7 @@ class ArtworkMatcherService
             foreach($type==='double'?['front','back']:['single'] as $side) {
                 $saved=$reviewed['files'][$side]['source']??null;$found=null;
                 foreach($index as $candidate) {
-                    if(($candidate['kind']??'')!=='artwork' || ($candidate['parent_id']??null)!==$folder['id'] || !$saved || self::artworkFingerprint($candidate)!==self::artworkFingerprint($saved))continue;
+                    if(($candidate['kind']??'')!=='artwork' || ($candidate['series_folder_id']??$candidate['parent_id']??null)!==$folder['id'] || !$saved || self::artworkFingerprint($candidate)!==self::artworkFingerprint($saved))continue;
                     $attributes=$this->sourceAttributes($candidate,$folder['name'],array_filter([$color]));
                     if(!$attributes || (empty($candidate['version']) && empty($candidate['modifiedTime']) && empty($candidate['md5Checksum'])))continue;
                     if($type==='double' && ($attributes['side']??null)!==null && $attributes['side']!==$side)continue;
@@ -250,12 +250,13 @@ class ArtworkMatcherService
         $index = []; $folders = [];
         foreach ($files as $file) {
             $parts = array_map('trim', explode('/', $file['path'] ?? ''));
-            if (count($parts) !== 3 || !in_array($parts[0], config('services.google_drive.allowed_root_folders', []), true)
+            if (count($parts) < 3 || !in_array($parts[0], config('services.google_drive.allowed_root_folders', []), true)
                 || !in_array($this->norm($parts[1]), self::folders()[$series], true)
-                || $parts[2] !== ($file['name'] ?? '') || empty($file['id'])) continue;
+                || end($parts) !== ($file['name'] ?? '') || empty($file['id'])
+                || preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVES?)(?:$|[^A-Z0-9])/i',implode('/',array_slice($parts,2,-1)))) continue;
             $folderId = $parts[0].'/'.$parts[1];
             $folders[$folderId] = ['kind'=>'series_folder','id'=>$folderId,'name'=>$parts[1],'path'=>$folderId];
-            $index[] = [...$file,'kind'=>'artwork','parent_id'=>$folderId];
+            $index[] = [...$file,'kind'=>'artwork','parent_id'=>$folderId,'series_folder_id'=>$folderId];
         }
         return $this->match($row, [...array_values($folders),...$index])['matches'];
     }

@@ -247,10 +247,10 @@ class ArtworkNamingService
         $catalog=array_column($catalog,null,'catalog_key');$entries=[];$targets=[];$reviewedOwners=[];
         foreach($catalog as $row)if($choice=$this->matcher->reviewedSelection($row))foreach($choice['files'] as $side=>$file)$reviewedOwners[$file['source']['id']][$this->matcher->selectionKey($row)]=['source'=>$file['source'],'mapping'=>['catalog_key'=>$row['catalog_key'],'side'=>$side,'color'=>$file['color']??'']];
         foreach($index as $file) {
-            if(($file['kind']??'')!=='artwork'||!isset($folders[$file['parent_id']??'']))continue;
-            $folder=$folders[$file['parent_id']];
+            if(($file['kind']??'')!=='artwork'||!isset($folders[$file['series_folder_id']??$file['parent_id']??'']))continue;
+            $folder=$folders[$file['series_folder_id']??$file['parent_id']];
             $path=array_map('trim',explode('/',$file['path']??''));$folderPath=array_map('trim',explode('/',$folder['path']));
-            if(count($path)!==3 || array_slice($path,0,2)!==$folderPath || $path[2]!==$file['name'])continue;
+            if(count($path)<3 || array_slice($path,0,2)!==$folderPath || end($path)!==$file['name'] || preg_match('/(?:^|[^A-Z0-9])(MOCKUPS?|PREVIEWS?|ARCHIVES?)(?:$|[^A-Z0-9])/i',implode('/',array_slice($path,2,-1))))continue;
             $choices=[];
             $mapping=$mappings[$file['id']]??null;
             $owners=$reviewedOwners[$file['id']]??[];

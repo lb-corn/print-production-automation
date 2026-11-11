@@ -63,4 +63,20 @@ if(in_array('--preview',$argv,true)){
     file_put_contents(__DIR__.'/../tmp/backing-compact-page.html',$controller->verification()->render());
     file_put_contents(__DIR__.'/../tmp/backing-ui-id.txt',(string)$ui->id);
 }
+$app->instance(App\Services\BackingSwatchService::class,new class extends App\Services\BackingSwatchService {
+    public function files(string $material,array $colors):array{return ['Latte'=>['id'=>'private-swatch','mimeType'=>'image/png']];}
+    public function suggest($item):array{return ['suggested'=>'Latte'];}
+});
+$loader=new class($refs['Latte']) extends App\Services\BackingReferenceLoader {
+    public int $reads=0;
+    public function __construct(private string $bytes){}
+    public function swatch(array $file):string{$this->reads++;return $this->bytes;}
+};$app->instance(App\Services\BackingReferenceLoader::class,$loader);
+$backingController=new App\Http\Controllers\BackingColorController;
+$suggestion=$backingController->suggest($stock)->getData(true);
+check(str_contains($suggestion['swatches'][0]['image'],'backing-swatch') && str_contains($suggestion['swatches'][0]['image'],'partner=lucky') && !str_contains($suggestion['swatches'][0]['image'],'drive.google.com'),'Private swatches use partner-scoped app URLs');
+$response=$backingController->swatch(Illuminate\Http\Request::create('/swatch?color=Latte'),$item);
+check($response->headers->get('Content-Type')==='image/png' && $response->getContent()===$refs['Latte'] && str_contains($response->headers->get('Cache-Control'),'private'),'App serves authenticated swatch bytes with private cache headers');
+$reject(fn()=>$backingController->swatch(Illuminate\Http\Request::create('/swatch?color=Brown'),$item),404);
+check($loader->reads===1,'Unknown colors cannot request arbitrary Drive files');
 echo "Backing-color checks passed.\n";

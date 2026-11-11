@@ -60,4 +60,5 @@ Route::middleware(['auth','auth.session',\App\Http\Middleware\RequireFeature::cl
 Route::middleware(['auth','auth.session',\App\Http\Middleware\RequireFeature::class,\App\Http\Middleware\ReadOnlyDemo::class,\App\Http\Middleware\PortalWriteLock::class])->group(function(){
     Route::post('/production/{item}/return-review',[\App\Http\Controllers\ProductionController::class,'returnReadyToReview'])->name('production.return-review');
     Route::get('/production/{item}/backing-suggestion',[\App\Http\Controllers\BackingColorController::class,'suggest'])->middleware('throttle:12,1')->name('backing.suggest');
+    Route::get('/production/{item}/backing-swatch',[\App\Http\Controllers\BackingColorController::class,'swatch'])->middleware('throttle:120,1')->name('backing.swatch');
 });

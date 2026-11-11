@@ -40,7 +40,7 @@ The single factory root resolves the direct `LuckyBags` and `Vibe` child folders
 
 ## Files and product naming to finish manually
 
-Both artwork roots use the existing allowed manufacturing group folders, with direct series folders and original files directly inside each series. Mockup/archive subfolders and Drive shortcuts are not treated as printable originals. Use Admin matching/naming after uploading originals; no remote folder, filename or SKU was changed by the integration.
+Both artwork roots use the existing allowed manufacturing group folders, with direct series folders. Originals are searched recursively inside each series, including Print and its subfolders. Mockup/preview/archive branches and Drive shortcuts are excluded. Use Admin matching/naming after uploading originals; no remote folder, filename or SKU was changed by the integration.
 
 Read-only audit on November 11, 2026:
 

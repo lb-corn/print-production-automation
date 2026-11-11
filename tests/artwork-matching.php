@@ -22,12 +22,20 @@ $file = fn($id,$name) => ['id'=>$id,'name'=>$name,'mimeType'=>'image/png','modif
 $drive->tree = ['group-b'=>[$folder('pse','PSE')], 'pse'=>[
     $file('correct','PSE-DUC-RED.png'),$file('wrong-color','PSE-DUC-BROWN.png'),
     $file('mockup','PSE-DUC-RED-MOCKUP.png'),$folder('mockups','MOCKUPS'),$folder('nested','OTHER'),
-], 'mockups'=>[$file('mockup-child','PSE-DUC-RED.png')], 'nested'=>[$file('nested-child','PSE-DUC-RED.png')]];
+], 'mockups'=>[$file('mockup-child','PSE-DUC-RED.png')], 'nested'=>[$file('nested-child','PSE-OTHER-RED.png')]];
 $matcher = new ArtworkMatcherService($drive);
 $row = ['sku'=>'2027-DUC-PSE-0001','product'=>'Pro Sniper Elite','variant'=>'Pro Sniper Elite / Red'];
 $match = $matcher->match($row);
 $check(array_column($match['matches'],'id')===['correct'],'Correct direct parent artwork selected; mockups excluded');
-$check(!in_array('nested',$drive->visited) && !in_array('mockups',$drive->visited),'No nested folders are visited');
+$check(in_array('nested',$drive->visited) && !in_array('mockups',$drive->visited),'Production subfolders are searched while mockups are excluded');
+$directTree=$drive->tree;
+$drive->tree['pse']=[$folder('print','Print')];$drive->tree['print']=[$folder('red','Red')];$drive->tree['red']=[$file('nested-original','PSE-DUC-RED.png')];
+$nestedMatch=$matcher->match($row);
+$check(array_column($nestedMatch['matches'],'id')===['nested-original'],'Artwork inside Print and further subfolders is matched to its series');
+$nestedIndex=$drive->artworkIndex();$nestedFile=collect($nestedIndex)->firstWhere('id','nested-original');
+$check($nestedFile['parent_id']==='red' && $nestedFile['series_folder_id']==='pse','Nested artwork keeps its actual parent and series identity');
+$check(array_column($matcher->savedPreviews($row,[$nestedFile]),'id')===['nested-original'],'Saved nested production artwork remains previewable');
+$drive->tree=$directTree;
 $check($match['match_status']==='REVIEW' && $match['confidence']===null,'Exact match still requires operator approval');
 $brown=$matcher->match([...$row,'variant'=>'Brown']);
 $check(array_column($brown['matches'],'id')===['wrong-color'],'Brown and Red are distinct supported colors');
