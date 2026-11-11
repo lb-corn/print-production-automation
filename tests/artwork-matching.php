@@ -36,6 +36,12 @@ $nestedIndex=$drive->artworkIndex();$nestedFile=collect($nestedIndex)->firstWher
 $check($nestedFile['parent_id']==='red' && $nestedFile['series_folder_id']==='pse','Nested artwork keeps its actual parent and series identity');
 $check(array_column($matcher->savedPreviews($row,[$nestedFile]),'id')===['nested-original'],'Saved nested production artwork remains previewable');
 $drive->tree=$directTree;
+$oldId='original-before-copy';$copiedName='LB-PSE-DUC-RED-SINGLE-ID-'.strtoupper(substr(hash('sha256',$oldId),0,12)).'.jpg';
+$drive->tree['pse']=[$file('new-copied-drive-id',$copiedName)];
+$copied=$matcher->match($row);
+$check(array_column($copied['matches'],'id')===['new-copied-drive-id'] && $copied['match_status']==='REVIEW','Copied artwork with its old filename suffix matches the current file and still requires approval');
+$check(!$matcher->isStandardFilename($file('new-copied-drive-id',$copiedName)),'Admin naming still identifies an old ID suffix as needing standardization');
+$drive->tree=$directTree;
 $check($match['match_status']==='REVIEW' && $match['confidence']===null,'Exact match still requires operator approval');
 $brown=$matcher->match([...$row,'variant'=>'Brown']);
 $check(array_column($brown['matches'],'id')===['wrong-color'],'Brown and Red are distinct supported colors');

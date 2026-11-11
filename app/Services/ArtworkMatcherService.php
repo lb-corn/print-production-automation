@@ -359,7 +359,10 @@ class ArtworkMatcherService
     {
         if(!str_starts_with($name,PartnerContext::prefix().'-'))return $name;
         $body=substr($name,3);
-        if(preg_match('/^(.+)-ID-([A-F0-9]{12})$/',$body,$parts))return hash_equals(strtoupper(substr(hash('sha256',$id),0,12)),$parts[2])?$parts[1]:null;
+        // Drive copies receive new IDs but retain the original descriptive filename.
+        // Live metadata fingerprints and operator approval establish identity; the suffix does not.
+        // isStandardFilename still requires the current ID for Admin naming checks.
+        if(preg_match('/^(.+)-ID-([A-F0-9]{12})$/',$body,$parts))return $parts[1];
         return $body;
     }
 
