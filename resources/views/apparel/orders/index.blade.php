@@ -333,7 +333,7 @@
                         </tr>
                     @empty
                         <tr class="apparel-empty-row">
-                            <td colspan="4" class="empty-state">No apparel orders found.</td>
+                            <td colspan="4" class="empty-state"><x-production-ui::empty-state title="No apparel orders found." :description="count(\App\Services\PartnerContext::allowed(auth()->user()))>1?'Try another company, status or search term.':'Try another status or search term.'" icon="apparel-production" /></td>
                         </tr>
                     @endforelse
                     </tbody>

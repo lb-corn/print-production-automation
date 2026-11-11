@@ -12,3 +12,10 @@ foreach($pages as $route=>[$heading,$subheading]){
 $html=Illuminate\Support\Facades\Blade::render('<x-production-ui::panel class="demo"><x-production-ui::badge>Vibe</x-production-ui::badge><x-production-ui::button type="submit" variant="chip" disabled>Save</x-production-ui::button></x-production-ui::panel>');
 check(str_contains($html,'panel') && str_contains($html,'partner-badge') && str_contains($html,'type="submit"') && str_contains($html,'disabled'),'Package components preserve classes, control types and disabled state');
 echo "Unified UI theme checks passed.\n";
+$request=requestFor($admin,'batches');$request->route()->bind($request);$app->instance('request',$request);
+$batch=(new App\Models\PrintBatch)->forceFill(['id'=>42,'batch_id'=>'LB-BATCH-TEST-LONG-IDENTIFIER-12345','status'=>'CANCELLED','order_count'=>1,'artwork_file_count'=>1,'partner'=>'lucky','payload'=>[],'created_at'=>now()]);
+$html=view('batches.index',['batches'=>collect([$batch])])->render();$markup=preg_replace('~<style\b[^>]*>.*?</style>~s','',$html);
+check(strpos($markup,'Batch history')<strpos($markup,'aria-label="Batch filters"') && str_contains($markup,'ui-toolbar batch-filter-toolbar'),'Batch title and filters use one shared list toolbar');
+check(!str_contains($markup,'company-filter-panel'),'Batch filters do not create a nested company panel');
+$markup=preg_replace('~<style\b[^>]*>.*?</style>~s','',view('batches.index',['batches'=>collect()])->render());
+check(str_contains($markup,'ui-empty-state') && !str_contains($markup,'batch-list-heading'),'An empty batch list uses the shared empty state without empty column headers');

@@ -4,10 +4,12 @@ $catalog=app(\App\Services\MaterialCatalog::class);$materialNames=$catalog->mate
 @endphp
 <x-layouts.app heading="Ready for Print" subheading="Choose a material, review approved artwork and queue a job">
 <div class="queue-workspace">
-@include('partials.partner-filter',['companyPanel'=>true])
 @include('partials.material-catalog-status')
 @if(!$queueAvailable)<div class="progress-failure" role="alert"><strong>Printing is waiting for a server update.</strong><p>Your approved items are saved. An administrator must complete the database update before queueing.</p>@if(auth()->user()?->role==='admin')<p>Run <code>bash deployment/post-deploy.sh</code> in the hosting application folder, then refresh.</p>@endif</div>@endif
+<x-production-ui::toolbar class="queue-overview-toolbar" aria-label="Ready for Print overview">
+@include('partials.partner-filter')
 <div class="queue-summary"><span><b>{{$summary['approved_orders']}}</b> approved items</span><span><b>{{$summary['total_sets']}}</b> sets</span><span><b>{{$summary['artwork_files']}}</b> artwork files</span><span><b>{{number_format($summary['printable_yards'],3)}} yd</b> printed fabric</span></div>
+</x-production-ui::toolbar>
 @if(auth()->user()->allows('bags.batches.edit') && $items->isNotEmpty())
 <section class="panel queue-controls"><form id="queue-selection" data-queue-selection data-queue-blocked="{{($queueAvailable && empty($materialCatalogError))?'0':'1'}}" method="post" action="{{route('batch.create')}}">@csrf<input type="hidden" name="dispatch_confirmed" value="1"><div class="queue-material-field"><label for="queue-material">Printed material</label><select id="queue-material" data-material-filter @disabled(!$queueAvailable)><option value="">All materials</option>@foreach($materialNames as $material)<option value="{{$material}}">{{$material}} · {{$summary['printable_materials'][$material]['sides']??0}} print sides</option>@endforeach</select></div><label class="confirmation-check"><input type="checkbox" data-select-all @disabled(!$queueAvailable)><span>Select visible orders</span></label><button type="button" class="primary" data-queue-open disabled>Queue selected (0)</button></form><p class="muted">Selected orders are split automatically into separate print batches by material. Double-sided bags can create two material batches. Single-sided backing never creates a print job.</p></section>
 @endif

@@ -31,4 +31,6 @@ CI checks that published assets match their sources. Existing `partials.*` inclu
 
 Buttons support `primary`, `chip`, `approve` and `reject`. Attributes, accessibility labels and disabled states pass through. Use `production-ui::partials.company-field` within an existing filter form, or `production-ui::partials.partner-filter` for a standalone company filter. Supply `companyAutoSubmit=false` when the parent form has its own Apply action. Controllers continue to enforce feature and company permissions; presentation components never grant access.
 
+For list pages, use `x-production-ui::panel-header` (title, description and optional `actions` slot), `x-production-ui::toolbar` for related filters, and `x-production-ui::empty-state` (title, description, icon and optional action slot). Place the title first and the filter toolbar below it. Do not put a bordered company panel inside another panel. Keep sidebar colors scoped to `.sidebar` so in-page tabs and filters remain readable.
+
 Do not add another CSS framework or per-page header sizing rules. Use the shared `--ui-header-height`, `--ui-control-height`, `--ui-panel-radius` and `--ui-page-gutter` tokens. This is an application-owned package, not a separately released Composer library; controllers, data services and production actions stay in the application.
