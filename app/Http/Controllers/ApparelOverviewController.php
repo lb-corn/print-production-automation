@@ -19,6 +19,7 @@ class ApparelOverviewController extends Controller
             'open_units'=>(int)(clone $open)->sum('quantity'),
         ];
         return view('dashboard.apparel', [
+            'charts'=>app(\App\Services\DashboardCharts::class)->apparel($summary),
             'summary'=>$summary,
             'attentionOrders'=>(clone $open)->orderByRaw('CASE WHEN ordered_at IS NULL THEN 1 ELSE 0 END')->orderBy('ordered_at')->orderBy('id')->limit(6)->get(),
             'pendingRemarks'=>JerseyOrder::needsAttention('pending_remarks')->orderBy('remark_updated_at')->orderBy('id')->limit(3)->get(),

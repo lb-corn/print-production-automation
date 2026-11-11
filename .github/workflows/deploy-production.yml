@@ -159,6 +159,7 @@ jobs:
           node tests/order-sync-controls.cjs
           php tests/role-permissions.php
           php tests/partner-integration.php
+          php tests/dashboard-charts.php
           php tests/admin-controls.php
           php tests/reset-flow.php
           php tests/backlog-reconciliation.php

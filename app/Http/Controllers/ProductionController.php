@@ -23,6 +23,7 @@ class ProductionController extends Controller
         );
 
         return view('dashboard.index', [
+            'charts'=>app(\App\Services\DashboardCharts::class)->bags($items,$this->svc),
             'total' => $items->count(),
             'openOrderCount'=>$items->filter(fn($item)=>$item->order_number)->unique(fn($item)=>$item->partner.':'.$item->order_number)->count(),
             'ready' => $ready->count(),
