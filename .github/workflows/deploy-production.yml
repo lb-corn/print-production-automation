@@ -154,6 +154,7 @@ jobs:
           php tests/production-summary.php
           php tests/apparel-integration.php
           php tests/order-sync.php
+          php tests/order-sync-throttle.php
           php tests/print-preview.php
           node tests/order-sync-controls.cjs
           php tests/role-permissions.php

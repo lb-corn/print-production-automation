@@ -9,6 +9,12 @@ use Illuminate\Http\Request;
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\PartnerContext::class);$this->app->scoped(\App\Services\ProductionSummaryService::class);$this->app->scoped(\App\Services\MaterialCatalog::class);$this->app->scoped(\App\Services\ProductionService::class);$this->app->scoped(\App\Services\FactoryDispatchService::class);}
  public function boot():void {
+  RateLimiter::for('order-sync',fn(Request $request)=>Limit::perMinute(3)->by('order-sync:'.($request->user()?->id??$request->ip()))->response(function(Request $request,array $headers){
+   $message='Please wait '.max(1,(int)($headers['Retry-After']??60)).' seconds before syncing orders again.';
+   if($request->expectsJson())return response()->json(['message'=>$message],429,$headers);
+   return redirect()->route('dashboard',['area'=>$request->input('area')==='apparel'?'apparel':'bags','partner'=>\App\Services\PartnerContext::current()])->with('warning',$message)->withHeaders($headers);
+  }));
+  RateLimiter::for('order-sync-status',fn(Request $request)=>Limit::perMinute(60)->by('order-sync-status:'.($request->user()?->id??$request->ip())));
   RateLimiter::for('backing-suggestions',fn(Request $request)=>Limit::perMinute(120)->by('backing-suggestions:'.($request->user()?->id??$request->ip())));
   RateLimiter::for('backing-references',fn(Request $request)=>Limit::perMinute(180)->by('backing-references:'.($request->user()?->id??$request->ip())));
   $this->loadViewsFrom(base_path('packages/ui-theme/resources/views'),'lucky-theme');
