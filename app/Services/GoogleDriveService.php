@@ -19,7 +19,7 @@ class GoogleDriveService
         );
 
         $this->rootId = trim(
-            PartnerContext::root()
+            PartnerContext::current()==='lucky'?(string)config('services.google_drive.artwork_root_id'):(string)config('services.partners.'.PartnerContext::current().'.drive_root_id')
         );
 
         $this->allowedFolders = config(
@@ -34,7 +34,7 @@ class GoogleDriveService
             );
         }
 
-        if ($this->rootId === '') {
+        if ($this->rootId === '' && !config('services.google_drive.factory_root_id')) {
             throw new RuntimeException(
                 'Google Drive artwork root is not configured.'
             );
@@ -49,6 +49,19 @@ class GoogleDriveService
         ]);
 
         $this->drive = new Drive($client);
+    }
+
+    public function partnerRoot(): string
+    {
+        $factory=trim((string)config('services.google_drive.factory_root_id'));
+        if($factory==='')return $this->rootId;
+        $name=(string)config('services.partners.'.PartnerContext::current().'.drive_folder');
+        if($name==='')throw new RuntimeException('Partner artwork folder name is not configured.');
+        return \Illuminate\Support\Facades\Cache::remember('drive.partner-root.'.hash('sha256',json_encode([$factory,$name,config('services.google_drive.service_account_file')])),300,function()use($factory,$name){
+            $folders=array_values(array_filter($this->listChildren($factory),fn($file)=>$file['mimeType']==='application/vnd.google-apps.folder' && $file['name']===$name));
+            if(count($folders)!==1)throw new RuntimeException('The partner folder is missing or ambiguous inside the configured factory root.');
+            return $folders[0]['id'];
+        });
     }
 
     /**
@@ -121,7 +134,7 @@ class GoogleDriveService
     public function manufacturingRoots(): array
     {
         return collect(
-            $this->listChildren($this->rootId)
+            $this->listChildren($this->partnerRoot())
         )
             ->filter(
                 fn (array $file) =>

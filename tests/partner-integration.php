@@ -72,4 +72,16 @@ if(in_array('--preview',$argv,true))foreach(['lucky','vibe'] as $previewPartner)
     $app->instance('request',Illuminate\Http\Request::create('/dashboard?partner='.$previewPartner));
     file_put_contents(__DIR__.'/../tmp/partner-'.$previewPartner.'.html',app(App\Http\Controllers\ProductionController::class)->dashboard()->render());
 });
+$factoryDrive=new class extends App\Services\GoogleDriveService {
+    public array $children=[['id'=>'lucky-child','name'=>'LuckyBags','mimeType'=>'application/vnd.google-apps.folder'],['id'=>'vibe-child','name'=>'Vibe','mimeType'=>'application/vnd.google-apps.folder']];
+    public function __construct(){}
+    public function listChildren(string $folderId):array{if($folderId!=='factory-test')throw new LogicException('Unexpected parent');return $this->children;}
+};
+$app->instance(App\Services\GoogleDriveService::class,$factoryDrive);
+config(['services.google_drive.factory_root_id'=>'factory-test']);
+check(Partner::run('lucky',fn()=>Partner::root())==='lucky-child' && Partner::run('vibe',fn()=>Partner::root())==='vibe-child','One factory root resolves separate Lucky and Vibe folders');
+Cache::flush();$factoryDrive->children=[$factoryDrive->children[0]];
+try{Partner::run('vibe',fn()=>Partner::root());throw new LogicException('Missing partner folder accepted');}catch(RuntimeException $e){check(str_contains($e->getMessage(),'missing or ambiguous'),'Missing Vibe folder never falls back to Lucky');}
+Cache::flush();$factoryDrive->children[]=$factoryDrive->children[0];
+try{Partner::run('lucky',fn()=>Partner::root());throw new LogicException('Duplicate partner folder accepted');}catch(RuntimeException $e){check(str_contains($e->getMessage(),'missing or ambiguous'),'Duplicate partner folders require correction');}
 echo "Partner integration checks passed.\n";

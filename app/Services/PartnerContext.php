@@ -15,6 +15,7 @@ class PartnerContext
         return self::current()==='lucky'?config('services.shopify.'.$key,$default):config('services.partners.'.self::current().'.shopify.'.$key,$default);
     }
     public static function root():string {
+        if(config('services.google_drive.factory_root_id'))return app(GoogleDriveService::class)->partnerRoot();
         return self::current()==='lucky'?(string)config('services.google_drive.artwork_root_id'):(string)config('services.partners.'.self::current().'.drive_root_id');
     }
     public static function tab():string {return self::current()==='lucky'?(string)config('services.materials.sheet_tab','Lucky'):(string)config('services.materials.partner_tabs.'.self::current());}

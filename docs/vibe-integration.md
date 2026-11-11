@@ -16,8 +16,7 @@ VIBE_CLIENT_ID=
 VIBE_CLIENT_SECRET=
 VIBE_API_VERSION=2026-07
 GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json
-GOOGLE_DRIVE_ARTWORK_ROOT_ID=1Jl1fACb76S7TQUKm4NK_tMDhLZDbApIJ
-VIBE_DRIVE_ARTWORK_ROOT_ID=1jHnba42rg_0hRlqkE5OlgA1Xsb9bn13u
+GOOGLE_DRIVE_FACTORY_ROOT_ID=1HCPXfG2xPQ1_ckXYg5e3KSEz70qcZbJN
 MATERIALS_SHEET_ID=1VKbVpQWHvwWIFQJXPTZsFq_KpyLshWTDLyZKpFBLmBQ
 MATERIALS_SHEET_TAB=Lucky
 MATERIALS_LUCKY_TAB=Lucky
@@ -28,6 +27,8 @@ MATERIALS_AUTHENTICATED=true
 `MATERIALS_SHEET_TAB` is the legacy fallback for Lucky. Vibe reads its own tab. Bag codes, names, materials, print type, template sizes and allowed backing colors come from the sheet. Vibe's Premiere spelling and nine bag codes are now readable.
 
 Default bag product types are `ACL2026|ACL2027|ACL2028` for Lucky and `Vibe Bags` for Vibe. Override with `LB_BAG_PRODUCT_TYPES` / `VIBE_BAG_PRODUCT_TYPES` if Shopify changes. Vibe's artwork catalog collection defaults to `All Bags` (`VIBE_ARTWORK_COLLECTION`). Apparel uses the existing jersey/hoodie classification; unrelated merchandise is excluded.
+
+The single factory root resolves the direct `LuckyBags` and `Vibe` child folders. Separate artwork-root environment values are unnecessary. Folder names can be overridden with `LB_DRIVE_FOLDER` and `VIBE_DRIVE_FOLDER` when renamed. Missing or duplicate partner folders stop matching rather than falling back to another partner. Legacy separate root values remain supported only when the factory root is unset.
 
 ## Deployment and validation
 
