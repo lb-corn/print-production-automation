@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Services\Shopify;
+use App\Services\PartnerContext;
 
 use App\Exceptions\ShopifyGraphqlException;
 use Illuminate\Http\Client\Response;
@@ -60,7 +61,7 @@ class ShopifyGraphqlClient
 
     private function endpoint(): string
     {
-        $version = trim((string) config('services.shopify.api_version'));
+        $version = trim((string) PartnerContext::shopify('api_version'));
 
         if ($version === '') {
             throw new ShopifyGraphqlException('SHOPIFY_API_VERSION is not configured.');

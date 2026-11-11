@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class JerseyOrder extends Model
 {
+    use \App\Models\Concerns\BelongsToPartner;
 
     private const MANUFACTURER_PERSONALIZATION_KEYS = [
         'Custom Name',
@@ -25,6 +26,7 @@ class JerseyOrder extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'partner',
         'shopify_order_gid',
         'shopify_order_number',
         'shopify_line_item_gid',

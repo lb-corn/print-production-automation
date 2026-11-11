@@ -24,7 +24,7 @@ class CustomArtworkService {
   $result=['series_code'=>$code,'design_type'=>$type,'color'=>null,'is_custom'=>true,'match_status'=>'CUSTOM','confidence'=>null,'matches'=>[]];
   $context=self::context([...$row,...$result,'backing_selection'=>$previous?->backing_selection]);
   if($previous && ($previous->artwork_review['context_sha256']??null)===$context)$result['matches']=$previous->matches??[];
-  $result['artwork_review']=['policy'=>self::POLICY,'context_sha256'=>$context,'issues'=>$code?[]:['Custom bag SKU does not identify a bag code in the Lucky Bags material sheet.']];return $result;
+  $result['artwork_review']=['policy'=>self::POLICY,'context_sha256'=>$context,'issues'=>$code?[]:['Custom bag SKU does not identify a bag code in the selected partner material sheet.']];return $result;
  }
  public static function validSelection($item):bool {
   if(!self::ready() || ($item->artwork_review['policy']??null)!==self::POLICY || !$item->is_custom || !in_array($item->design_type,['single','double'],true))return false;

@@ -10,7 +10,7 @@ class PrintLabelService {
     public static function label(ProductionItem $item,string $material):string {
         $parts=[self::token(str_replace(' ','',$material),24)];
         $order=trim((string)$item->order_number);
-        if($order!=='')$parts[]='LB'.self::token(ltrim($order,'#'),24);
+        if($order!=='')$parts[]=PartnerContext::prefix($item->partner??PartnerContext::current()).self::token(ltrim($order,'#'),24);
         // Only single-sided bags have an unprinted backing to identify.
         $back=app(MaterialCatalog::class)->row($item->series_code)['back']??'';
         if($item->design_type==='single' && $back!==''){

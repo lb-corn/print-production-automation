@@ -11,7 +11,14 @@ class BacklogSyncService
 
     public function sync(): array
     {
-        app(MaterialCatalog::class)->rows(true);
+        if(!PartnerContext::get()->scoped)return PartnerContext::run(PartnerContext::current(),fn()=>$this->sync());
+        $materialConfigReady=true;
+        try{app(MaterialCatalog::class)->rows(true);}catch(\Illuminate\Validation\ValidationException $e){
+            // A new shop can import its order identities before its manual material setup is complete.
+            // Never replace established mappings/approvals when an existing shop's sheet is unavailable.
+            if(PartnerContext::current()!=='vibe' || ProductionItem::whereNotNull('series_code')->exists())throw $e;
+            $materialConfigReady=false;
+        }
         $hasReview=ArtworkRematchService::schemaReady();
         $presence=\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active');
         $this->matcher->refreshReviewedSelections();
@@ -24,7 +31,7 @@ class BacklogSyncService
                 $item = ProductionItem::where('line_item_id', $row['line_item_id'])->lockForUpdate()->first();
                 if($presence && $item && !$item->shopify_active)$item->forceFill(['shopify_active'=>true,'shopify_seen_at'=>now()])->save();
                 if (isset(app(ProductionService::class)->batchIndex(true)[$row['line_item_id']])) { $skipped++; continue; }
-                $fields = array_intersect_key($row, array_flip(['order_number','product','variant','sku','quantity','shopify_image']));
+                $fields = array_intersect_key($row, array_flip(['partner','order_number','product','variant','sku','quantity','shopify_image']));
                 if($presence)$fields=[...$fields,'shopify_active'=>true];
                 $custom=(bool)($row['is_custom']??false);
                 $match = $custom?CustomArtworkService::match($row,$item):$this->matcher->match($row, $index);
@@ -50,7 +57,7 @@ class BacklogSyncService
                 $retired=ProductionItem::where('shopify_active',true)->whereNotIn('line_item_id',$activeIds)->update(['shopify_active'=>false]);
             }
         });
-        return ['retired_items'=>$retired,'custom_items'=>$customItems,'artwork_schema_ready'=>$hasReview,'shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
+        return ['material_config_ready'=>$materialConfigReady,'retired_items'=>$retired,'custom_items'=>$customItems,'artwork_schema_ready'=>$hasReview,'shopify_items'=>$backlog['item_count'],'orders_examined'=>$backlog['order_count'],'added'=>$added,
             'updated'=>$updated,'unchanged'=>$unchanged,'matched'=>$matched,'missing'=>$missing,'ambiguous'=>$ambiguous,
             'processed_skipped'=>$skipped,'drive_files'=>count(array_filter($index,fn($f)=>($f['kind']??'')==='artwork'))];
     }

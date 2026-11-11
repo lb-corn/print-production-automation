@@ -22,6 +22,7 @@ class RequireFeature {
             if($area==='apparel') return response(app(\App\Http\Controllers\ApparelOverviewController::class)->index());
             return $next($request);
         }
+        if($name==='admin.settings' && $request->query('section')==='reset')abort_unless(count(\App\Services\PartnerContext::allowed($request->user()))===count(config('services.partners',[])),403,'Reset requires access to every production partner.');
         $permission=$name==='admin.settings'?RouteAccess::section($request->query('section','artwork')):RouteAccess::permission($name);
         abort_unless($permission && $request->user()?->allows($permission),403,'Your role does not allow this feature.');
         return $next($request);

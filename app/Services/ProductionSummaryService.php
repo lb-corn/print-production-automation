@@ -13,7 +13,7 @@ class ProductionSummaryService
     {
         $bags = $user->allows('bags.overview.view');
         $apparel = $user->allows('apparel.overview.view');
-        $key = (int) $bags . ':' . (int) $apparel;
+        $key = PartnerContext::current().':'.(int) $bags . ':' . (int) $apparel;
         if (!$refresh && isset($this->snapshots[$key])) return $this->snapshots[$key];
         $data = ['areas' => []];
         if ($bags) {

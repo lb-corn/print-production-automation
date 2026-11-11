@@ -64,8 +64,8 @@ class JerseyOrderController extends Controller
             'total' => JerseyOrder::count(),
         ];
 
-        $lastSync = $this->normalizeLastSync(Cache::get(JerseyOrderSyncService::LAST_SUCCESSFUL_SYNC_CACHE_KEY_V2))
-            ?? $this->normalizeLastSync(Cache::get(JerseyOrderSyncService::LAST_SUCCESSFUL_SYNC_CACHE_KEY))
+        $lastSync = $this->normalizeLastSync(Cache::get(\App\Services\PartnerContext::key(JerseyOrderSyncService::LAST_SUCCESSFUL_SYNC_CACHE_KEY_V2)))
+            ?? $this->normalizeLastSync(Cache::get(\App\Services\PartnerContext::key(JerseyOrderSyncService::LAST_SUCCESSFUL_SYNC_CACHE_KEY)))
             ?? $this->normalizeLastSync(JerseyOrder::max('last_synced_at'));
         $syncHealth = $this->syncHealth($lastSync);
         $storefrontBase = $this->storefrontBase();
@@ -127,7 +127,7 @@ class JerseyOrderController extends Controller
 
     private function storefrontBase(): ?string
     {
-        $store = trim((string) config('services.shopify.store'));
+        $store = trim((string) \App\Services\PartnerContext::shopify('store'));
         $store = Str::of($store)->replaceStart('https://', '')->replaceStart('http://', '')->trim('/')->toString();
 
         return $store === '' ? null : 'https://'.$store.'/products/';
@@ -184,8 +184,8 @@ class JerseyOrderController extends Controller
      */
     private function syncHealth(?DateTimeInterface $lastSync): array
     {
-        $failedAt = $this->normalizeLastSync(Cache::get(JerseyOrderSyncService::LAST_SYNC_FAILED_AT_CACHE_KEY));
-        $errorSummary = Cache::get(JerseyOrderSyncService::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY);
+        $failedAt = $this->normalizeLastSync(Cache::get(\App\Services\PartnerContext::key(JerseyOrderSyncService::LAST_SYNC_FAILED_AT_CACHE_KEY)));
+        $errorSummary = Cache::get(\App\Services\PartnerContext::key(JerseyOrderSyncService::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY));
 
         if ($failedAt && (! $lastSync || $failedAt >= $lastSync)) {
             return [

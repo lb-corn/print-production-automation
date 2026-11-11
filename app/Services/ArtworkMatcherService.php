@@ -22,6 +22,16 @@ class ArtworkMatcherService
     private const COMPOUND_COLORS = ['BLACK-LEATHER','BBY-BLUE','BABY-BLUE','ROYAL-BLUE','NAVY-BLUE'];
     public const POLICY = 'strict-v2';
 
+    private static function series():array {
+        if(PartnerContext::current()==='lucky')return self::SERIES;
+        $result=[];foreach(app(MaterialCatalog::class)->rows() as $code=>$row)$result[$code]=[[$code]];
+        return $result;
+    }
+    private static function folders():array {
+        if(PartnerContext::current()==='lucky')return self::FOLDERS;
+        $result=[];foreach(app(MaterialCatalog::class)->rows() as $code=>$row)$result[$code]=array_values(array_unique([$code,trim(preg_replace('/[^A-Z0-9]+/','-',strtoupper($row['name'])),'-')]));
+        return $result;
+    }
     private ?array $reviewedSelections=null;
     private ?array $reviewedDesigns=null;
     public function __construct(private ?GoogleDriveService $drive = null) {}
@@ -46,7 +56,7 @@ class ArtworkMatcherService
     public static function seriesForFolder(string $name): ?string
     {
         $normalized=trim(preg_replace('/[^A-Z0-9]+/','-',strtoupper($name)),'-');
-        foreach(self::FOLDERS as $series=>$aliases)if(in_array($normalized,$aliases,true))return $series;
+        foreach(self::folders() as $series=>$aliases)if(in_array($normalized,$aliases,true))return $series;
         return null;
     }
 
@@ -57,7 +67,8 @@ class ArtworkMatcherService
     private function skuParts(?string $sku): ?array
     {
         $sku=strtoupper(trim((string)$sku));
-        foreach(self::SERIES as $series=>$definition)foreach($definition[0] as $alias) {
+        if(PartnerContext::current()==='vibe'){if(preg_match('/^VB-([A-Z0-9]+)-(.+)-[0-9]+$/',$sku,$parts) && isset(self::series()[$parts[1]]))return ['year'=>'','design'=>$this->norm($parts[2]),'series'=>$parts[1]];return null;}
+        foreach(self::series() as $series=>$definition)foreach($definition[0] as $alias) {
             if(preg_match('/^(\d{4})-(.+)-'.preg_quote($alias,'/').'-\d+$/',$sku,$parts))return ['year'=>$parts[1],'design'=>$this->norm($parts[2]),'series'=>$series];
         }
         return null;
@@ -89,7 +100,7 @@ class ArtworkMatcherService
         }
         $index ??= ($this->drive ?? app(GoogleDriveService::class))->artworkIndex();
         $folders = array_values(array_filter($index, fn($f) => ($f['kind'] ?? '') === 'series_folder'
-            && in_array($this->norm($f['name']), self::FOLDERS[$series], true)));
+            && in_array($this->norm($f['name']), self::folders()[$series], true)));
         if (count($folders) !== 1) {
             $review['issues'][] = count($folders) ? 'Multiple series folders found. Resolve duplicates before matching.' : 'Series folder not found in the approved manufacturing branches.';
             if (count($folders)) { $result['match_status'] = 'AMBIGUOUS'; $review['suggested_filenames'] = []; }
@@ -168,13 +179,13 @@ class ArtworkMatcherService
     private function variant(string $variant, ?string $series): array
     {
         $name = $this->norm($variant);
-        if (in_array($name, ['', 'DEFAULT-TITLE', ...(self::FOLDERS[$series] ?? [])], true)) return [true, null];
+        if (in_array($name, ['', 'DEFAULT-TITLE', ...(self::folders()[$series] ?? [])], true)) return [true, null];
         // A different known series is a catalog contradiction, never a color.
-        foreach(self::FOLDERS as $other=>$aliases)if($other!==$series && in_array($name,$aliases,true))return [false,null];
+        foreach(self::folders() as $other=>$aliases)if($other!==$series && in_array($name,$aliases,true))return [false,null];
         // Color is the whole option, not any substring inside a longer variant.
         if (str_contains($variant, '/')) {
             $parts = array_map('trim', explode('/', $variant));
-            if (count($parts) !== 2 || !in_array($this->norm($parts[0]), self::FOLDERS[$series] ?? [], true)) return [false, null];
+            if (count($parts) !== 2 || !in_array($this->norm($parts[0]), self::folders()[$series] ?? [], true)) return [false, null];
             $name = $this->norm($parts[1]);
         }
         $valid=$name!=='' && strlen($name)<=40 && !preg_match('/(?:^|-)(CUSTOM|FRONT|BACK|SINGLE)(?:-|$)/',$name);
@@ -190,7 +201,7 @@ class ArtworkMatcherService
     {
         // Exact full product title is independent evidence; never expand a code by substring.
         $title = $this->designIdentity($row['product'] ?? '');
-        if (in_array($title, array_merge(...array_values(self::FOLDERS)), true)) $title = '';
+        if (in_array($title, array_merge(...array_values(self::folders())), true)) $title = '';
         if ($title !== '' && preg_match('/^(.*)-ACL-CORNHOLE-BAGS$/', $title, $parts)) $title = $parts[1];
         $designs=[$code,$title];
         if(config('services.google_drive.reviewed_selections_enabled',true)) {
@@ -212,7 +223,7 @@ class ArtworkMatcherService
         } elseif ($type === 'double') return null;
         if ($type === 'single' && $side === 'back') return null;
         if ($type === 'double' && !in_array($side, ['front','back'], true)) return null;
-        foreach (self::SERIES[$series][0] as $alias) {
+        foreach (self::series()[$series][0] as $alias) {
             if (!str_starts_with($name, $alias.'-')) continue;
             $body = substr($name, strlen($alias) + 1);
             foreach ($designs as $design) {
@@ -227,7 +238,7 @@ class ArtworkMatcherService
 
     private function productionFilename(string $series,string $design,?string $color,string $side,string $extension): string
     {
-        $stem=implode('-',array_filter(['LB',$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
+        $stem=implode('-',array_filter([PartnerContext::prefix(),$series,$design,$color,strtoupper($side)],fn($value)=>$value!==null));
         return $stem.'.'.$extension;
     }
 
@@ -240,7 +251,7 @@ class ArtworkMatcherService
         foreach ($files as $file) {
             $parts = array_map('trim', explode('/', $file['path'] ?? ''));
             if (count($parts) !== 3 || !in_array($parts[0], config('services.google_drive.allowed_root_folders', []), true)
-                || !in_array($this->norm($parts[1]), self::FOLDERS[$series], true)
+                || !in_array($this->norm($parts[1]), self::folders()[$series], true)
                 || $parts[2] !== ($file['name'] ?? '') || empty($file['id'])) continue;
             $folderId = $parts[0].'/'.$parts[1];
             $folders[$folderId] = ['kind'=>'series_folder','id'=>$folderId,'name'=>$parts[1],'path'=>$folderId];
@@ -254,7 +265,7 @@ class ArtworkMatcherService
     public function namingCandidate(array $row, array $file, string $folderName, ?array $mapping = null, bool $standardize = false): ?array
     {
         $series=$this->seriesFromSku($row['sku'] ?? null);
-        if (!$series || !in_array($this->norm($folderName),self::FOLDERS[$series],true) || stripos($row['product'] ?? '', 'custom') !== false) return null;
+        if (!$series || !in_array($this->norm($folderName),self::folders()[$series],true) || stripos($row['product'] ?? '', 'custom') !== false) return null;
         $parts=$this->skuParts($row['sku']);
         if(!$parts)return null;
         $sku=[null,$parts['year'],$parts['design']];
@@ -279,7 +290,7 @@ class ArtworkMatcherService
             if (!$parsed) {
                 // A bare exact design may use its approved folder as series context when preparing a reviewed rename.
                 // An explicit different series is never silently overwritten.
-                foreach (self::SERIES as $definition) foreach ($definition[0] as $alias) if (str_starts_with($name,$alias.'-')) return null;
+                foreach (self::series() as $definition) foreach ($definition[0] as $alias) if (str_starts_with($name,$alias.'-')) return null;
                 $bare=$name;
                 if (preg_match('/^(\d{4})-(.+)$/',$bare,$parts)) $bare=$parts[2];
                 $parsed=$this->parse($series.'-'.$bare,$series,$type,$designs,$sku[1],$variantColor);
@@ -321,7 +332,7 @@ class ArtworkMatcherService
         if(preg_match('/(?:^|-)(MOCKUPS?|PREVIEWS?|ARCHIVE)(?:-|$)/',$name))return null;
         $name=$this->namingStem($name,$file['id']);if($name===null)return null;
         $name=preg_replace('/^\d{4}-/','',$name);
-        $aliases=[];foreach(self::SERIES as $code=>$definition)foreach($definition[0] as $alias)$aliases[$alias]=$code;
+        $aliases=[];foreach(self::series() as $code=>$definition)foreach($definition[0] as $alias)$aliases[$alias]=$code;
         uksort($aliases,fn($a,$b)=>strlen($b)<=>strlen($a));
         foreach($aliases as $alias=>$code)if(str_starts_with($name,$alias.'-')){
             if($code!==$series)return null;$name=substr($name,strlen($alias)+1);break;
@@ -339,13 +350,13 @@ class ArtworkMatcherService
     {
         if(!in_array(strtolower(pathinfo($file['name']??'',PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff','webp','psd','pdf'],true) || empty($file['id']))return false;
         $stem=strtoupper(pathinfo($file['name'],PATHINFO_FILENAME));
-        $series=implode('|',array_map(fn($code)=>preg_quote($code,'/'),array_keys(self::SERIES)));
-        return preg_match('/^LB-('.$series.')-[A-Z0-9]+(?:-[A-Z0-9]+)*-(FRONT|BACK|SINGLE)-ID-([A-F0-9]{12})$/D',$stem,$parts)===1
+        $series=implode('|',array_map(fn($code)=>preg_quote($code,'/'),array_keys(self::series())));
+        return preg_match('/^'.PartnerContext::prefix().'-('.$series.')-[A-Z0-9]+(?:-[A-Z0-9]+)*-(FRONT|BACK|SINGLE)-ID-([A-F0-9]{12})$/D',$stem,$parts)===1
             && hash_equals(strtoupper(substr(hash('sha256',$file['id']),0,12)),$parts[3]);
     }
     private function namingStem(string $name,string $id): ?string
     {
-        if(!str_starts_with($name,'LB-'))return $name;
+        if(!str_starts_with($name,PartnerContext::prefix().'-'))return $name;
         $body=substr($name,3);
         if(preg_match('/^(.+)-ID-([A-F0-9]{12})$/',$body,$parts))return hash_equals(strtoupper(substr(hash('sha256',$id),0,12)),$parts[2])?$parts[1]:null;
         return $body;

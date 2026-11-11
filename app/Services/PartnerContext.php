@@ -1,0 +1,30 @@
+<?php
+namespace App\Services;
+
+class PartnerContext
+{
+    public string $partner='lucky';
+    public bool $scoped=false;
+    public bool $denied=false;
+    public static function get():self {return app(self::class);}
+    public static function current():string {return self::get()->partner;}
+    public static function label(?string $partner=null):string {return config('services.partners.'.($partner??self::current()).'.label','Lucky');}
+    public static function prefix(?string $partner=null):string {return config('services.partners.'.($partner??self::current()).'.prefix','LB');}
+    public static function key(string $key):string {return self::current()==='lucky'?$key:$key.'.'.self::current();}
+    public static function shopify(string $key,mixed $default=null):mixed {
+        return self::current()==='lucky'?config('services.shopify.'.$key,$default):config('services.partners.'.self::current().'.shopify.'.$key,$default);
+    }
+    public static function root():string {
+        return self::current()==='lucky'?(string)config('services.google_drive.artwork_root_id'):(string)config('services.partners.'.self::current().'.drive_root_id');
+    }
+    public static function tab():string {return self::current()==='lucky'?(string)config('services.materials.sheet_tab','Lucky'):(string)config('services.materials.partner_tabs.'.self::current());}
+    public static function allowed($user):array {
+        if(!$user)return [];
+        return array_values(array_filter(array_keys(config('services.partners',[])),fn($p)=>$user->allows('partners.'.$p.'.view')));
+    }
+    public static function run(string $partner,callable $callback):mixed {
+        if(!array_key_exists($partner,config('services.partners',[])))throw new \InvalidArgumentException('Unknown production partner.');
+        $ctx=self::get();$old=$ctx->partner;$scoped=$ctx->scoped;$denied=$ctx->denied;$ctx->partner=$partner;$ctx->scoped=true;$ctx->denied=false;
+        try{return $callback();}finally{$ctx->partner=$old;$ctx->scoped=$scoped;$ctx->denied=$denied;}
+    }
+}

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Services\Shopify;
+use App\Services\PartnerContext;
 
 use App\Exceptions\ShopifyAuthenticationException;
 use Illuminate\Support\Facades\Cache;
@@ -28,8 +29,8 @@ class ShopifyTokenService
             ->timeout(20)
             ->post($this->tokenUrl(), [
                 'grant_type' => 'client_credentials',
-                'client_id' => config('services.shopify.client_id'),
-                'client_secret' => config('services.shopify.client_secret'),
+                'client_id' => PartnerContext::shopify('client_id'),
+                'client_secret' => PartnerContext::shopify('client_secret'),
             ]);
 
         if ($response->failed()) {
@@ -56,11 +57,11 @@ class ShopifyTokenService
 
     public function storeDomain(): string
     {
-        $store = trim((string) config('services.shopify.store'));
+        $store = trim((string) PartnerContext::shopify('store'));
         $store = Str::of($store)->replaceStart('https://', '')->replaceStart('http://', '')->trim('/')->toString();
 
         if ($store === '') {
-            throw new ShopifyAuthenticationException('SHOPIFY_STORE is not configured.');
+            throw new ShopifyAuthenticationException('The selected Shopify shop is not configured.');
         }
 
         return $store;
@@ -73,13 +74,13 @@ class ShopifyTokenService
 
     private function cacheKey(): string
     {
-        return 'shopify.access_token.'.sha1($this->storeDomain().'|'.(string) config('services.shopify.client_id'));
+        return 'shopify.access_token.'.sha1($this->storeDomain().'|'.(string) PartnerContext::shopify('client_id'));
     }
 
     private function ensureConfigured(): void
     {
         foreach (['store', 'client_id', 'client_secret'] as $key) {
-            if (blank(config('services.shopify.'.$key))) {
+            if (blank(PartnerContext::shopify($key))) {
                 throw new ShopifyAuthenticationException('Shopify authentication is not fully configured.');
             }
         }

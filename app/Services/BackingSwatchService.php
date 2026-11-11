@@ -7,7 +7,7 @@ use RuntimeException;
 class BackingSwatchService
 {
     public function files(string $material,array $colors):array {
-        $root=(string)config('services.google_drive.artwork_root_id');$map=config('services.backing_colors.folder_map',[]);
+        $root=PartnerContext::root();$map=PartnerContext::current()==='lucky'?config('services.backing_colors.folder_map',[]):config('services.partners.'.PartnerContext::current().'.backing_folder_map',[]);
         $key='backing.swatches.'.hash('sha256',json_encode([$root,$material,$colors,$map,config('services.backing_colors.folder_name')]));
         return Cache::remember($key,300,function()use($root,$material,$colors,$map){
             $drive=app(GoogleDriveService::class);

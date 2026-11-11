@@ -71,6 +71,7 @@ class AdminController extends Controller
 
     public function resetPage()
     {
+        abort_unless(count(\App\Services\PartnerContext::allowed(auth()->user()))===count(config('services.partners',[])),403,'Reset requires access to every production partner.');
         $counts = collect(self::RESET_TABLES)->mapWithKeys(fn ($table) => [$table => DB::table($table)->count()]);
         return view('admin.reset', compact('counts'));
     }
@@ -129,6 +130,7 @@ CMD;
 
     public function reset(Request $request)
     {
+        abort_unless(count(\App\Services\PartnerContext::allowed(auth()->user()))===count(config('services.partners',[])),403,'Reset requires access to every production partner.');
         $request->validate([
             'password' => ['required', 'current_password'],
             'confirmation' => ['required', Rule::in(['RESET PORTAL'])],

@@ -3,7 +3,7 @@
 require __DIR__.'/../vendor/autoload.php';
 $app=require __DIR__.'/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','cache.default'=>'array','services.backing_colors.enabled'=>false]);
+config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','session.driver'=>'array','cache.default'=>'array','services.partners.vibe.enabled'=>false,'services.backing_colors.enabled'=>false]);
 Illuminate\Support\Facades\DB::purge('sqlite');
 foreach(glob(__DIR__.'/../database/migrations/*.php') as $file){
  if(str_contains($file,'create_configurable_roles')) Illuminate\Support\Facades\DB::table('users')->insert(['name'=>'Legacy','email'=>'legacy@example.test','password'=>'unused','role'=>'operator']);

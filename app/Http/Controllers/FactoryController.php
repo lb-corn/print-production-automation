@@ -69,21 +69,22 @@ class FactoryController extends Controller
         $data=$request->validate(['after'=>'nullable|integer|min:0']);$after=(int)($data['after']??0);
         $items=\App\Models\ProductionItem::where('id','>',$after)->when(\Illuminate\Support\Facades\Schema::hasColumn('production_items','shopify_active'),fn($q)=>$q->where('shopify_active',true))->orderBy('id')->limit(100)->get();
         $processed=app(\App\Services\ProductionService::class)->batchIndex(true);
-        $catalog=app(\App\Services\MaterialCatalog::class);$catalog->rows(true);$map=$catalog->map();
         $orders=[];
         foreach($items as $item){
-            if(!\App\Services\BackingColorService::confirmed($item))continue;
-            if((int)$item->quantity<1 || (int)$item->quantity>10000 || isset($processed[$item->line_item_id]) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset($map[$item->series_code]))continue;
-            if(($catalog->row($item->series_code)['type']??null)!==$item->design_type)continue;
-            $materials=$map[$item->series_code];$arts=[];
-            foreach($item->matches as $match){
-                $side=$item->design_type==='single'?'PRINT':strtoupper($match['side']);
-                $material=$materials[$side==='BACK'?1:0];
-                $art=app(\App\Services\ProductionService::class)->art($side,$material,$match);
-                if(!in_array(strtolower(pathinfo((string)$art['filename'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff'],true) || !$art['md5_checksum'] || !$art['drive_version'])continue;
-                $art['print_label']=\App\Services\PrintLabelService::label($item,$material);$arts[]=$art;
-            }
-            if($arts)$orders[]=['line_item_id'=>$item->line_item_id,'order'=>$item->order_number,'quantity'=>(int)$item->quantity,'artworks'=>$arts];
+            if((int)$item->quantity<1 || (int)$item->quantity>10000 || $item->is_custom || isset($processed[$item->line_item_id]))continue;
+            try {$order=\App\Services\PartnerContext::run($item->partner??'lucky',function()use($item){
+                $catalog=app(\App\Services\MaterialCatalog::class);$map=$catalog->map();
+                if(!\App\Services\BackingColorService::confirmed($item) || !\App\Services\ArtworkMatcherService::validSelection($item) || !isset($map[$item->series_code]))return null;
+                if(($catalog->row($item->series_code)['type']??null)!==$item->design_type)return null;
+                $materials=$map[$item->series_code];$arts=[];
+                foreach($item->matches as $match){
+                    $side=$item->design_type==='single'?'PRINT':strtoupper($match['side']);$material=$materials[$side==='BACK'?1:0];
+                    $art=app(\App\Services\ProductionService::class)->art($side,$material,$match);
+                    if(!in_array(strtolower(pathinfo((string)$art['filename'],PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff'],true) || !$art['md5_checksum'] || !$art['drive_version'])continue;
+                    $art['print_label']=\App\Services\PrintLabelService::label($item,$material);$arts[]=$art;
+                }
+                return $arts?['partner'=>$item->partner??'lucky','line_item_id'=>$item->line_item_id,'order'=>$item->order_number,'quantity'=>(int)$item->quantity,'artworks'=>$arts]:null;
+            });if($order)$orders[]=$order;}catch(\Throwable $e){report($e);}
         }
         return response()->json(['print_label_policy'=>\App\Services\PrintLabelService::POLICY,'orders'=>$orders,'next_after'=>$items->count()===100?$items->last()->id:0])->header('Cache-Control','no-store');
     }

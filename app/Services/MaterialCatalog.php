@@ -9,22 +9,24 @@ class MaterialCatalog
 {
     public const DEFAULT_SHEET_ID='1NyRZkS7ZFvsr2PmBLuj7eFABRkYlmBOSOdI442DooXM';
     private ?array $snapshot=null;
+    private ?string $snapshotPartner=null;
     private array $backingMaterials=[];
     private ?string $failure=null;
     public function rows(bool $fresh=false):array {
+        if($this->snapshotPartner!==PartnerContext::current()){$this->snapshotPartner=PartnerContext::current();$this->snapshot=null;$this->backingMaterials=[];$this->failure=null;}
         if(!$fresh && $this->snapshot!==null)return $this->snapshot;
         try {
             $id=(string)config('services.materials.sheet_id',self::DEFAULT_SHEET_ID);
             if(!preg_match('/^[A-Za-z0-9_-]{20,100}$/',$id))throw new \RuntimeException('Sheet configuration missing');
             if(config('services.materials.authenticated',false)){
-                $tab=(string)config('services.materials.sheet_tab','Lucky');
+                $tab=PartnerContext::tab();
                 $parsed=app(MaterialSheetParser::class)->parse(app(ConfigurationSheetReader::class)->read($id,$tab));
                 $this->backingMaterials=$parsed['backing_materials'];
                 $rows=$parsed['bags'];
                 $this->failure=null;
                 return $this->snapshot=$rows;
             }
-            $response=Http::timeout(12)->connectTimeout(5)->withOptions(['allow_redirects'=>false])->get('https://docs.google.com/spreadsheets/d/'.$id.'/gviz/tq',['tqx'=>'out:csv','sheet'=>config('services.materials.sheet_tab','Lucky Bags')]);
+            $response=Http::timeout(12)->connectTimeout(5)->withOptions(['allow_redirects'=>false])->get('https://docs.google.com/spreadsheets/d/'.$id.'/gviz/tq',['tqx'=>'out:csv','sheet'=>PartnerContext::tab()]);
             if(!$response->successful())throw new \RuntimeException('Google Sheets returned HTTP '.$response->status());
             $rows=$this->parse($response->body());
             $this->failure=null;

@@ -19,8 +19,8 @@ class SyncProductionOrders extends Command
             return self::FAILURE;
         }
         try {
-            $run = $sync->sync((string)$this->option('source'));
-            foreach (['bags','apparel'] as $area) $this->line(ucfirst($area).': '.$run['areas'][$area]['state']);
+            $run = $sync->syncPartners((string)$this->option('source'));
+            foreach($run['partners'] as $partner=>$result)foreach(['bags','apparel'] as $area)$this->line(ucfirst($partner).' '.ucfirst($area).': '.$result['areas'][$area]['state']);
             return $run['state'] === 'success' ? self::SUCCESS : self::FAILURE;
         } catch (\Throwable $e) {
             report($e);

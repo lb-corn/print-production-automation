@@ -7,7 +7,7 @@ use RuntimeException;
 class ArtworkRenameStore
 {
     private string $directory;
-    public function __construct(?string $directory=null) { $this->directory=$directory ?? storage_path('app/private/artwork-names'); }
+    public function __construct(?string $directory=null) { $this->directory=$directory ?? storage_path('app/private/artwork-names'.(PartnerContext::current()==='lucky'?'':'/'.PartnerContext::current())); }
     public function create(int $actor, array $data): array
     {
         $plan=['token'=>bin2hex(random_bytes(24)),'actor'=>$actor,'created_at'=>time(),'expires_at'=>time()+1800,'status'=>'preview','events'=>[],...$data];

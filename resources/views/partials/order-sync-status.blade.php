@@ -4,6 +4,15 @@
     $formatSyncTime=fn($value)=>$value?\Illuminate\Support\Carbon::parse($value)->timezone(config('app.timezone'))->format('M j, g:i A T'):'Not yet';
 @endphp
 <section class="order-sync-status" id="order-sync-status" aria-label="Common order sync status" aria-live="polite" data-status-url="{{route('orders.sync-status')}}" data-order-sync-state="{{$sync['state']}}">
+    @php
+        $syncPartners=\App\Services\PartnerContext::allowed(auth()->user());
+    @endphp
+    @if(count($syncPartners)>1)<div class="partner-sync-results">@foreach($syncPartners as $syncPartner)
+        @php
+            $shopSync=\Illuminate\Support\Facades\Cache::get($syncPartner==='lucky'?\App\Services\OrderSyncService::STATUS_KEY:\App\Services\OrderSyncService::STATUS_KEY.'.'.$syncPartner,[]);
+        @endphp
+        <span><strong>{{\App\Services\PartnerContext::label($syncPartner)}}</strong><small>{{['success'=>'Synced','partial'=>'Needs review','error'=>'Needs retry','running'=>'Syncing…'][$shopSync['state']??'']??'Not synced yet'}}</small></span>
+    @endforeach</div>@endif
     <div class="sync-status-top"><span class="order-sync-badge {{$sync['state']}}">{{$syncLabels[$sync['state']]??'Not synced yet'}}</span><span class="sync-frequency">Every 10 minutes</span></div>
     <div class="sync-timing-grid">
         <div>@include('partials.nav-icon',['name'=>'clock'])<div><span>Last update</span><strong>{{$formatSyncTime($sync['finished_at']??$sync['started_at']??null)}}</strong></div></div>

@@ -17,20 +17,20 @@ class ShopifyService
     public function __construct()
     {
         $this->store = trim(
-            (string) config('services.shopify.store')
+            (string) PartnerContext::shopify('store')
         );
 
         $this->clientId = trim(
-            (string) config('services.shopify.client_id')
+            (string) PartnerContext::shopify('client_id')
         );
 
         $this->clientSecret = trim(
-            (string) config('services.shopify.client_secret')
+            (string) PartnerContext::shopify('client_secret')
         );
 
         $this->apiVersion = trim(
-            (string) config(
-                'services.shopify.api_version',
+            (string) PartnerContext::shopify(
+                'api_version',
                 '2026-07'
             )
         );
@@ -187,10 +187,6 @@ query ProductionBacklog($first: Int!, $after: String) {
             displayFinancialStatus
             displayFulfillmentStatus
 
-            customer {
-                displayName
-            }
-
             lineItems(first: 100) {
                 pageInfo { hasNextPage endCursor }
                 nodes {
@@ -340,10 +336,7 @@ GRAPHQL;
                 $customPreview=$custom?CustomArtworkService::thumbnail($line['customAttributes']??[]):null;
                 if (!$custom && !in_array(
                     $productType,
-                    [
-                        'ACL Pro Stamped 2026',
-                        'ACL Pro Stamped 2027',
-                    ],
+                    config('services.bag_product_types.'.PartnerContext::current(),[]),
                     true
                 )) {
                     continue;
@@ -373,8 +366,9 @@ GRAPHQL;
                     'shopify_variant_id'=>$linkedVariant?$currentVariant['id']:null,
                     'order_sku'=>$line['sku']??null,
                     'order_variant'=>$line['variantTitle']??null,
+                    'partner'=>PartnerContext::current(),
                     'line_item_id' =>
-                        $line['id'],
+                        (PartnerContext::current()==='lucky'?$line['id']:PartnerContext::current().':'.$line['id']),
 
                     'order_id' =>
                         $order['id'],
@@ -447,7 +441,7 @@ GRAPHQL;
     /** Read only active manufacturing bags in the fixed All Bags collection. */
     public function getArtworkCatalog(): array
     {
-        $title=(string)config('services.shopify.artwork_collection','All Bags');
+        $title=(string)PartnerContext::shopify('artwork_collection','All Bags');
         $after=null;$seen=[];$collections=[];
         do {
             $data=$this->graphql('query ArtworkCollections($after: String) { collections(first: 100, after: $after) { nodes { id title } pageInfo { hasNextPage endCursor } } }',['after'=>$after]);

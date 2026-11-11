@@ -6,7 +6,7 @@ $customUsable=$customReady && in_array($item->design_type,['single','double'],tr
 <section class="custom-artwork-review" data-custom-review data-create-url="{{route('custom.create',$item)}}" data-confirm-url="{{route('custom.confirm',$item)}}" data-status-base="{{url('/custom-transfers')}}" data-csrf="{{csrf_token()}}">
 <div class="custom-upload-heading"><strong>Custom production artwork</strong><span class="badge">Saved on Print PC only</span></div>
 <p class="custom-upload-hint">Upload print originals directly to the PC. Use the order preview for comparison.</p>
-@if(!$customReady)<p class="custom-upload-status bad">Custom upload needs the server database update.</p>@elseif(!$item->design_type)<p class="custom-upload-status bad">The custom bag SKU needs a matching code in the Lucky Bags sheet. Sync again after correcting it.</p>@endif
+@if(!$customReady)<p class="custom-upload-status bad">Custom upload needs the server database update.</p>@elseif(!$item->design_type)<p class="custom-upload-status bad">The custom bag SKU needs a matching code in the {{\App\Services\PartnerContext::label()}} sheet. Sync again after correcting it.</p>@endif
 <div class="custom-upload-slots {{count($customSides)===1?'one':''}}">
 @foreach($customSides as $side)
 @php $saved=collect($item->matches??[])->firstWhere('side',$side); @endphp

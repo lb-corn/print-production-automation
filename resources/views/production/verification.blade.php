@@ -58,7 +58,7 @@
 <summary class="job-title">
 @if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<input class="review-select" @disabled(\App\Services\BackingColorService::required($item) && $item->decision?->decision==='CORRECT') type="checkbox" name="items[]" value="{{$item->id}}" form="bulk-review" aria-label="Select {{$item->order_number}} {{$item->product}} {{$item->variant}}">
 @endif<div>
-<span>{{$item->order_number}}</span>
+<span>{{$item->order_number}}</span><span class="partner-badge">{{\App\Services\PartnerContext::label($item->partner??'lucky')}}</span>
 <h2>{{$item->product}}</h2>
 </div>
 <span class="review-header-labels">

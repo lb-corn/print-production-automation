@@ -19,9 +19,7 @@ class GoogleDriveService
         );
 
         $this->rootId = trim(
-            (string) config(
-                'services.google_drive.artwork_root_id'
-            )
+            PartnerContext::root()
         );
 
         $this->allowedFolders = config(

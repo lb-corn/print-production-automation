@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Services\Shopify;
+use App\Services\PartnerContext;
 
 use App\Models\JerseyOrder;
 use Carbon\CarbonInterface;
@@ -97,12 +98,15 @@ class JerseyOrderSyncService
      */
     public function sync(bool $full = false, ?string $since = null, ?int $limit = null, string $source = 'command'): array
     {
-        $lock=Cache::lock('apparel:orders:sync',900);
+        if(!PartnerContext::get()->scoped)return PartnerContext::run(PartnerContext::current(),fn()=>$this->sync($full,$since,$limit,$source));
+        $lock=Cache::lock(PartnerContext::key('apparel:orders:sync'),900);
         if(!$lock->get()) throw new \RuntimeException('An apparel sync is already running.');
         $this->recordSyncStarted($source);
 
         try {
-            $stats = $this->performSync($full, $since, $limit);
+            $initialVibe=PartnerContext::current()==='vibe' && !Cache::get(PartnerContext::key('apparel.initial_history_loaded'));
+            $stats = $this->performSync($full || $initialVibe, $since, $limit);
+            if($initialVibe && $limit===null)Cache::forever(PartnerContext::key('apparel.initial_history_loaded'),true);
             $this->recordLastSuccessfulSync($source);
 
             return $stats;
@@ -175,8 +179,8 @@ class JerseyOrderSyncService
     public function recordSyncStarted(string $source): CarbonInterface
     {
         $startedAt = now();
-        Cache::forever(self::LAST_SYNC_STARTED_AT_CACHE_KEY, $startedAt->toIso8601String());
-        Cache::forever(self::LAST_SYNC_SOURCE_CACHE_KEY, $this->normalizeSource($source));
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_STARTED_AT_CACHE_KEY), $startedAt->toIso8601String());
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_SOURCE_CACHE_KEY), $this->normalizeSource($source));
 
         return $startedAt;
     }
@@ -184,11 +188,11 @@ class JerseyOrderSyncService
     public function recordLastSuccessfulSync(string $source = 'command'): CarbonInterface
     {
         $syncedAt = now();
-        Cache::forever(self::LAST_SUCCESSFUL_SYNC_CACHE_KEY, $syncedAt->toIso8601String());
-        Cache::forever(self::LAST_SUCCESSFUL_SYNC_CACHE_KEY_V2, $syncedAt->toIso8601String());
-        Cache::forever(self::LAST_SYNC_SOURCE_CACHE_KEY, $this->normalizeSource($source));
-        Cache::forget(self::LAST_SYNC_FAILED_AT_CACHE_KEY);
-        Cache::forget(self::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY);
+        Cache::forever(PartnerContext::key(self::LAST_SUCCESSFUL_SYNC_CACHE_KEY), $syncedAt->toIso8601String());
+        Cache::forever(PartnerContext::key(self::LAST_SUCCESSFUL_SYNC_CACHE_KEY_V2), $syncedAt->toIso8601String());
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_SOURCE_CACHE_KEY), $this->normalizeSource($source));
+        Cache::forget(PartnerContext::key(self::LAST_SYNC_FAILED_AT_CACHE_KEY));
+        Cache::forget(PartnerContext::key(self::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY));
 
         return $syncedAt;
     }
@@ -196,9 +200,9 @@ class JerseyOrderSyncService
     public function recordSyncFailed(string $source, \Throwable $exception): CarbonInterface
     {
         $failedAt = now();
-        Cache::forever(self::LAST_SYNC_FAILED_AT_CACHE_KEY, $failedAt->toIso8601String());
-        Cache::forever(self::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY, $this->safeErrorSummary($exception));
-        Cache::forever(self::LAST_SYNC_SOURCE_CACHE_KEY, $this->normalizeSource($source));
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_FAILED_AT_CACHE_KEY), $failedAt->toIso8601String());
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_ERROR_SUMMARY_CACHE_KEY), $this->safeErrorSummary($exception));
+        Cache::forever(PartnerContext::key(self::LAST_SYNC_SOURCE_CACHE_KEY), $this->normalizeSource($source));
 
         return $failedAt;
     }
@@ -214,7 +218,7 @@ class JerseyOrderSyncService
         $message = preg_replace('/access[_ -]?token[=: ]+[A-Za-z0-9_\-\.]+/i', 'access token [redacted]', (string) $message);
 
         foreach (['client_id', 'client_secret'] as $key) {
-            $value = (string) config('services.shopify.'.$key);
+            $value = (string) PartnerContext::shopify($key);
 
             if ($value !== '') {
                 $message = str_replace($value, '[redacted]', (string) $message);
@@ -243,6 +247,7 @@ class JerseyOrderSyncService
         $normalized = $this->normalizeDetails($customFields, $selectedOptions, $variantTitle);
 
         return [
+            'partner'=>PartnerContext::current(),
             'shopify_order_gid' => (string) data_get($order, 'id'),
             'shopify_order_number' => (string) data_get($order, 'name'),
             'shopify_line_item_gid' => (string) data_get($lineItem, 'id'),
@@ -376,6 +381,7 @@ class JerseyOrderSyncService
                 $record = Arr::except($record, self::LOCAL_MANAGED_COLUMNS);
 
                 $order = JerseyOrder::firstOrNew([
+                    'partner'=>PartnerContext::current(),
                     'shopify_line_item_gid' => $record['shopify_line_item_gid'],
                 ]);
 
@@ -523,6 +529,10 @@ GRAPHQL;
     {
         $value = $this->cleanValue($value);
 
+        if($value!==null && preg_match('/^(?:Youth|Y)\s*(XS|S|M|L|XL|Small|Medium|Large)$/i',$value,$parts)){
+            $sizes=['XS'=>'XS','S'=>'Small','M'=>'Medium','L'=>'Large','XL'=>'XL','SMALL'=>'Small','MEDIUM'=>'Medium','LARGE'=>'Large'];
+            return 'Youth '.$sizes[strtoupper($parts[1])];
+        }
         if ($value === null || ! $this->isKnownSize($value)) {
             return null;
         }

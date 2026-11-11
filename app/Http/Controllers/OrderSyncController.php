@@ -13,7 +13,7 @@ class OrderSyncController extends Controller
         $area = $request->input('area') === 'apparel' ? 'apparel' : 'bags';
         if (!$request->user()->allows($area.'.overview.view')) $area = $request->user()->allows('bags.overview.view') ? 'bags' : 'apparel';
         try {
-            $run = $sync->sync('manual', $areas);
+            $run = $sync->syncPartners('manual', $areas,\App\Services\PartnerContext::allowed($request->user()));
             return redirect()->route('dashboard', ['area'=>$area])->with($run['state'] === 'success' ? 'ok' : 'warning',
                 $run['state'] === 'success' ? 'Order sync complete. Results for each production area are shown below.' : 'Order sync needs attention. Review the separate results below.');
         } catch (\Throwable $e) {

@@ -17,7 +17,7 @@ class BackingColorService
     }
     public static function context($item):string {
         return hash('sha256',json_encode([self::definition($item),$item->series_code,$item->design_type,$item->sku,$item->variant,$item->shopify_image,
-            config('services.google_drive.artwork_root_id'),config('services.materials.sheet_id'),config('services.materials.sheet_tab')]));
+            PartnerContext::root(),config('services.materials.sheet_id'),PartnerContext::tab()]));
     }
     public static function confirmed($item):bool {
         if(!self::required($item))return true;
@@ -40,7 +40,7 @@ class BackingColorService
         $definition=self::definition($item);
         abort_unless(in_array($color,$definition['colors'],true),422,'Select a backing color from the material sheet before approval.');
         if(self::confirmed($item) && $item->backing_selection['color']===$color)return;
-        $item->backing_selection=['material'=>$definition['material'],'color'=>$color,'context'=>$context,'source_image'=>$item->shopify_image,'sheet_id'=>config('services.materials.sheet_id'),'sheet_tab'=>config('services.materials.sheet_tab'),'confirmed_by'=>$actor,'confirmed_at'=>now()->toIso8601String()];
+        $item->backing_selection=['material'=>$definition['material'],'color'=>$color,'context'=>$context,'source_image'=>$item->shopify_image,'sheet_id'=>config('services.materials.sheet_id'),'sheet_tab'=>PartnerContext::tab(),'confirmed_by'=>$actor,'confirmed_at'=>now()->toIso8601String()];
         $item->save();
     }
     public function confirm(ProductionItem $item,string $color,string $context,int $actor):void {
