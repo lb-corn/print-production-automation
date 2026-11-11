@@ -7,15 +7,18 @@ use Illuminate\Support\Facades\{DB,Schema};
 class BackingColorService
 {
     public static function required($item):bool {
+        if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>self::required($item));
         return config('services.backing_colors.enabled',false) && $item->design_type==='single'
             && (app(MaterialCatalog::class)->row($item->series_code)['back']??'')!=='';
     }
     public static function definition($item):array {
+        if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>self::definition($item));
         $catalog=app(MaterialCatalog::class);$row=$catalog->row($item->series_code);
         $material=$row['back']??'';
         return ['material'=>$material,'colors'=>$catalog->backingColors($material)];
     }
     public static function context($item):string {
+        if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>self::context($item));
         return hash('sha256',json_encode([self::definition($item),$item->series_code,$item->design_type,$item->sku,$item->variant,$item->shopify_image,
             PartnerContext::root(),config('services.materials.sheet_id'),PartnerContext::tab()]));
     }

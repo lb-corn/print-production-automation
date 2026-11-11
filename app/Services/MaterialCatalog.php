@@ -12,8 +12,13 @@ class MaterialCatalog
     private ?string $snapshotPartner=null;
     private array $backingMaterials=[];
     private ?string $failure=null;
+    private array $partnerSnapshots=[];
     public function rows(bool $fresh=false):array {
-        if($this->snapshotPartner!==PartnerContext::current()){$this->snapshotPartner=PartnerContext::current();$this->snapshot=null;$this->backingMaterials=[];$this->failure=null;}
+        if(PartnerContext::current()==='all'){$rows=[];foreach(PartnerContext::visible() as $partner)$rows+=PartnerContext::run($partner,fn()=>$this->rows($fresh));return $rows;}
+        if($this->snapshotPartner!==PartnerContext::current()){
+            if($this->snapshotPartner!==null)$this->partnerSnapshots[$this->snapshotPartner]=[$this->snapshot,$this->backingMaterials,$this->failure];
+            $this->snapshotPartner=PartnerContext::current();[$this->snapshot,$this->backingMaterials,$this->failure]=$this->partnerSnapshots[$this->snapshotPartner]??[null,[],null];
+        }
         if(!$fresh && $this->snapshot!==null)return $this->snapshot;
         try {
             $id=(string)config('services.materials.sheet_id',self::DEFAULT_SHEET_ID);
@@ -44,10 +49,11 @@ class MaterialCatalog
         foreach($this->backingMaterials as $row)if(strcasecmp($row['material'],$material)===0)return $row['colors'];
         return [];
     }
-    public function error():?string {$this->rows();return $this->failure;}
+    public function error():?string {if(PartnerContext::current()==='all'){$errors=[];foreach(PartnerContext::visible() as $partner){$error=PartnerContext::run($partner,fn()=>$this->error());if($error)$errors[]=PartnerContext::label($partner).': '.$error;}return $errors?implode(' ',$errors):null;}$this->rows();return $this->failure;}
     public function map():array {return array_map(fn($r)=>[$r['front'],$r['back']],$this->rows());}
     public function row(?string $code):?array {return $this->rows()[strtoupper((string)$code)]??null;}
     public function materials():array {
+        if(PartnerContext::current()==='all'){$names=[];foreach(PartnerContext::visible() as $partner)$names=[...$names,...PartnerContext::run($partner,fn()=>$this->materials())];$names=array_values(array_unique($names));natcasesort($names);return array_values($names);}
         $names=[];foreach($this->rows() as $row){$names[]=$row['front'];if($row['back']!=='')$names[]=$row['back'];}
         $names=array_values(array_unique($names));natcasesort($names);return array_values($names);
     }

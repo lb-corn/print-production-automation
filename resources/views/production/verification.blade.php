@@ -1,5 +1,5 @@
 <x-layouts.app heading="Production Verification" subheading="Compare Shopify order artwork against factory Drive artwork">
-@if(auth()->user()->allows('bags.artwork.edit') || auth()->user()->allows('bags.sync.edit'))
+@if(auth()->user()->allows('bags.artwork.edit') || auth()->user()->allows('bags.sync.edit') || count(\App\Services\PartnerContext::allowed(auth()->user()))>1)
 <section class="production-refresh" aria-labelledby="production-refresh-heading">
 <div class="production-refresh-heading"><h2 id="production-refresh-heading">Orders &amp; artwork</h2><p>Print batches stay locked. Changed artwork needs approval again.</p></div>
 <div class="production-refresh-actions">
@@ -10,6 +10,7 @@
 <span class="tool-icon">@include('partials.nav-icon',['name'=>'artwork'])</span><div class="tool-copy"><strong>Drive artwork</strong><p>Recheck artwork matches for current orders.</p></div>
 <button type="submit" class="chip">Rematch Artwork</button>
 </form>@endif
+@include('partials.partner-filter',['partnerTile'=>true])
 </div>
 </section>
 @endif
@@ -48,13 +49,14 @@
 </form>
 @endif<div class="cards verification-cards">
 @forelse($items as $item)
+@php $cardPartner=\App\Services\PartnerContext::enter($item->partner??'lucky'); @endphp
 @php
     $approved = $item->workflow_state === 'approved';
     $rejected = $item->workflow_state === 'rejected';
     $stale = $item->decision && !$item->approval_current;
     $reviewLabel = $item->production_batch ? ($item->workflow_state === 'completed' ? 'Completed' : ($item->workflow_state === 'failed' ? 'Print failed' : 'In print · '.str_replace('_', ' ', strtolower($item->production_batch['status'])))) : ($approved ? 'Verified' : ($rejected ? 'Rejected' : ($stale ? 'Artwork changed · Re-verify' : ($item->is_custom ? 'Custom · Pending' : 'Not verified'))));
 @endphp
-<details data-item-id="{{$item->id}}" class="job-card {{$approved?'approved-card':($rejected?'wrong-card':($item->workflow_state === 'completed'?'completed-card':($item->production_batch?'in-print-card':'')))}}" {{ (!$approved && !$rejected && !$item->production_batch) ? 'open' : '' }} data-workflow="{{$item->workflow_state}}" data-type="{{$item->design_type}}" data-custom="{{$item->is_custom?'yes':'no'}}" data-ready="{{$item->ready_for_print?'yes':'no'}}" data-decision="{{$item->decision?->decision??''}}" data-status="{{$item->match_status}}">
+<details data-partner="{{$item->partner??'lucky'}}" data-item-id="{{$item->id}}" class="job-card {{$approved?'approved-card':($rejected?'wrong-card':($item->workflow_state === 'completed'?'completed-card':($item->production_batch?'in-print-card':'')))}}" {{ (!$approved && !$rejected && !$item->production_batch) ? 'open' : '' }} data-workflow="{{$item->workflow_state}}" data-type="{{$item->design_type}}" data-custom="{{$item->is_custom?'yes':'no'}}" data-ready="{{$item->ready_for_print?'yes':'no'}}" data-decision="{{$item->decision?->decision??''}}" data-status="{{$item->match_status}}">
 <summary class="job-title">
 @if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && !$item->is_custom && $item->valid_artwork)<input class="review-select" @disabled(\App\Services\BackingColorService::required($item) && $item->decision?->decision==='CORRECT') type="checkbox" name="items[]" value="{{$item->id}}" form="bulk-review" aria-label="Select {{$item->order_number}} {{$item->product}} {{$item->variant}}">
 @endif<div>
@@ -130,6 +132,7 @@
 @else NOT VERIFIED
 @endif</div>
 @if(auth()->user()->allows('bags.artwork.approve') && !$item->production_batch && \App\Services\BackingColorService::required($item))<form method="post" action="{{route('production.return-review',$item)}}" data-review-return @if($item->decision?->decision!=='CORRECT') hidden @endif>@csrf<button class="chip" type="submit">Return to review</button></form>@endif
+
 @if(auth()->user()->allows('bags.batches.edit') && ($item->production_batch['can_return']??false))
 <form method="post" action="{{route('batch.return-item',[$item->production_batch['id'],$item->id])}}" data-return-batch data-return-scope="item" data-batch-id="{{$item->production_batch['id']}}">
 @csrf<input type="hidden" name="return_confirmed" value="1"><button type="submit" class="chip">Return to Artwork Review</button><small class="muted">This item only</small>
@@ -149,6 +152,7 @@
 <button class="approve" disabled>Approve artwork</button>
 @endif</div>
 </details>
+@php \App\Services\PartnerContext::leave($cardPartner); @endphp
 @empty<div class="panel empty">No artwork orders to review.</div>
 @endforelse</div>
 <div class="panel empty" data-filter-empty hidden>No orders match this filter.</div>

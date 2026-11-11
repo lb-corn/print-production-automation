@@ -24,12 +24,12 @@
     @if(auth()->user()->allows($area.'.overview.view') || auth()->user()->allows($area.'.sync.edit'))
     @php
         $result=$sync['areas'][$area]??[];$done=($result['state']??'')==='success';$stats=$result['stats']??[];
-        $checked=$done?($area==='bags'?$stats['shopify_items']:$stats['jersey_line_items_matched']):null;
-        $added=$done?($area==='bags'?$stats['added']:$stats['inserted']):null;
+        $checked=$done?($area==='bags'?($stats['shopify_items']??0):($stats['jersey_line_items_matched']??0)):null;
+        $added=$done?($area==='bags'?($stats['added']??0):($stats['inserted']??0)):null;
     @endphp
     <div class="order-sync-result" data-sync-area="{{$area}}">
         <div class="sync-result-heading"><span class="sync-area-icon">@include('partials.nav-icon',['name'=>$area==='bags'?'bag-production':'apparel-production'])</span><strong>{{$label}}</strong><span class="sync-area-state">{{['success'=>'Synced','error'=>'Needs retry','running'=>'Syncing…','pending'=>'Waiting','interrupted'=>'Needs retry'][$result['state']??'']??'Not synced yet'}}</span></div>
-        <div class="sync-result-counts"><div><b>{{$checked??'—'}}</b><span>{{$area==='bags'?'Current lines':'Lines checked'}}</span></div><div><b>{{$added??'—'}}</b><span>Added</span></div><div><b>{{$done?$stats['updated']:'—'}}</b><span>Updated</span></div></div>
+        <div class="sync-result-counts"><div><b>{{$checked??'—'}}</b><span>{{$area==='bags'?'Current lines':'Lines checked'}}</span></div><div><b>{{$added??'—'}}</b><span>Added</span></div><div><b>{{$done?($stats['updated']??0):'—'}}</b><span>Updated</span></div></div>
         @if(($result['state']??'')==='error')<p class="order-sync-notice">Could not sync {{$label}}. Try again.</p>@endif
         @if(isset($result['warning']))<p class="order-sync-notice">{{$result['warning']}}</p>@endif
         @if(!empty($result['last_success_at']))<small class="sync-result-footer">Last success: {{$formatSyncTime($result['last_success_at'])}}</small>@endif

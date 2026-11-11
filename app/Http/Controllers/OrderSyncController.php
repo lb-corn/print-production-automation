@@ -6,13 +6,14 @@ use Illuminate\Http\Request;
 
 class OrderSyncController extends Controller
 {
-    public function store(Request $request, OrderSyncService $sync)
+    public function store(Request $request, $sync=null)
     {
         $areas = array_values(array_filter(['bags','apparel'], fn($area) => $request->user()->allows($area.'.sync.edit')));
         abort_unless($areas, 403);
         $area = $request->input('area') === 'apparel' ? 'apparel' : 'bags';
         if (!$request->user()->allows($area.'.overview.view')) $area = $request->user()->allows('bags.overview.view') ? 'bags' : 'apparel';
         try {
+            $sync??=\App\Services\PartnerContext::run(\App\Services\PartnerContext::allowed($request->user())[0],fn()=>app(OrderSyncService::class));
             $run = $sync->syncPartners('manual', $areas,\App\Services\PartnerContext::allowed($request->user()));
             return redirect()->route('dashboard', ['area'=>$area])->with($run['state'] === 'success' ? 'ok' : 'warning',
                 $run['state'] === 'success' ? 'Order sync complete. Results for each production area are shown below.' : 'Order sync needs attention. Review the separate results below.');

@@ -9,6 +9,7 @@
             <span>Syncs {{auth()->user()->allows('bags.sync.edit') && auth()->user()->allows('apparel.sync.edit') ? 'bags & apparel' : (auth()->user()->allows('bags.sync.edit') ? 'bags' : 'apparel')}}</span>
         </form>
         @endif
+        @include('partials.partner-filter')
     </header>
     @include('partials.order-sync-status')
 </section>

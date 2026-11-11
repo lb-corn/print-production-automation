@@ -3,7 +3,7 @@ namespace App\Services;use App\Models\{ProductionItem,VerificationDecision,Print
 class ProductionService{
  const YARDS=.143;
  function materials():array {return app(MaterialCatalog::class)->map();}
- function materialCompatible($item):bool {$row=app(MaterialCatalog::class)->row($item->series_code);return $row && $row['type']===$item->design_type;}
+ function materialCompatible($item):bool {return PartnerContext::forItem($item,function()use($item){$row=app(MaterialCatalog::class)->row($item->series_code);return $row && $row['type']===$item->design_type;});}
 
  private ?string $cachePartner=null;
  private function ensurePartner():void {if($this->cachePartner!==PartnerContext::current()){$this->cachePartner=PartnerContext::current();$this->batchIndexCache=null;$this->workspaceStatsCache=null;}}
@@ -44,6 +44,7 @@ class ProductionService{
  function current($i){$d=$i->decision;return $d&&$this->ids($i)===collect($d->drive_file_ids??[])->sort()->values()->all() && ($d->decision==='WRONG' || !BackingColorService::required($i) || (BackingColorService::confirmed($i) && $d->backing_context_sha256===BackingColorService::approvalHash($i)));}
  function ready($i){return ($i->shopify_active??true) && $this->approved($i) && !$this->processed($i) && $this->materialCompatible($i) && in_array($i->design_type,['single','double'],true) && (int)$i->quantity>0;}
  function verify($item,$decision,$uid,?array $backing=null){
+  if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>$this->verify($item,$decision,$uid,$backing));
   return DB::transaction(function() use($item,$decision,$uid,$backing) {
    $locked=ProductionItem::lockForUpdate()->findOrFail($item->id);
    $this->batchIndex(true);
@@ -70,7 +71,7 @@ class ProductionService{
     if($item->design_type==='single' && !empty($item->backing_material)){$name=$item->backing_material;$nonprint[$name]['sides']=($nonprint[$name]['sides']??0)+$quantity;}
     continue;
    }
-   $materials = $this->materials()[$item->series_code] ?? null;
+   $materials = PartnerContext::forItem($item,fn()=>$this->materials()[$item->series_code] ?? null);
    // Never publish a partial material total for an unsupported item.
    if (!$materials || !in_array($item->design_type, ['single','double'], true) || $quantity < 1) {
     throw new \LogicException('Cannot calculate material for production item '.$item->line_item_id.'. Check series, design type and quantity.');
@@ -98,6 +99,7 @@ class ProductionService{
  }
  function batch($uid,?array $selected=null,bool $split=false){return DB::transaction(function()use($uid,$selected,$split){$items=ProductionItem::with('decision')->orderBy('id')->lockForUpdate()->get();$this->batchIndex(true);$items=$items->filter(fn($i)=>$this->ready($i))->values();if($selected!==null){$selected=array_values(array_unique(array_map('intval',$selected)));abort_if(!$selected,422,'Select approved items to queue.');$items=$items->whereIn('id',$selected)->values();abort_unless($items->count()===count($selected),422,'One or more selected items are no longer approved or available. Refresh the queue.');}abort_if($items->isEmpty(),422,'No approved stock orders ready.');abort_if(!$split && $selected!==null && $items->map(fn($i)=>PrintLabelService::group($i))->unique()->count()>1,422,'Choose items from one printed-material group per queue request. Front/back pairs stay together.');$orders=[];$fc=0;foreach($items as $i){$r=$this->materials()[$i->series_code]??null;abort_if(!$r,422,'Material mapping missing.');$ms=collect($i->matches??[]);$arts=[];if($i->design_type==='single'){$m=$ms->first();abort_if(!$m,422,'Single artwork missing.');$arts[]=$this->art('PRINT',$r[0],$m);$fc++;}else{$f=$ms->firstWhere('side','front');$b=$ms->firstWhere('side','back');abort_if(!$f||!$b,422,'Double artwork incomplete.');$arts[]=$this->art('FRONT',$r[0],$f);$arts[]=$this->art('BACK',$r[1],$b);$fc+=2;}if($selected!==null)$arts=array_map(function($art)use($i){if(!in_array(strtolower(pathinfo((string)($art['filename']??''),PATHINFO_EXTENSION)),['jpg','jpeg','png','tif','tiff'],true))throw \Illuminate\Validation\ValidationException::withMessages(['items'=>'Automatic print labels require approved JPEG, PNG or single-page TIFF originals. Convert and review unsupported artwork before queueing.']);$art['print_label']=PrintLabelService::label($i,$art['material']);return $art;},$arts);$orders[]=['partner'=>$i->partner??PartnerContext::current(),'is_custom'=>(bool)$i->is_custom,'material_settings'=>app(MaterialCatalog::class)->row($i->series_code),'backing_material'=>$r[1],'backing_color'=>BackingColorService::color($i),'backing_confirmation'=>$i->backing_selection,'color'=>$i->color,'line_item_id'=>$i->line_item_id,'order'=>$i->order_number,'product'=>$i->product,'variant'=>$i->variant,'sku'=>$i->sku,'series_code'=>$i->series_code,'design_type'=>$i->design_type,'quantity'=>$i->quantity,'artworks'=>$arts,'artwork_approval'=>['user_id'=>$i->decision->updated_by,'account_name'=>$i->decision->user?->name,'approved_at'=>$i->decision->updated_at?->toIso8601String(),'drive_file_ids'=>$i->decision->drive_file_ids]];}abort_if(!$orders,422,'No supported approved stock orders ready.');$id=PartnerContext::prefix().'-BATCH-'.now('UTC')->format('Ymd-His').'-'.strtoupper(substr(bin2hex(random_bytes(3)),0,4));$payload=[...($selected!==null?['print_label_policy'=>PrintLabelService::POLICY,'material_group'=>PrintLabelService::group($items->first())]:[]),'batch_id'=>$id,'status'=>'QUEUED','created_at'=>now('UTC')->toIso8601String(),'yards_per_side_per_set'=>self::YARDS,'order_count'=>count($orders),'artwork_file_count'=>$fc,'orders'=>$orders];if($split)return $this->createMaterialBatches($uid,$orders);$batch=PrintBatch::create(['batch_id'=>$id,'status'=>'QUEUED','order_count'=>count($orders),'artwork_file_count'=>$fc,'total_yards'=>$this->summary($items)['total_yards'],'payload'=>$payload,'created_by'=>$uid]);$this->batchIndexCache=null;$this->workspaceStatsCache=null;return $batch;});}
  function batchByMaterial($uid,array $selected):array {
+  if(PartnerContext::current()==='all')return DB::transaction(function()use($uid,$selected){$items=ProductionItem::whereIn('id',$selected)->get();abort_unless($items->count()===count(array_unique($selected)),422,'Some selected orders are unavailable.');$jobs=[];foreach($items->groupBy('partner') as $partner=>$group)$jobs=[...$jobs,...PartnerContext::run($partner,fn()=>$this->batchByMaterial($uid,$group->pluck('id')->all()))];return $jobs;});
   app(MaterialCatalog::class)->rows(true); // Fresh sheet required at the authorization boundary.
   return $this->batch($uid,$selected,true);
  }

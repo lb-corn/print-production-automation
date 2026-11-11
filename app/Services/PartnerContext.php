@@ -6,9 +6,14 @@ class PartnerContext
     public string $partner='lucky';
     public bool $scoped=false;
     public bool $denied=false;
+    public ?array $permitted=null;
     public static function get():self {return app(self::class);}
     public static function current():string {return self::get()->partner;}
-    public static function label(?string $partner=null):string {return config('services.partners.'.($partner??self::current()).'.label','Lucky');}
+    public static function label(?string $partner=null):string {return ($partner??self::current())==='all'?'All partners':config('services.partners.'.($partner??self::current()).'.label','Lucky');}
+    public static function visible():array {return self::current()==='all'?(self::get()->permitted??self::allowed(auth()->user())):[self::current()];}
+    public static function forItem($item,callable $callback):mixed {return self::run($item->partner??'lucky',$callback);}
+    public static function enter(string $partner):array {$ctx=self::get();$old=[$ctx->partner,$ctx->scoped,$ctx->denied];$ctx->partner=$partner;$ctx->scoped=true;$ctx->denied=false;return $old;}
+    public static function leave(array $old):void {[$ctxPartner,$scoped,$denied]=$old;$ctx=self::get();$ctx->partner=$ctxPartner;$ctx->scoped=$scoped;$ctx->denied=$denied;}
     public static function prefix(?string $partner=null):string {return config('services.partners.'.($partner??self::current()).'.prefix','LB');}
     public static function key(string $key):string {return self::current()==='lucky'?$key:$key.'.'.self::current();}
     public static function shopify(string $key,mixed $default=null):mixed {

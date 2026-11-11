@@ -68,6 +68,17 @@ class OrderSyncService
 
     public static function status(): array
     {
+        if(PartnerContext::current()==='all'){
+            $runs=[];foreach(PartnerContext::visible() as $partner)$runs[]=PartnerContext::run($partner,fn()=>self::status());
+            $result=$runs[0]??['state'=>'never','areas'=>[]];$states=array_column($runs,'state');
+            $result['state']=in_array('running',$states,true)?'running':(count(array_unique($states))===1?($states[0]??'never'):'partial');
+            $result['areas']=[];
+            foreach(['bags','apparel'] as $area){$parts=array_column(array_column($runs,'areas'),$area);$stats=[];foreach($parts as $part)foreach($part['stats']??[] as $key=>$value)if(is_numeric($value))$stats[$key]=($stats[$key]??0)+$value;
+                $areaStates=array_column($parts,'state');$result['areas'][$area]=['state'=>count($parts)===count($runs) && count(array_filter($areaStates,fn($state)=>$state==='success'))===count($runs)?'success':'pending','stats'=>$stats,'last_success_at'=>collect($parts)->pluck('last_success_at')->filter()->sort()->last()];
+            }
+            $result['finished_at']=collect($runs)->pluck('finished_at')->filter()->sort()->last();
+            return $result;
+        }
         $run = Cache::get(PartnerContext::key(self::STATUS_KEY), ['state'=>'never', 'areas'=>[]]);
         if ($run['state'] === 'running' && Carbon::parse($run['started_at'])->lt(now()->subMinutes(30))) {
             $run['state'] = 'interrupted';

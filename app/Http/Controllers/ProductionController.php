@@ -24,7 +24,7 @@ class ProductionController extends Controller
 
         return view('dashboard.index', [
             'total' => $items->count(),
-            'openOrderCount'=>$items->pluck('order_number')->filter()->unique()->count(),
+            'openOrderCount'=>$items->filter(fn($item)=>$item->order_number)->unique(fn($item)=>$item->partner.':'.$item->order_number)->count(),
             'ready' => $ready->count(),
             'review' => $items->filter(fn ($item) => !$this->svc->processed($item) && (!$this->svc->approved($item) || !$this->svc->materialCompatible($item)))->count(),
             'custom' => $items->where('is_custom', true)->count(),
@@ -57,7 +57,8 @@ class ProductionController extends Controller
         $request->validate(['confirm_rematch'=>'required|accepted']);
         try {
             \App\Services\ArtworkRematchService::ensureSchemaReady();
-            $counts = app(\App\Services\ArtworkRematchService::class)->rematch();
+            $counts=['matched'=>0,'missing'=>0,'ambiguous'=>0,'skipped'=>0];
+            foreach(\App\Services\PartnerContext::visible() as $partner){$result=\App\Services\PartnerContext::run($partner,fn()=>app(\App\Services\ArtworkRematchService::class)->rematch());foreach($counts as $key=>$value)$counts[$key]+=$result[$key];}
             return redirect()->route('production')->with('ok', sprintf(
                 'Artwork rematched: %d matched · %d missing · %d ambiguous · %d skipped. Review artwork before approval.',
                 $counts['matched'], $counts['missing'], $counts['ambiguous'], $counts['skipped']));
@@ -86,6 +87,7 @@ class ProductionController extends Controller
         $batchIndex = $this->svc->batchIndex(true);
         $reviewSummary = ['approved'=>0, 'rejected'=>0, 'pending'=>0, 'in_print'=>0, 'completed'=>0, 'failed'=>0];
         foreach ($items as $item) {
+            $previousPartner=\App\Services\PartnerContext::enter($item->partner??'lucky');
             $item->production_batch = $batchIndex[$item->line_item_id] ?? null;
             $state = $item->production_batch
                 ? match ($item->production_batch['status']) { 'PRINTED'=>'completed', 'FAILED'=>'failed', default=>'in_print' }
@@ -106,6 +108,7 @@ class ProductionController extends Controller
             $item->valid_artwork = $validArtwork;
             $item->ready_for_print = $this->svc->ready($item);
             $item->approval_current = $this->svc->current($item);
+            \App\Services\PartnerContext::leave($previousPartner);
         }
 
         return view('production.verification', compact('items', 'reviewSummary'));

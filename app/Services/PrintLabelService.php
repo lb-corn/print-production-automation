@@ -8,6 +8,7 @@ class PrintLabelService {
         return substr(trim(preg_replace('/[^A-Z0-9]+/','-',strtoupper($text)),'-'),0,$limit)?:'NA';
     }
     public static function label(ProductionItem $item,string $material):string {
+        if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>self::label($item,$material));
         $parts=[self::token(str_replace(' ','',$material),24)];
         $order=trim((string)$item->order_number);
         if($order!=='')$parts[]=PartnerContext::prefix($item->partner??PartnerContext::current()).self::token(ltrim($order,'#'),24);
@@ -21,6 +22,7 @@ class PrintLabelService {
         return implode(' ',$parts);
     }
     public static function materials(ProductionItem $item):array {
+        if(PartnerContext::current()!==($item->partner??'lucky'))return PartnerContext::forItem($item,fn()=>self::materials($item));
         $map=app(MaterialCatalog::class)->map()[$item->series_code]??[];
         return $item->design_type==='double'?array_values(array_unique($map)):array_slice($map,0,1);
     }

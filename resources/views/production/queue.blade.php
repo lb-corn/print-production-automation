@@ -13,8 +13,10 @@ $catalog=app(\App\Services\MaterialCatalog::class);$materialNames=$catalog->mate
 <details class="panel queue-material-details"><summary><strong><svg class="queue-material-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><path d="m6 4 4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Material totals</strong><span>{{number_format($summary['printable_yards'],3)}} yd printed · {{number_format($summary['nonprint_yards'],3)}} yd backing</span></summary>@include('partials.material-requirements')</details>
 <div class="queue-list"><p class="panel queue-empty" data-material-empty hidden>No approved print sides for this material. Choose another material or All materials.</p>
 @forelse($items as $item)
+@php $cardPartner=\App\Services\PartnerContext::enter($item->partner??'lucky'); @endphp
+@php $materials=app(\App\Services\ProductionService::class)->materials(); @endphp
 @php $groupName=\App\Services\PrintLabelService::group($item); @endphp
-<article class="panel queue-item" data-queue-card data-material-group="{{$groupName}}" data-materials="{{json_encode(\App\Services\PrintLabelService::materials($item))}}">
+<article data-partner="{{$item->partner??'lucky'}}" class="panel queue-item" data-queue-card data-material-group="{{$groupName}}" data-materials="{{json_encode(\App\Services\PrintLabelService::materials($item))}}">
 @if(auth()->user()->allows('bags.batches.edit'))<label class="queue-item-select"><input type="checkbox" name="items[]" value="{{$item->id}}" form="queue-selection" data-queue-item data-material-group="{{$groupName}}" data-materials="{{json_encode(\App\Services\PrintLabelService::materials($item))}}" aria-label="Select {{$item->product}}" @disabled(!$queueAvailable)></label>@endif
 <div class="queue-item-images">
 @foreach($item->matches as $match)
@@ -32,6 +34,7 @@ $side=$match['side']??'single';$material=$materials[$item->series_code][$side===
 <details class="queue-source-details"><summary>Approved source files</summary>@foreach($item->matches as $match)@if(($match['source']??null)==='pc_custom')<p>{{$match['name']}} · confirmed custom file on Print PC</p>@else<a href="{{$match['webViewLink']??'https://drive.google.com/file/d/'.$match['id'].'/view'}}" target="_blank" rel="noopener">{{$match['name']}} ↗</a>@endif
 @endforeach</details><span class="ok">✓ Artwork approved</span>@if(auth()->user()->allows('bags.artwork.approve') && $item->getKey())<form method="post" action="{{route('production.return-review',$item)}}" class="ready-return-review">@csrf<button type="submit" class="chip">Return to review</button></form>@endif</div>
 </article>
+@php \App\Services\PartnerContext::leave($cardPartner); @endphp
 @empty<div class="panel queue-empty"><strong>No approved items waiting</strong><p>Track queued jobs in Print batches, or approve artwork to prepare another job.</p><a class="primary" href="{{route('batches')}}">View print batches →</a></div>
 @endforelse
 </div>

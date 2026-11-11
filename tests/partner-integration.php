@@ -67,6 +67,39 @@ $syncFactory=function()use(&$shopCalls){
 $app->bind(App\Services\OrderSyncService::class,$syncFactory);
 Partner::run('vibe',fn()=>$syncFactory()->syncPartners('manual',['bags'],['lucky','vibe']));
 check($shopCalls===[['client'=>'lucky','scope'=>'lucky'],['client'=>'vibe','scope'=>'vibe']],'Sync initiated from Vibe uses the correct Shopify client for both shops');
+Auth::setUser($manager);
+$allRequest=requestFor($manager,'production');
+$middleware->handle($allRequest,function()use($app,$lucky,$vibe){
+    check(Partner::current()==='all' && ProductionItem::count()===2,'Default production view includes all permitted partners');
+    check(JerseyOrder::count()===2 && PrintBatch::count()===2,'All view includes both apparel and batch records');
+    $renderRequest=requestFor(auth()->user(),'production');$renderRequest->route()->bind($renderRequest);$app->instance('request',$renderRequest);
+    $view=app(App\Http\Controllers\ProductionController::class)->verification();
+    check($view->getData()['items']->count()===2,'Combined verification prepares both shops');
+    $html=$view->render();;
+    check(str_contains($html,'ALL PARTNERS') && str_contains($html,'partner-control-tile') && strpos($html,'partner-control partner-control-tile')>strpos($html,'<section class="production-refresh"'),'The partner filter sits inside Orders and artwork');
+    check(Partner::current()==='all','Rendering partner-specific cards restores the combined context');
+    if(in_array('--preview',$GLOBALS['argv'],true))file_put_contents(__DIR__.'/../tmp/partner-all.html',$html);
+});
+$middleware->handle(requestFor($onlyVibe,'production','GET',['partner'=>'all']),function(){check(ProductionItem::count()===1 && ProductionItem::first()->partner==='vibe','All never exposes another shop to a Vibe-only role');});
+$middleware->handle(requestFor($manager,'production','GET',['partner'=>'lucky']),function(){check(ProductionItem::count()===1,'Lucky filter shows only Lucky');});
+$shopCalls=[];
+$syncRequest=requestFor($manager,'orders.sync','POST',['partner'=>'all']);
+$middleware->handle($syncRequest,fn()=>(new App\Http\Controllers\OrderSyncController)->store($syncRequest));
+check($shopCalls===[['client'=>'lucky','scope'=>'lucky'],['client'=>'vibe','scope'=>'vibe']],'Manual sync from All resolves both shop clients before updating names and orders');
+$shopCalls=[];Partner::run('lucky',fn()=>$syncFactory()->syncPartners('scheduled',['bags'],['lucky','vibe']));
+check($shopCalls===[['client'=>'lucky','scope'=>'lucky'],['client'=>'vibe','scope'=>'vibe']],'Scheduled sync processes both shops regardless of the display filter');
+$forbiddenItem=requestFor($onlyVibe,'verify','POST',['partner'=>'all']);$forbiddenItem->route()->bind($forbiddenItem);$forbiddenItem->route()->setParameter('item',$lucky->id);
+try{$middleware->handle($forbiddenItem,fn()=>'allowed');throw new LogicException('Cross partner mutation allowed');}catch(Symfony\Component\HttpKernel\Exception\HttpException $e){check($e->getStatusCode()===404,'All cannot be used to approve an inaccessible partner item');}
+$newLucky=$make('mixed-lucky','lucky');$newVibe=$make('vibe:mixed-vibe','vibe');
+foreach([$newLucky,$newVibe] as $readyItem)Partner::forItem($readyItem,fn()=>$svc->verify($readyItem,'CORRECT',$manager->id));
+$middleware->handle(requestFor($manager,'queue'),function()use($svc,$newLucky,$newVibe,$manager){
+    $ready=$svc->queue();check($ready->count()===2,'Combined Ready for Print contains approved items from both shops');
+    $summary=$svc->summary($ready);check($summary['printable_materials']['Rave8']['sides']===1 && $summary['printable_materials']['Rave9']['sides']===1,'Combined totals use each order partner material sheet');
+    $queueHtml=app(App\Http\Controllers\ProductionController::class)->queue()->render();check(str_contains($queueHtml,'RAVE8 VB42 MACARENA') && str_contains($queueHtml,'RAVE9 LB42 VIEWMONT'),'Combined queue keeps the correct materials and LB/VB labels');
+    $jobs=$svc->batchByMaterial($manager->id,[$newLucky->id,$newVibe->id]);
+    check(count($jobs)===2 && count(array_unique(array_column(array_map(fn($job)=>$job->payload,$jobs),'partner')))===2,'One combined queue action creates separate partner batches');
+    foreach($jobs as $job){check(count(array_unique(array_column($job->payload['orders'],'partner')))===1 && $job->payload['orders'][0]['partner']===$job->partner,'Print payload never mixes partners');}
+});
 Partner::get()->scoped=false;Partner::get()->partner='lucky';Auth::setUser($manager);
 if(in_array('--preview',$argv,true))foreach(['lucky','vibe'] as $previewPartner)Partner::run($previewPartner,function()use($app,$previewPartner){
     $app->instance('request',Illuminate\Http\Request::create('/dashboard?partner='.$previewPartner));

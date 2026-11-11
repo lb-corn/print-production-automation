@@ -1,6 +1,6 @@
 # Lucky and Vibe setup
 
-The existing bag and apparel workflows run separately for Lucky and Vibe. Select the partner above the page content. The common Overview sync processes every partner and production area the signed-in user can sync. The scheduled `shopify:sync-orders` command processes both configured shops every ten minutes. The server still needs its normal Laravel scheduler installed.
+The default production view shows every partner the user can access. On Artwork Verification, the Partner selector is the third tile inside Orders & artwork; choose All partners, Lucky or Vibe. The common Overview sync processes every partner and production area the signed-in user can sync, regardless of the display filter. Names, SKUs and variants refresh from each shop. Combined Ready for Print uses each order's own sheet and creates separate partner/material batches. The scheduled `shopify:sync-orders` command processes both configured shops every ten minutes. The server still needs its normal Laravel scheduler installed.
 
 ## Configuration
 
@@ -44,7 +44,7 @@ Both artwork roots use the existing allowed manufacturing group folders, with di
 
 Read-only audit on November 11, 2026:
 
-- Lucky: all ten expected series folders are visible. The service account lists four originals in Luciano and no children in the other nine series folders. Folder visibility is confirmed; file availability/sharing needs checking separately. If your own Drive account sees files there, share those originals with the service account and recheck.
+- Lucky: after copying the missing originals, all ten series folders are populated and 243 eligible originals are indexed. The local rematch found 49 matches and ten items needing review, with five custom/locked items skipped. Copied files may retain a former ID suffix in their descriptive filename; matching accepts this while current metadata and operator approval establish identity.
 - Vibe: the root currently exposes Backside Scan Materials, including Macarena scans, but no manufacturing artwork groups/originals. Add the intended folders and originals, then rematch.
 - Ensure every Vibe variant SKU contains its actual sheet series code, for example `VB-BEL-…-001` for Believe and `VB-PRE-…-001` for Premiere. Some catalog variants were observed using another series' code; correct those in Shopify before relying on matching. Missing or ambiguous artwork stays in review.
 - Backing labels use the exact allowed color name from the selected partner's sheet. Where scans are unavailable or comparison is uncertain, choose the sheet color in verification and approve once; the app does not invent color names or approve automatically.

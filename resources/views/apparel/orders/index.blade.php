@@ -176,7 +176,7 @@
                         <tr class="{{ trim('order-card '.$remarkRowClass) }}">
                             <td class="order-section" data-label="Order">
                                 <div class="order-cell">
-                                    <div class="order-number">{{ $order->shopify_order_number }}</div>
+                                    <div class="order-number">{{ $order->shopify_order_number }} <span class="partner-badge">{{\App\Services\PartnerContext::label($order->partner)}}</span></div>
                                     <div class="muted">{{ $order->ordered_at?->format('M j, Y') }}</div>
                                 </div>
                                 <div class="badge-stack compact">
