@@ -99,25 +99,42 @@
 <b>{{$item->color?:'—'}}</b>
 </div>
 </div>
-<div class="compare {{!$item->production_batch && \App\Services\BackingColorService::required($item)?'compare-backing':''}} {{count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">
+<div class="compare {{!$item->production_batch && \App\Services\BackingColorService::required($item)?'compare-backing':''}} {{$item->design_type==='double' || count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">
 <div class="art">
 <label>{{$item->is_custom?'CUSTOM ORDER PREVIEW':'SHOPIFY ORDER IMAGE'}}</label>
 @if($item->shopify_image)<div class="backing-source-image"><img src="{{$item->shopify_image}}" alt="Shopify order artwork for {{$item->product}}" loading="lazy"><span data-backing-crop hidden></span></div>
 @else<div class="placeholder">No Shopify image</div>
 @endif<p>{{$item->product}}</p>
 </div>
-<div class="drive-grid {{$item->design_type==='single' || !count($item->display_matches??[]) ? 'one' : ''}}">
+<div class="drive-grid {{$item->design_type!=='double' && ($item->design_type==='single' || !count($item->display_matches??[])) ? 'one' : ''}}">
 @if($item->is_custom)
 @include('partials.custom-artwork-upload',['item'=>$item])
 @elseif(!$item->production_batch && !count($item->display_matches??[]) && !$item->is_custom)
-@include('partials.artwork-review', ['item'=>$item])
+@if($item->design_type==='double')
+@foreach(['front','back'] as $missingSide)
+@include('partials.artwork-review', ['item'=>$item,'missingSide'=>$missingSide])
+@endforeach
 @else
-@forelse($item->display_matches??[] as $m)<div class="art">
+@include('partials.artwork-review', ['item'=>$item,'missingSide'=>null])
+@endif
+@else
+@php
+$artworkSlots=$item->display_matches??[];
+if($item->design_type==='double' && !$item->is_custom && !$item->production_batch) {
+    $artworkSlots=collect(['front','back'])->mapWithKeys(fn($side)=>[$side=>collect($item->display_matches??[])->first(fn($match)=>strtolower($match['side']??'')===$side)])->all();
+}
+@endphp
+@forelse($artworkSlots as $side=>$m)
+@if(!$m)
+@include('partials.artwork-review', ['item'=>$item,'missingSide'=>$side])
+@else
+<div class="art">
 <label>DRIVE {{strtoupper($m['side']??'ARTWORK')}}</label>
 <img src="{{\App\Http\Controllers\ArtworkPreviewController::url($m['id'])}}" alt="Drive {{$m['side']??'artwork'}}: {{$m['name']??'Artwork'}}" loading="lazy">
 @include('partials.artwork-filename',['filename'=>$m['name']??''])<small>{{$item->production_batch ? 'Locked batch artwork' : ($item->valid_artwork ? (($item->artwork_review['selection_source']??'')==='admin'?'Admin-reviewed artwork choice · operator approval required':'Exact filename match · operator approval required') : 'Saved artwork preview · rematch to verify')}}</small>
 <a target="_blank" rel="noopener noreferrer" href="{{$m['webViewLink']??'#'}}">Open original</a>
 </div>
+@endif
 @empty<div class="placeholder">{{$item->is_custom?'Custom artwork pending':'No Drive artwork matched'}}</div>
 @endforelse
 @endif</div>

@@ -167,6 +167,16 @@ $cardHtml=$dom->saveHTML($card);
 $check(str_contains($cardHtml,'valid-ui-file') && !str_contains($cardHtml,'Production file not found') && !str_contains($cardHtml,'Suggested filename'),'Correct production artwork displays without missing instructions or naming errors');
 $missingBox=$xpath->query('//details[@data-item-id="'.$legacy->id.'"]//div[contains(@class,"drive-grid")]//div[contains(@class,"artwork-review")]');
 $check($missingBox->length===1,'Missing filename instructions replace the right-hand image inside its comparison box');
+
+$doubleMissing=ProductionItem::create(['line_item_id'=>'double-missing-ui','sku'=>'2027-USA250-PSN-0001','product'=>'Double-sided missing artwork','variant'=>'Pro Snipers / Gray','quantity'=>1,'series_code'=>'PSN','design_type'=>'double','match_status'=>'NOT_FOUND','matches'=>[]]);
+$html=$controller->verification()->render();
+$dom=new DOMDocument();@$dom->loadHTML($html,LIBXML_NONET);$xpath=new DOMXPath($dom);
+$doubleCard=$xpath->query('//details[@data-item-id="'.$doubleMissing->id.'"]')->item(0);
+$doubleHtml=$dom->saveHTML($doubleCard);
+$check(str_contains($doubleHtml,'compare-double') && str_contains($doubleHtml,'DRIVE FRONT') && str_contains($doubleHtml,'DRIVE BACK'),'Double-sided missing artwork retains separate front and back comparison tiles');
+$check($xpath->query('.//div[contains(@class,"artwork-missing-frame")]',$doubleCard)->length===2,'Both missing sides show their own matching guidance');
+$check($xpath->query('.//button[contains(@class,"approve") and not(@disabled)]',$doubleCard)->length===0,'Missing double-sided artwork cannot be approved');
+$doubleMissing->delete();
 echo "$checks total artwork checks passed.\n";
 $drive->tree['group-b']=[$folder('clover','Clover')];
 $earth=['sku'=>'2027-EAR-CLV-0001','product'=>'Lucky Bags 2027 Earth','variant'=>'Clover'];
