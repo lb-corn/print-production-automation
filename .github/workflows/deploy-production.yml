@@ -110,6 +110,7 @@ jobs:
       - name: Validate and audit dependencies
         run: |
           set -euo pipefail
+          mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
           composer validate --no-check-publish
           composer install --no-interaction --prefer-dist --no-progress
           composer audit --locked
@@ -207,6 +208,7 @@ jobs:
       - name: Build production dependencies and deployment package
         run: |
           set -euo pipefail
+          mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
           composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
           python3 - <<'PY'
           """Create an allowlisted Laravel web-server package without local data or factory-PC tools."""
