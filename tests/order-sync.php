@@ -62,7 +62,9 @@ foreach(['open'=>2,'pending_remarks'=>1,'missing_tracking'=>1] as $attention=>$c
 }
 $combined->sync('scheduled');Auth::setUser($manager);view()->share('errors',new Illuminate\Support\ViewErrorBag());
 foreach(['bags','apparel'] as $area){
-    $request=Illuminate\Http\Request::create('/dashboard?area='.$area);$app->instance('request',$request);
+    $request=Illuminate\Http\Request::create('/dashboard?area='.$area);
+    $dashboardRoute=new Illuminate\Routing\Route(['GET'],'dashboard',fn()=>null);$dashboardRoute->name('dashboard');$dashboardRoute->bind($request);$request->setRouteResolver(fn()=>$dashboardRoute);
+    $app->instance('request',$request);
     $view=$area==='bags'?app(App\Http\Controllers\ProductionController::class)->dashboard():app(App\Http\Controllers\ApparelOverviewController::class)->index();
     $html=$view->render();
     check(substr_count($html,'data-order-sync-form>')===1 && strpos($html,'<section class="order-sync-card"')<strpos($html,'<section class="overview-workspace"'),'One standalone sync card appears before '.$area.' tabs');

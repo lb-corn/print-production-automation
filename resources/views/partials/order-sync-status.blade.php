@@ -4,6 +4,8 @@
     $formatSyncTime=fn($value)=>$value?\Illuminate\Support\Carbon::parse($value)->timezone(config('app.timezone'))->format('M j, g:i A T'):'Not yet';
 @endphp
 <section class="order-sync-status" id="order-sync-status" aria-label="Common order sync status" aria-live="polite" data-status-url="{{route('orders.sync-status')}}" data-order-sync-state="{{$sync['state']}}">
+    <div class="sync-status-overview">
+    <span class="order-sync-badge {{$sync['state']}}">{{$syncLabels[$sync['state']]??'Not synced yet'}}</span>
     @php
         $syncPartners=\App\Services\PartnerContext::allowed(auth()->user());
     @endphp
@@ -13,7 +15,7 @@
         @endphp
         <span><strong>{{\App\Services\PartnerContext::label($syncPartner)}}</strong><small>{{['success'=>'Synced','partial'=>'Needs review','error'=>'Needs retry','running'=>'Syncing…'][$shopSync['state']??'']??'Not synced yet'}}</small></span>
     @endforeach</div>@endif
-    <div class="sync-status-top"><span class="order-sync-badge {{$sync['state']}}">{{$syncLabels[$sync['state']]??'Not synced yet'}}</span><span class="sync-frequency">Every 10 minutes</span></div>
+    <span class="sync-frequency">Every 10 minutes</span></div>
     <div class="sync-timing-grid">
         <div>@include('partials.nav-icon',['name'=>'clock'])<div><span>Last update</span><strong>{{$formatSyncTime($sync['finished_at']??$sync['started_at']??null)}}</strong></div></div>
         <div>@include('partials.nav-icon',['name'=>'sync'])<div><span>Next planned sync</span><strong>{{$formatSyncTime($sync['next_expected_at'])}}</strong></div></div>
@@ -32,7 +34,6 @@
         <div class="sync-result-counts"><div><b>{{$checked??'—'}}</b><span>{{$area==='bags'?'Current lines':'Lines checked'}}</span></div><div><b>{{$added??'—'}}</b><span>Added</span></div><div><b>{{$done?($stats['updated']??0):'—'}}</b><span>Updated</span></div></div>
         @if(($result['state']??'')==='error')<p class="order-sync-notice">Could not sync {{$label}}. Try again.</p>@endif
         @if(isset($result['warning']))<p class="order-sync-notice">{{$result['warning']}}</p>@endif
-        @if(!empty($result['last_success_at']))<small class="sync-result-footer">Last success: {{$formatSyncTime($result['last_success_at'])}}</small>@endif
     </div>
     @endif
     @endforeach
