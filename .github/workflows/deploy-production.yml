@@ -139,6 +139,7 @@ jobs:
           php tests/material-settings.php
           php tests/material-sheet-parser.php
           php tests/backing-colors.php
+          node tests/backing-color-controls.cjs
           php tests/agent-updater.php
           node tests/backlog-controls.cjs
           node tests/artwork-naming-controls.cjs

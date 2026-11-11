@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 class AppServiceProvider extends ServiceProvider {
  public function register():void {$this->app->scoped(\App\Services\PartnerContext::class);$this->app->scoped(\App\Services\ProductionSummaryService::class);$this->app->scoped(\App\Services\MaterialCatalog::class);$this->app->scoped(\App\Services\ProductionService::class);$this->app->scoped(\App\Services\FactoryDispatchService::class);}
  public function boot():void {
+  RateLimiter::for('backing-suggestions',fn(Request $request)=>Limit::perMinute(120)->by('backing-suggestions:'.($request->user()?->id??$request->ip())));
+  RateLimiter::for('backing-references',fn(Request $request)=>Limit::perMinute(180)->by('backing-references:'.($request->user()?->id??$request->ip())));
   $this->loadViewsFrom(base_path('packages/ui-theme/resources/views'),'lucky-theme');
   RateLimiter::for('admin-reset',fn(Request $request)=>Limit::perMinute(3)->by('admin-reset:'.($request->user()?->id??$request->ip()))->response(function(Request $request,array $headers){$message='Please wait '.max(1,(int)($headers['Retry-After']??60)).' seconds before another reset attempt. No reset was performed.';return $request->expectsJson()?response()->json(['message'=>$message],429,$headers):redirect()->route('admin.settings',['section'=>'reset'])->with('error',$message)->withHeaders($headers);}));
   RateLimiter::for('factory-health',fn(Request $request)=>Limit::perMinute(30)->by('factory-health:'.$request->ip()));

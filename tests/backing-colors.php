@@ -57,6 +57,7 @@ try{(new App\Services\BackingReferenceLoader)->product('http://127.0.0.1/private
 $item->backing_selection=null;$item->setRelation('decision',null);
 Auth::setUser($manager);view()->share('errors',new Illuminate\Support\ViewErrorBag());
 $html=view('partials.backing-color-review',['item'=>$item])->render();check(str_contains($html,'<option value="Latte"') && !str_contains($html,'<option value="Red"') && !str_contains($html,'name="backing_confirmed"') && !str_contains($html,'<form') && str_contains($html,'form="approve-artwork-'),'Compact sheet-only selector submits with the existing approval form, without a checkbox or second action');
+check(substr_count($html,'class="backing-swatch ')===3 && str_contains($html,'backing-reference?'),'Allowed material swatch tiles and private image URLs are rendered before comparison starts');
 if(in_array('--preview',$argv,true))file_put_contents(__DIR__.'/../tmp/backing-review.html','<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>'.file_get_contents(public_path('css/app.css')).'</style><main style="max-width:1100px;margin:auto">'.$html.'</main>');
 if(in_array('--preview',$argv,true)){
     $ui=$stock->replicate();$ui->line_item_id='compact-ui-preview';$ui->order_number='#9009';$ui->backing_selection=null;$ui->save();$ui->unsetRelation('decision');
@@ -74,9 +75,13 @@ $loader=new class($refs['Latte']) extends App\Services\BackingReferenceLoader {
 };$app->instance(App\Services\BackingReferenceLoader::class,$loader);
 $backingController=new App\Http\Controllers\BackingColorController;
 $suggestion=$backingController->suggest($stock)->getData(true);
-check(str_contains($suggestion['swatches'][0]['image'],'backing-swatch') && str_contains($suggestion['swatches'][0]['image'],'partner=lucky') && !str_contains($suggestion['swatches'][0]['image'],'drive.google.com'),'Private swatches use partner-scoped app URLs');
+check(str_contains($suggestion['swatches'][0]['image'],'backing-reference') && str_contains($suggestion['swatches'][0]['image'],'partner=lucky') && !str_contains($suggestion['swatches'][0]['image'],'drive.google.com'),'Private swatches use partner-scoped app URLs');
 $response=$backingController->swatch(Illuminate\Http\Request::create('/swatch?color=Latte'),$item);
 check($response->headers->get('Content-Type')==='image/png' && $response->getContent()===$refs['Latte'] && str_contains($response->headers->get('Cache-Control'),'private'),'App serves authenticated swatch bytes with private cache headers');
 $reject(fn()=>$backingController->swatch(Illuminate\Http\Request::create('/swatch?color=Brown'),$item),404);
 check($loader->reads===1,'Unknown colors cannot request arbitrary Drive files');
+$response=$backingController->reference(Illuminate\Http\Request::create('/reference?material=Viewmont&color=Latte'));
+check($response->getContent()===$refs['Latte'],'Shared material reference loads without depending on any one order');
+$reject(fn()=>$backingController->reference(Illuminate\Http\Request::create('/reference?material=Viewmont&color=Brown')),404);
+$reject(fn()=>$backingController->reference(Illuminate\Http\Request::create('/reference?material=Unknown&color=Latte')),404);
 echo "Backing-color checks passed.\n";

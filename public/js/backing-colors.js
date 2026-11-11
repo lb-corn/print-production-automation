@@ -1,24 +1,31 @@
 (() => {
     const sections = [...document.querySelectorAll('[data-backing-review]')];
-    let queue = Promise.resolve();
+    const queue=[];let active=0;
+    const drain=()=>{while(active<2 && queue.length){const task=queue.shift();active++;Promise.resolve().then(task).finally(()=>{active--;drain();});}};
     sections.forEach(section => {
         const button = section.querySelector('[data-backing-compare]');
         if (!button) return;
         const message = section.querySelector('[data-backing-message]');
         const select = section.querySelector('[data-backing-color]');
-        let loaded = false, busy = false, swatches = [];
+        let busy = false, queued = false, changed = false;
+        let swatches=[...section.querySelectorAll('.backing-swatch')].map(tile=>({color:tile.dataset.color,image:tile.querySelector('img')?.getAttribute('src')}));
         const updateSwatch = () => {
             const image = section.querySelector('[data-backing-selected-image]');
             section.querySelectorAll('.backing-swatch').forEach(tile => {const selected = tile.dataset.color === select?.value;tile.classList.toggle('selected', selected);tile.setAttribute('aria-pressed',String(selected));});
             const current = swatches.find(swatch => swatch.color === select?.value);
             if (current?.image) {image.src = current.image;image.alt = current.color + ' backing swatch';image.hidden = false;} else image.hidden = true;
         };
+        const bindTile=card=>card.addEventListener('click',()=>{if(!select || select.disabled)return;select.value=card.dataset.color;select.dispatchEvent(new Event('change',{bubbles:true}));});
+        section.querySelectorAll('.backing-swatch').forEach(bindTile);
+        section.addEventListener('error',event=>{if(event.target instanceof HTMLImageElement)event.target.hidden=true;},true);
+        updateSwatch();
         if (section.dataset.locked === 'true') return;
         const compare = async () => {
             if (busy) return;
             busy = true; button.disabled = true; button.textContent = 'Comparing…';
+            const abort=new AbortController();const timeout=setTimeout(()=>abort.abort(),35000);
             try {
-                const response = await fetch(section.dataset.suggestUrl, {headers:{Accept:'application/json'},credentials:'same-origin'});
+                const response = await fetch(section.dataset.suggestUrl, {headers:{Accept:'application/json'},credentials:'same-origin',signal:abort.signal});
                 if (!response.ok || response.redirected) throw Error('Comparison unavailable');
                 const result = await response.json();
                 message.textContent = result.suggested ? `Suggested: ${result.suggested} · Approve saves this color and artwork.` : 'Choose a sheet color, then Approve.';
@@ -36,11 +43,12 @@
                     if (swatch.image) {const image = document.createElement('img');image.src = swatch.image;image.alt = `${swatch.color} backing swatch`;image.loading = 'lazy';card.append(image);}
                     const label = document.createElement('span');label.textContent = swatch.color;card.append(label);
                     if (result.suggested === swatch.color) {const hint = document.createElement('small');hint.textContent = 'Suggested';card.append(hint);card.classList.add('suggested');}
-                    card.addEventListener('click', () => {select.value = swatch.color;select.dispatchEvent(new Event('change',{bubbles:true}));});
+                    bindTile(card);
                     list.append(card);
                 });
-                if (select && !select.value && result.suggested) select.value = result.suggested;
+                if (select && !changed && !select.value && result.suggested) select.value = result.suggested;
                 updateSwatch();
+                if(changed && select?.value)message.textContent='Selected: '+select.value+' · saved with Approve.';
                 const source = section.closest('.job-card')?.querySelector('.backing-source-image');
                 const crop = source?.querySelector('[data-backing-crop]');
                 const sourceImage = source?.querySelector('img');
@@ -57,19 +65,14 @@
                     alignCrop();sourceImage.addEventListener('load',alignCrop,{once:true});
                     if ('ResizeObserver' in window) new ResizeObserver(alignCrop).observe(sourceImage);
                 }
-                loaded = true;
+
             } catch (_) {
-                message.textContent = 'No automatic match · choose a sheet color, then Approve.';
-            } finally {busy = false;button.disabled = section.dataset.locked === 'true';button.textContent = 'Retry comparison';}
+                message.textContent = 'Comparison unavailable · choose a sheet color, then Approve.';
+            } finally {clearTimeout(timeout);busy = false;button.disabled = section.dataset.locked === 'true';button.textContent = 'Retry comparison';}
         };
-        const enqueue = () => {queue = queue.then(compare, compare);};
-        button.addEventListener('click', enqueue);
-        select?.addEventListener('change', () => {updateSwatch();message.textContent = 'Selected: ' + select.value + ' · saved with Approve.';});
-        if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver(entries => {
-                if (!loaded && entries.some(entry => entry.isIntersecting)) {observer.disconnect();enqueue();}
-            }, {threshold:.1});
-            observer.observe(section);
-        }
+        const enqueue=()=>{if(busy||queued)return;queued=true;queue.push(async()=>{queued=false;await compare();});drain();};
+        button.addEventListener('click',enqueue);
+        select?.addEventListener('change',()=>{changed=true;updateSwatch();message.textContent='Selected: '+select.value+' · saved with Approve.';});
+        enqueue();
     });
 })();
