@@ -85,7 +85,7 @@ $backingController=new App\Http\Controllers\BackingColorController;
 $customBacking=$stock->replicate();$customBacking->line_item_id='custom-backing-source';$customBacking->is_custom=true;$customBacking->save();
 $app->instance('request',Illuminate\Http\Request::create('/suggest'));
 $customResult=$backingController->suggest($customBacking)->getData(true);
-check($customResult['suggested']===null && str_contains($customResult['message'],'view 2'),'Custom front artwork is never treated as backside color evidence');
+check($customResult['suggested']===null && str_contains($customResult['message'],'Shopify Admin'),'Custom front artwork is never treated as backside color evidence');
 $app->instance('request',Illuminate\Http\Request::create('/suggest', 'GET',['fpd_backside'=>'https://127.0.0.1/private']));
 $reject(fn()=>$backingController->suggest($customBacking),422);
 $app->instance('request',Illuminate\Http\Request::create('/suggest'));

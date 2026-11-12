@@ -983,15 +983,6 @@ body select:not([multiple]):hover{border-color:#7faeb5}body select:focus-visible
 .custom-artwork-double .custom-review-footer .custom-upload-hint{flex-basis:100%;margin:0!important}
 .custom-artwork-double .custom-review-footer .custom-review-check{margin:0;flex:1;min-width:200px}
 .verification-cards .custom-artwork-double .custom-upload-slot:has([data-local-preview]:not([hidden])) .custom-file-drop{height:auto;min-height:36px}
-.fpd-backing-source{margin:8px 0;font-size:10px;line-height:1.6}
-.fpd-backing-source summary{cursor:pointer;color:var(--accent);font-weight:700}
-.fpd-backing-source p{font-size:10px!important;margin:6px 0!important}
-.fpd-backing-source label{display:block;font-weight:700;margin-bottom:4px}
-.fpd-backing-source input{width:100%;min-width:0;padding:7px;border:1px solid var(--line);border-radius:6px;font-size:11px}
-.fpd-backing-source .chip{margin:6px 0;font-size:10px;padding:6px 8px}
-.fpd-backing-source>img{display:block;width:100%;height:130px;object-fit:contain;background:#fff;border-radius:6px}
-.fpd-backing-source>img[hidden]{display:none}
-.fpd-backing-source>small{display:block}
 /* A heading above a shared frame aligns every product variant in Artwork Review. */
 .verification-cards .compare>.art>label,.verification-cards .compare .drive-grid>.art>label,.verification-cards .compare .custom-side-heading,.verification-cards .compare .backing-review-column>label{display:block;font-size:10px;font-weight:700;min-height:18px;line-height:18px;margin:0 0 9px;color:#48636e}
 .verification-cards .compare .drive-grid{align-items:start}

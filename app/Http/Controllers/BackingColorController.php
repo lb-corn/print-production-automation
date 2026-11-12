@@ -39,7 +39,7 @@ class BackingColorController extends Controller
         abort_if(isset(app(ProductionService::class)->batchIndex(true)[$item->line_item_id]),409,'This order is already in a locked batch.');
         $source=request()->query('fpd_backside');
         abort_if($source!==null && (!$item->is_custom || !is_string($source) || !\App\Services\BackingReferenceLoader::validFpdBackside($source)),422,'Use the original FPD backside image link for a custom single-sided bag.');
-        $definition=BackingColorService::definition($item);$result=['suggested'=>null,'candidates'=>[],'message'=>$item->is_custom?'Open view 2 in FPD and paste its backside image link to compare, or choose an allowed color manually.':'Needs confirmation. Compare the website backside with the sheet colors and select one.'];$files=[];
+        $definition=BackingColorService::definition($item);$result=['suggested'=>null,'candidates'=>[],'message'=>$item->is_custom?'Review the backside in Shopify Admin, then choose a sheet color.':'Needs confirmation. Compare the website backside with the sheet colors and select one.'];$files=[];
         try {
             $service=app(BackingSwatchService::class);$files=$service->files($definition['material'],$definition['colors']);
             if($item->is_custom){if($source!==null)$result=$service->suggestFpd($item,$source);}
