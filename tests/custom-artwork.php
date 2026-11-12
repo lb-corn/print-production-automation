@@ -55,6 +55,10 @@ $item->production_batch=null;$doubleHtml=view('partials.custom-artwork-upload',[
 $check(substr_count($singleHtml,'data-custom-slot')===1 && substr_count($doubleHtml,'data-custom-slot')===2,'Custom review preserves the existing tile and provides exactly one or two upload slots');
 $controller=new App\Http\Controllers\ProductionController($svc);$reviewHtml=$controller->verification()->render();
 $check(str_contains($reviewHtml,'CUSTOM ORDER PREVIEW') && str_contains($reviewHtml,'data-custom-review'),'Custom orders render the external website preview beside the upload controls');
+config(['services.backing_colors.enabled'=>true]);
+$colorHtml=$controller->verification()->render();
+$check(str_contains($colorHtml,'data-backing-summary') && str_contains($colorHtml,'Choose color</b>') && str_contains($colorHtml,'Custom design</b>'),'Custom metadata shows backing selection guidance for single sides and custom design for double sides');
+config(['services.backing_colors.enabled'=>false]);
 if(in_array('--preview',$argv,true)){
  config(['services.backing_colors.enabled'=>true]);
  // Exercise each actual product renderer together, including single-side backing controls.

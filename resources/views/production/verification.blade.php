@@ -95,8 +95,13 @@
 <b>{{$item->design_type}}</b>
 </div>
 <div>
+@if($item->is_custom && \App\Services\BackingColorService::required($item))
+<span>Backing color</span>
+<b data-backing-summary title="Selected backing color; saved with artwork approval">{{\App\Services\BackingColorService::color($item)?:'Choose color'}}</b>
+@else
 <span>Color</span>
-<b>{{$item->color?:'—'}}</b>
+<b>{{$item->color?:($item->is_custom?'Custom design':'—')}}</b>
+@endif
 </div>
 </div>
 <div class="compare {{!$item->production_batch && \App\Services\BackingColorService::required($item)?'compare-backing':''}} {{$item->design_type==='double' || count($item->display_matches??[]) > 1 ? 'compare-double' : ''}}">

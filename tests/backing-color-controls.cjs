@@ -5,14 +5,14 @@ function section(id,locked=false){const s=new Element(),select=new Element('sele
 
 (async()=>{
  const fixture=section('fpd'),input=new Element('input'),button=new Element('button'),preview=new Element('img'),calls=[];
- input.value='';const originalQuery=fixture.s.querySelector;
+ input.value='';const summary=new Element();fixture.s.closest=()=>({querySelector:key=>key==='[data-backing-summary]'?summary:null});const originalQuery=fixture.s.querySelector;
  fixture.s.querySelector=key=>({'[data-fpd-backside]':input,'[data-fpd-compare]':button,'[data-fpd-backside-preview]':preview}[key]||originalQuery(key));
  const tick=async()=>{for(let n=0;n<15;n++)await Promise.resolve();};
  vm.runInNewContext(fs.readFileSync('public/js/backing-colors.js','utf8'),{document:{querySelectorAll:()=>[fixture.s],createElement:tag=>new Element(tag)},window:{},HTMLImageElement:Element,AbortController,setTimeout:()=>1,clearTimeout(){},fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({context:'context-fpd',suggested:calls.length>1?'Ash':null,message:'Paste FPD view 2',swatches:[{color:'Ash',image:'/shared/Ash'},{color:'Red',image:'/shared/Red'}]})};}});
- await tick();assert.equal(fixture.select.value,'');assert.equal(fixture.message.textContent,'Paste FPD view 2');
+ await tick();assert.equal(fixture.select.value,'');assert.equal(fixture.message.textContent,'Paste FPD view 2');assert.equal(summary.textContent,'Choose color');
  input.value='https://127.0.0.1/private';input.events.input();button.events.click();await tick();assert.equal(calls.length,1,'Reject unapproved source before requesting a comparison');
  const source='https://fpd-shopify-v2.s3.eu-central-1.amazonaws.com/6gsfphjjzy135zf9p6s1hf3r3tpb';
- input.value=source;input.events.input();button.events.click();await tick();assert.equal(calls.length,2);assert(calls[1].includes('fpd_backside='+encodeURIComponent(source)));assert.equal(fixture.select.value,'Ash');assert.equal(preview.src,source);assert.equal(preview.hidden,false);
- fixture.select.value='Red';fixture.select.events.change();button.events.click();await tick();assert.equal(fixture.select.value,'Red','Comparing again preserves the operator choice');assert.equal(input.disabled,false);
+ input.value=source;input.events.input();button.events.click();await tick();assert.equal(calls.length,2);assert(calls[1].includes('fpd_backside='+encodeURIComponent(source)));assert.equal(fixture.select.value,'Ash');assert.equal(summary.textContent,'Ash');assert.equal(preview.src,source);assert.equal(preview.hidden,false);
+ fixture.select.value='Red';fixture.select.events.change();button.events.click();await tick();assert.equal(fixture.select.value,'Red','Comparing again preserves the operator choice');assert.equal(input.disabled,false);assert.equal(summary.textContent,'Red');
  console.log('PASS FPD source validation, isolated backside request, preview, suggestion and manual choice preservation');
 })().catch(error=>{console.error(error);process.exitCode=1;});

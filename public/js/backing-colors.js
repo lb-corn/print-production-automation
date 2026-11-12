@@ -12,6 +12,8 @@
         let busy = false, queued = false, changed = false;
         let swatches=[...section.querySelectorAll('.backing-swatch')].map(tile=>({color:tile.dataset.color,image:tile.querySelector('img')?.getAttribute('src')}));
         const updateSwatch = () => {
+            const summary = section.closest('.job-card')?.querySelector('[data-backing-summary]');
+            if(summary)summary.textContent=select?.value || 'Choose color';
             const image = section.querySelector('[data-backing-selected-image]');
             section.querySelectorAll('.backing-swatch').forEach(tile => {const selected = tile.dataset.color === select?.value;tile.classList.toggle('selected', selected);tile.setAttribute('aria-pressed',String(selected));});
             const current = swatches.find(swatch => swatch.color === select?.value);
