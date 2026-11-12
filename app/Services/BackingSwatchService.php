@@ -40,4 +40,15 @@ class BackingSwatchService
             return $matcher->compare($product,$profiles);
         });
     }
+    public function suggestFpd($item,string $url):array {
+        $definition=BackingColorService::definition($item);
+        $files=$this->files($definition['material'],$definition['colors']);
+        if(!$definition['colors'] || count($files)!==count($definition['colors']))return ['suggested'=>null,'candidates'=>[],'message'=>'Allowed swatches are incomplete. Choose the backing color manually.'];
+        $loader=app(BackingReferenceLoader::class);$matcher=app(BackingImageMatcher::class);$profiles=[];
+        foreach($files as $color=>$file){
+            $key='backing.profile.'.hash('sha256',json_encode([$file['id'],$file['version']??null,$file['md5Checksum']??null]));
+            $profiles[$color]=Cache::remember($key,86400,fn()=>$matcher->profile($loader->swatch($file)));
+        }
+        return $matcher->compareBackside($loader->fpdBackside($url),$profiles);
+    }
 }

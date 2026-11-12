@@ -42,6 +42,19 @@ class BackingImageMatcher
             return $this->descriptor($pixels);
         } finally {imagedestroy($swatch);}
     }
+    /** FPD view 2 already isolates the backing; sample its central fabric area. */
+    public function compareBackside(string $backside,array $references):array {
+        $target=$this->profile($backside);$ranked=[];
+        foreach($references as $name=>$reference){
+            $descriptor=is_array($reference)?$reference:$this->profile($reference);
+            $distance=sqrt(array_sum(array_map(fn($a,$b)=>($a-$b)**2,$target['lab'],$descriptor['lab'])));
+            $ranked[]=['color'=>$name,'distance'=>round($distance,2)];
+        }
+        usort($ranked,fn($a,$b)=>$a['distance']<=>$b['distance']);
+        $clear=count($ranked)>=2 && $ranked[0]['distance']<18 && $ranked[1]['distance']-$ranked[0]['distance']>=3;
+        return ['suggested'=>$clear?$ranked[0]['color']:null,'candidates'=>array_slice($ranked,0,3),
+            'message'=>$clear?'Possible FPD backing match. Check the backside image and confirm the color before approval.':'No clear FPD backing match. Compare the backside image and choose an allowed color.'];
+    }
     public function compare(string $product,array $references):array {
         $image=$this->image($product);
         try {

@@ -7,6 +7,8 @@
         if (!button) return;
         const message = section.querySelector('[data-backing-message]');
         const select = section.querySelector('[data-backing-color]');
+        const fpdInput = section.querySelector('[data-fpd-backside]');
+        const fpdButton = section.querySelector('[data-fpd-compare]');
         let busy = false, queued = false, changed = false;
         let swatches=[...section.querySelectorAll('.backing-swatch')].map(tile=>({color:tile.dataset.color,image:tile.querySelector('img')?.getAttribute('src')}));
         const updateSwatch = () => {
@@ -22,13 +24,22 @@
         if (section.dataset.locked === 'true') return;
         const compare = async () => {
             if (busy) return;
+            const fpdUrl = fpdInput?.value.trim() || '';
+            if (fpdUrl && !/^https:\/\/fpd-shopify-v2\.s3\.eu-central-1\.amazonaws\.com\/[A-Za-z0-9_-]{12,128}$/.test(fpdUrl)) {
+                message.textContent = 'Paste the original FPD backside image link from view 2.';return;
+            }
             busy = true; button.disabled = true; button.textContent = 'Comparing…';
+            if(fpdButton)fpdButton.disabled=true;
+            if(fpdInput)fpdInput.disabled=true;
             const abort=new AbortController();const timeout=setTimeout(()=>abort.abort(),35000);
             try {
-                const response = await fetch(section.dataset.suggestUrl, {headers:{Accept:'application/json'},credentials:'same-origin',signal:abort.signal});
+                const url = section.dataset.suggestUrl + (fpdUrl ? (section.dataset.suggestUrl.includes('?') ? '&' : '?') + 'fpd_backside=' + encodeURIComponent(fpdUrl) : '');
+                const response = await fetch(url, {headers:{Accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:abort.signal});
                 if (!response.ok || response.redirected) throw Error('Comparison unavailable');
                 const result = await response.json();
-                message.textContent = result.suggested ? `Suggested: ${result.suggested} · Approve saves this color and artwork.` : 'Choose a sheet color, then Approve.';
+                message.textContent = result.suggested ? `Suggested: ${result.suggested} · Check and approve this color with the artwork.` : result.message || 'Choose a sheet color, then Approve.';
+                const fpdPreview=section.querySelector('[data-fpd-backside-preview]');
+                if(fpdPreview){fpdPreview.hidden=!fpdUrl;if(fpdUrl)fpdPreview.src=fpdUrl;else fpdPreview.removeAttribute('src');}
                 const context = section.querySelector('[data-backing-context]');
                 if (context && context.value !== result.context) {
                     message.textContent = 'Settings changed · reload before approving.';
@@ -68,10 +79,12 @@
 
             } catch (_) {
                 message.textContent = 'Comparison unavailable · choose a sheet color, then Approve.';
-            } finally {clearTimeout(timeout);busy = false;button.disabled = section.dataset.locked === 'true';button.textContent = 'Retry comparison';}
+            } finally {clearTimeout(timeout);busy = false;button.disabled = section.dataset.locked === 'true';button.textContent = 'Retry comparison';if(fpdInput)fpdInput.disabled=!select || select.disabled;if(fpdButton)fpdButton.disabled=!select || select.disabled;}
         };
         const enqueue=()=>{if(busy||queued)return;queued=true;queue.push(async()=>{queued=false;await compare();});drain();};
         button.addEventListener('click',enqueue);
+        fpdButton?.addEventListener('click',()=>{if(!fpdInput.value.trim()){message.textContent='Paste the FPD view 2 backside image link first.';return;}enqueue();});
+        fpdInput?.addEventListener('input',()=>{if(!changed && select)select.value='';updateSwatch();const preview=section.querySelector('[data-fpd-backside-preview]');if(preview)preview.hidden=true;message.textContent='Backside source changed · compare again before choosing a color.';});
         select?.addEventListener('change',()=>{changed=true;updateSwatch();message.textContent='Selected: '+select.value+' · saved with Approve.';});
         enqueue();
     });

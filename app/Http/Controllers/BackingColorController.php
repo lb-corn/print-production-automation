@@ -37,10 +37,13 @@ class BackingColorController extends Controller
     public function suggest(ProductionItem $item) {
         abort_unless(BackingColorService::required($item),422);
         abort_if(isset(app(ProductionService::class)->batchIndex(true)[$item->line_item_id]),409,'This order is already in a locked batch.');
-        $definition=BackingColorService::definition($item);$result=['suggested'=>null,'candidates'=>[],'message'=>'Needs confirmation. Compare the website backside with the sheet colors and select one.'];$files=[];
+        $source=request()->query('fpd_backside');
+        abort_if($source!==null && (!$item->is_custom || !is_string($source) || !\App\Services\BackingReferenceLoader::validFpdBackside($source)),422,'Use the original FPD backside image link for a custom single-sided bag.');
+        $definition=BackingColorService::definition($item);$result=['suggested'=>null,'candidates'=>[],'message'=>$item->is_custom?'Open view 2 in FPD and paste its backside image link to compare, or choose an allowed color manually.':'Needs confirmation. Compare the website backside with the sheet colors and select one.'];$files=[];
         try {
             $service=app(BackingSwatchService::class);$files=$service->files($definition['material'],$definition['colors']);
-            $result=$service->suggest($item);
+            if($item->is_custom){if($source!==null)$result=$service->suggestFpd($item,$source);}
+            else $result=$service->suggest($item);
         } catch(\Throwable $e){report($e);}
         return response()->json($result+['context'=>BackingColorService::context($item),
             'swatches'=>array_map(fn($color)=>['color'=>$color,'image'=>isset($files[$color])?self::swatchUrl($definition['material'],$color):null],$definition['colors'])])->header('Cache-Control','no-store');

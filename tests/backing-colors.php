@@ -47,6 +47,14 @@ $img=function(array $rgb,bool $composite=false,bool $reverse=false):string {
     ob_start();imagepng($im);$bytes=ob_get_clean();imagedestroy($im);return $bytes;
 };
 $matcher=new BackingImageMatcher;$refs=['Latte'=>$img([150,130,95]),'Ash'=>$img([105,115,100]),'Charcoal'=>$img([40,40,40])];
+check($matcher->compareBackside($refs['Latte'],$refs)['suggested']==='Latte','An isolated FPD backside can suggest an allowed sheet color without a two-bag composite');
+check($matcher->compareBackside($refs['Latte'],['Latte'=>$refs['Latte'],'Ash'=>$refs['Latte']])['suggested']===null,'Ambiguous FPD swatches require operator selection');
+check($matcher->compareBackside($refs['Latte'],['Charcoal'=>$refs['Charcoal'],'Ash'=>$refs['Ash']])['suggested']===null,'A color outside the allowed reference set cannot be suggested');
+$fpdUrl='https://fpd-shopify-v2.s3.eu-central-1.amazonaws.com/6gsfphjjzy135zf9p6s1hf3r3tpb';
+check(App\Services\BackingReferenceLoader::validFpdBackside($fpdUrl),'Original FPD asset URL is accepted');
+foreach(['http://127.0.0.1/private',$fpdUrl.'?redirect=private',$fpdUrl.'/../private','https://fpd-shopify-v2.s3.eu-central-1.amazonaws.com.evil.test/6gsfphjjzy135zf9p6s1hf3r3tpb'] as $unsafe){
+ check(!App\Services\BackingReferenceLoader::validFpdBackside($unsafe),'FPD comparison rejects arbitrary hosts, queries and path traversal');
+}
 $result=$matcher->compare($img([150,130,95],true),$refs);
 check($result['suggested']==='Latte' && $result['crop']['x']>.5,'Website composite comparison isolates the backside and suggests its sheet color');
 $result=$matcher->compare($img([150,130,95],true,true),$refs);check($result['suggested']==='Latte' && $result['crop']['x']<.3,'Backside isolation supports either left or right position');
@@ -74,6 +82,13 @@ $loader=new class($refs['Latte']) extends App\Services\BackingReferenceLoader {
     public function swatch(array $file):string{$this->reads++;return $this->bytes;}
 };$app->instance(App\Services\BackingReferenceLoader::class,$loader);
 $backingController=new App\Http\Controllers\BackingColorController;
+$customBacking=$stock->replicate();$customBacking->line_item_id='custom-backing-source';$customBacking->is_custom=true;$customBacking->save();
+$app->instance('request',Illuminate\Http\Request::create('/suggest'));
+$customResult=$backingController->suggest($customBacking)->getData(true);
+check($customResult['suggested']===null && str_contains($customResult['message'],'view 2'),'Custom front artwork is never treated as backside color evidence');
+$app->instance('request',Illuminate\Http\Request::create('/suggest', 'GET',['fpd_backside'=>'https://127.0.0.1/private']));
+$reject(fn()=>$backingController->suggest($customBacking),422);
+$app->instance('request',Illuminate\Http\Request::create('/suggest'));
 $suggestion=$backingController->suggest($stock)->getData(true);
 check(str_contains($suggestion['swatches'][0]['image'],'backing-reference') && str_contains($suggestion['swatches'][0]['image'],'partner=lucky') && !str_contains($suggestion['swatches'][0]['image'],'drive.google.com'),'Private swatches use partner-scoped app URLs');
 $response=$backingController->swatch(Illuminate\Http\Request::create('/swatch?color=Latte'),$item);
@@ -84,4 +99,22 @@ $response=$backingController->reference(Illuminate\Http\Request::create('/refere
 check($response->getContent()===$refs['Latte'],'Shared material reference loads without depending on any one order');
 $reject(fn()=>$backingController->reference(Illuminate\Http\Request::create('/reference?material=Viewmont&color=Brown')),404);
 $reject(fn()=>$backingController->reference(Illuminate\Http\Request::create('/reference?material=Unknown&color=Latte')),404);
+
+$app->instance(App\Services\BackingSwatchService::class,new class extends App\Services\BackingSwatchService {
+    public function files(string $material,array $colors):array {
+        check($material==='Viewmont' && $colors===['Latte','Ash','Charcoal'],'FPD comparison requests only the custom series backing material and its allowed colors');
+        return array_combine($colors,array_map(fn($color)=>['id'=>'fpd-'.$color,'mimeType'=>'image/png'],$colors));
+    }
+});
+$app->instance(App\Services\BackingReferenceLoader::class,new class($refs) extends App\Services\BackingReferenceLoader {
+    public function __construct(private array $fixtures){}
+    public function fpdBackside(string $url):string{return $this->fixtures['Latte'];}
+    public function swatch(array $file):string{return $this->fixtures[substr($file['id'],4)];}
+});
+$app->instance('request',Illuminate\Http\Request::create('/suggest','GET',['fpd_backside'=>$fpdUrl]));
+$fpdResult=$backingController->suggest($customBacking)->getData(true);
+check($fpdResult['suggested']==='Latte' && array_column($fpdResult['swatches'],'color')===['Latte','Ash','Charcoal'],'Custom FPD comparison integrates with the normal sheet-only selector without approving the order');
+check(!$customBacking->fresh()->decision,'An FPD suggestion never creates an artwork approval');
+$reject(fn()=>$backingController->suggest($stock),422);
+$app->instance('request',Illuminate\Http\Request::create('/suggest'));
 echo "Backing-color checks passed.\n";

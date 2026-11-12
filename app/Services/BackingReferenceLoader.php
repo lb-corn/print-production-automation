@@ -9,6 +9,13 @@ use RuntimeException;
 /** Reads bounded private Drive images using the service account. */
 class BackingReferenceLoader
 {
+    public static function validFpdBackside(string $url):bool {
+        return (bool)preg_match('~\Ahttps://fpd-shopify-v2\.s3\.eu-central-1\.amazonaws\.com/[A-Za-z0-9_-]{12,128}\z~D',$url);
+    }
+    public function fpdBackside(string $url):string {
+        if(!self::validFpdBackside($url))throw new RuntimeException('Use the original Fancy Product Designer backside image link.');
+        return $this->bounded((new HttpClient(['timeout'=>15,'connect_timeout'=>5,'allow_redirects'=>false]))->get($url,['stream'=>true]));
+    }
     private ?\GuzzleHttp\ClientInterface $driveClient=null;
     private function bounded($response):string {
         if($response->getStatusCode()!==200 || (int)$response->getHeaderLine('Content-Length')>8388608)throw new RuntimeException('Reference image is unavailable or too large.');
