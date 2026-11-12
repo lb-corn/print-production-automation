@@ -3,10 +3,12 @@ $customReady=\App\Services\CustomArtworkService::ready();
 $customSides=$item->design_type==='double'?['front','back']:['single'];
 $customUsable=$customReady && in_array($item->design_type,['single','double'],true) && !$item->production_batch;
 @endphp
-<section class="custom-artwork-review {{count($customSides)===2?'custom-artwork-double':''}}" data-custom-review data-create-url="{{route('custom.create',$item)}}" data-confirm-url="{{route('custom.confirm',$item)}}" data-status-base="{{url('/custom-transfers')}}" data-csrf="{{csrf_token()}}">
+<section class="custom-artwork-review {{count($customSides)===2?'custom-artwork-double':'custom-artwork-single'}}" data-custom-review data-create-url="{{route('custom.create',$item)}}" data-confirm-url="{{route('custom.confirm',$item)}}" data-status-base="{{url('/custom-transfers')}}" data-csrf="{{csrf_token()}}">
 @if(count($customSides)===1)
-<div class="custom-upload-heading"><strong>Custom production artwork</strong><span class="badge">Saved on Print PC only</span></div>
-<p class="custom-upload-hint">Upload the print original directly to the PC. Use the order preview for comparison.</p>
+<span class="custom-side-heading">CUSTOM PRODUCTION ARTWORK</span>
+<div class="custom-single-frame">
+<div class="custom-upload-heading"><span class="badge">Saved on Print PC only</span></div>
+<p class="custom-upload-hint">Upload the print original. Compare it with the order preview.</p>
 @endif
 <div class="custom-upload-slots {{count($customSides)===1?'one':''}}">
 @foreach($customSides as $side)
@@ -29,4 +31,5 @@ $customUsable=$customReady && in_array($item->design_type,['single','double'],tr
 @if($customUsable && auth()->user()->allows('bags.artwork.approve'))<label class="confirmation-check custom-review-check"><input type="checkbox" data-custom-reviewed><span>I checked all uploaded print sides against the order preview.</span></label><button type="button" class="primary" data-custom-confirm disabled>Confirm artwork</button>@endif
 <p class="custom-upload-status" role="status" aria-live="polite" data-custom-result></p>
 </div>
+@if(count($customSides)===1)</div>@endif
 </section>

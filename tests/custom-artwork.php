@@ -55,5 +55,14 @@ $item->production_batch=null;$doubleHtml=view('partials.custom-artwork-upload',[
 $check(substr_count($singleHtml,'data-custom-slot')===1 && substr_count($doubleHtml,'data-custom-slot')===2,'Custom review preserves the existing tile and provides exactly one or two upload slots');
 $controller=new App\Http\Controllers\ProductionController($svc);$reviewHtml=$controller->verification()->render();
 $check(str_contains($reviewHtml,'CUSTOM ORDER PREVIEW') && str_contains($reviewHtml,'data-custom-review'),'Custom orders render the external website preview beside the upload controls');
-if(in_array('--preview',$argv,true)){file_put_contents(__DIR__.'/../tmp/custom-review.html',$reviewHtml);file_put_contents(__DIR__.'/../tmp/custom-dashboard.html',$controller->dashboard()->render());}
+if(in_array('--preview',$argv,true)){
+ config(['services.backing_colors.enabled'=>true]);
+ // Exercise each actual product renderer together, including single-side backing controls.
+ foreach(['single','double'] as $type){
+  $normal=ProductionItem::findOrFail(($type==='single'?$single:$item)->id)->replicate();$normal->line_item_id='layout-normal-'.$type;
+  $normal->product='Normal '.$type.' layout fixture';$normal->is_custom=false;$normal->shopify_active=true;$normal->matches=[];$normal->artwork_review=[];$normal->save();
+ }
+ file_put_contents(__DIR__.'/../tmp/custom-review.html',$controller->verification()->render());
+ file_put_contents(__DIR__.'/../tmp/custom-dashboard.html',$controller->dashboard()->render());
+}
 echo "$checks combined custom-artwork checks passed.\n";
